@@ -1,0 +1,10 @@
+{
+  "extensionName": {
+    "message": "firefox-cloudleak",
+    "description": "Name of the extension. Code name until the public name is chosen."
+  },
+  "extensionDescription": {
+    "message": "Shows when your requests go through an intermediary that decrypts them, such as Cloudflare, Akamai or Imperva.",
+    "description": "Description of the extension, shown in the add-ons manager."
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "firefox-cloudleak",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "clean": "node -e \"for (const d of ['build', 'dist', 'web-ext-artifacts']) fs.rmSync(d, { recursive: true, force: true })\"",
+    "build": "npm run clean && tsc -p tsconfig.tools.json && tsc -p tsconfig.json && node build/scripts/build.js && web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --filename firefox-cloudleak-{version}.xpi",
+    "test": "node -e \"fs.rmSync('build', { recursive: true, force: true })\" && tsc -p tsconfig.tools.json && node --test build/tests/*.test.js",
+    "lint": "biome ci --error-on-warnings && npm run build && web-ext lint --source-dir dist --warnings-as-errors",
+    "format": "biome check --write",
+    "check": "npm test && npm run lint && npm audit --audit-level=moderate",
+    "start": "web-ext run --source-dir dist",
+    "refresh-ranges": "tsc -p tsconfig.tools.json && node build/scripts/refresh-ranges.js"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "@types/firefox-webext-browser": "120.0.5",
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2",
+    "web-ext": "10.8.0"
+  }
+}

@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Adrien Kara
+//
+// The extension itself. Only the WebExtension types are visible, so code that
+// needs Node does not compile here.
+{
+  "compilerOptions": {
+    "strict": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    // Firefox 142, the minimum version, supports all of ES2022. Holding lib to
+    // the same level keeps later APIs out of the code.
+    "target": "es2022",
+    "lib": ["es2022", "dom"],
+    // Firefox loads background scripts as ES modules since version 112
+    // (browser-compat-data, webextensions.manifest.background.type), so the
+    // compiled modules ship as they are, without a bundler. Node module
+    // resolution forces the explicit ".js" extensions the browser needs.
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    // Pinned to the newest type release that does not exceed the minimum
+    // Firefox version (120 for 142), so an API newer than the minimum version
+    // fails to compile.
+    "types": ["firefox-webext-browser"],
+    "newLine": "lf",
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

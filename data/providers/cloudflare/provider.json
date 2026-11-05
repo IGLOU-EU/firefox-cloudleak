@@ -1,0 +1,39 @@
+{
+  "name": "Cloudflare",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "cf-ray",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/http-headers/"
+      },
+      {
+        "name": "cf-cache-status",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/http-headers/"
+      },
+      {
+        "name": "cf-mitigated",
+        "value": "challenge",
+        "source": "https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "__cf_bm",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      }
+    ],
+    "server": [
+      {
+        "value": "cloudflare",
+        "source": "Observed on 2026-11-05 on www.ameli.fr and www.legifrance.gouv.fr"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "cdn.cloudflare.net",
+        "source": "Observed on 2026-11-05 on www.ameli.fr and www.legifrance.gouv.fr"
+      }
+    ]
+  }
+}
