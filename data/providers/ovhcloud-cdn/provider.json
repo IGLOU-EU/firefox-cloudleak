@@ -1,0 +1,27 @@
+{
+  "name": "OVHcloud CDN",
+  "country": "FR",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-cdn-pop-ip",
+        "source": "https://docs.ovhcloud.com/en/guides/web-cloud/web-hosting/cdn-how-to-use-cdn (the X-CDN headers confirm that the domain runs through the CDN) and https://docs.ovhcloud.com/en/guides/network/content-delivery-network-infrastructure/cdn-infrastructure-first-domain-configuration, and observed on 2026-11-06 on auth.service-public.gouv.fr"
+      },
+      {
+        "name": "x-cacheable",
+        "value": "Matched cache",
+        "source": "https://docs.ovhcloud.com/en/guides/network/content-delivery-network-infrastructure/cdn-infrastructure-first-domain-configuration (a file served from the cache), and observed on 2026-11-06 on auth.service-public.gouv.fr"
+      },
+      {
+        "name": "x-cacheable",
+        "value": "Cacheable",
+        "source": "https://docs.ovhcloud.com/en/guides/web-cloud/web-hosting/cdn-how-to-use-cdn (example response of a domain that runs through the CDN)"
+      },
+      {
+        "name": "x-cacheable",
+        "value": "Not cacheable: *",
+        "source": "Observed on 2026-11-06 on auth.service-public.gouv.fr (Not cacheable: uncacheable, and Not cacheable: no cache headers from backend), together with x-cdn-pop-ip"
+      }
+    ]
+  }
+}

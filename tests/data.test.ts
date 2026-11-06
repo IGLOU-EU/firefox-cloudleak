@@ -44,6 +44,28 @@ function leakOf(changes: Partial<RequestFacts>): Leak | null {
   return result?.leak ?? null;
 }
 
+// A script fetched from an address no provider publishes: each test adds
+// only the signal it is about.
+function classify(changes: Partial<RequestFacts>) {
+  return classifyRequest(
+    {
+      method: "GET",
+      type: "script",
+      tls: true,
+      host: "www.example.org",
+      path: "/app.js",
+      queryNames: [],
+      ip: "192.0.2.1",
+      cookies: [],
+      authorization: false,
+      responseHeaders: [],
+      setCookies: [],
+      ...changes,
+    },
+    table,
+  );
+}
+
 const CHALLENGE: Leak = { level: 4, case: "data-sent", challenge: true };
 const SESSION_POSSIBLE: Leak = {
   level: 4,
@@ -124,28 +146,6 @@ describe("the committed data", () => {
   });
 
   describe("CloudFront", () => {
-    // A script fetched from an address no provider publishes: each test adds
-    // only the signal it is about.
-    function classify(changes: Partial<RequestFacts>) {
-      return classifyRequest(
-        {
-          method: "GET",
-          type: "script",
-          tls: true,
-          host: "www.example.org",
-          path: "/app.js",
-          queryNames: [],
-          ip: "192.0.2.1",
-          cookies: [],
-          authorization: false,
-          responseHeaders: [],
-          setCookies: [],
-          ...changes,
-        },
-        table,
-      );
-    }
-
     it("recognises the edges that served leboncoin.fr on 2026-11-06 by their address, without proof", () => {
       for (const ip of [
         "52.85.118.25",
@@ -210,6 +210,170 @@ describe("the committed data", () => {
 
     it("leaves the edge addresses of other providers to them", () => {
       assert.equal(classify({ ip: CLOUDFLARE_IP })?.provider, "cloudflare");
+    });
+  });
+
+  describe("Fastly", () => {
+    it("proves the decryption of the jQuery that Chorus Pro loaded on 2026-11-06", () => {
+      assert.deepEqual(
+        classify({
+          host: "code.jquery.com",
+          path: "/jquery-3.6.4.min.js",
+          ip: "2a04:4e42::411",
+          responseHeaders: [
+            { name: "server", value: "nginx" },
+            { name: "via", value: "1.1 varnish, 1.1 varnish" },
+            {
+              name: "x-served-by",
+              value: "cache-lga21953-LGA, cache-par-lfpb1150080-PAR",
+            },
+            { name: "x-cache", value: "HIT, HIT" },
+            { name: "x-timer", value: "S1793984558.304123,VS0,VE0" },
+          ],
+        }),
+        { provider: "fastly", proven: true, leak: { level: 2 } },
+      );
+    });
+
+    it("recognises the edge of the Pinterest images of 2026-11-06 by its address, without proof", () => {
+      assert.deepEqual(
+        classify({
+          type: "image",
+          host: "i.pinimg.com",
+          path: "/236x/a.jpg",
+          ip: "146.75.120.84",
+          responseHeaders: [{ name: "x-cdn", value: "fastly" }],
+        }),
+        { provider: "fastly", proven: false, leak: { level: 2 } },
+      );
+    });
+
+    it("proves the decryption by each header Fastly adds to its responses", () => {
+      for (const header of [
+        { name: "X-Served-By", value: "cache-par-lfpb1150080-PAR" },
+        { name: "x-timer", value: "S1793984558.304123,VS0,VE12" },
+      ]) {
+        assert.deepEqual(
+          classify({ responseHeaders: [header] }),
+          { provider: "fastly", proven: true, leak: { level: 2 } },
+          header.name,
+        );
+      }
+    });
+
+    // Other caches send these names, or these values, too.
+    it("takes no other value of x-served-by or x-timer, and no x-cache, for Fastly", () => {
+      for (const header of [
+        { name: "x-served-by", value: "web-01" },
+        { name: "x-timer", value: "12ms" },
+        { name: "x-cache", value: "MISS" },
+        { name: "x-cache-hits", value: "3" },
+        { name: "via", value: "1.1 varnish" },
+      ]) {
+        assert.equal(
+          classify({ responseHeaders: [header] }),
+          null,
+          `${header.name}: ${header.value}`,
+        );
+      }
+    });
+
+    it("recognises a service by the last name of its CNAME chain", () => {
+      for (const name of [
+        "dualstack.pinterest.map.fastly.net",
+        "j.sni.global.fastly.net",
+      ]) {
+        assert.equal(classify({ cnames: [name] })?.provider, "fastly", name);
+      }
+      assert.equal(classify({ cnames: ["notfastly.net"] }), null);
+    });
+  });
+
+  describe("OVHcloud CDN", () => {
+    // The headers every response of auth.service-public.gouv.fr carried on
+    // 2026-11-06, besides x-cacheable.
+    const POP = [
+      { name: "x-cdn-pop", value: "rbx" },
+      { name: "x-cdn-pop-ip", value: "51.68.15.224/27" },
+    ];
+    const LOGIN = {
+      host: "auth.service-public.gouv.fr",
+      ip: "46.105.199.93",
+      cookies: ["SP_SESSION", "TS015ce0c6"],
+    };
+
+    it("proves the decryption of the login form of service-public.gouv.fr on 2026-11-06", () => {
+      assert.deepEqual(
+        classify({
+          ...LOGIN,
+          type: "main_frame",
+          method: "POST",
+          path: "/realms/service-public/login-actions/authenticate",
+          cookies: [
+            "AUTH_SESSION_ID",
+            "KC_AUTH_SESSION_HASH",
+            "KC_RESTART",
+            "SP_RGPD_OREJIME",
+            "SP_SESSION",
+            "TS015ce0c6",
+          ],
+          responseHeaders: [
+            ...POP,
+            { name: "x-cacheable", value: "Not cacheable: uncacheable" },
+          ],
+        }),
+        { provider: "ovhcloud-cdn", proven: true, leak: SESSION_POSSIBLE },
+      );
+    });
+
+    it("proves the decryption of the resources of that page it served from its cache", () => {
+      assert.deepEqual(
+        classify({
+          ...LOGIN,
+          path: "/resources/xz97u/login/service-public/js/require.js",
+          responseHeaders: [
+            ...POP,
+            { name: "x-cacheable", value: "Matched cache" },
+          ],
+        }),
+        { provider: "ovhcloud-cdn", proven: true, leak: SESSION_POSSIBLE },
+      );
+    });
+
+    it("proves the decryption by each header OVHcloud documents for its CDN", () => {
+      for (const header of [
+        { name: "X-CDN-Pop-IP", value: "51.68.15.224/27" },
+        { name: "X-Cacheable", value: "Matched cache" },
+        { name: "x-cacheable", value: "Cacheable" },
+        {
+          name: "x-cacheable",
+          value: "Not cacheable: no cache headers from backend",
+        },
+      ]) {
+        assert.deepEqual(
+          classify({ responseHeaders: [header] }),
+          { provider: "ovhcloud-cdn", proven: true, leak: { level: 2 } },
+          `${header.name}: ${header.value}`,
+        );
+      }
+    });
+
+    it("takes no other value of x-cacheable for OVHcloud's CDN", () => {
+      for (const value of ["YES", "NO:Not Cacheable", "HIT"]) {
+        assert.equal(
+          classify({ responseHeaders: [{ name: "x-cacheable", value }] }),
+          null,
+          value,
+        );
+      }
+    });
+
+    // OVHcloud's network also carries ordinary servers, such as that of
+    // www.data.gouv.fr on 2026-11-06.
+    it("never recognises OVHcloud's CDN by an address alone", () => {
+      for (const ip of ["46.105.199.93", "37.59.183.92"]) {
+        assert.equal(classify({ ip }), null, ip);
+      }
     });
   });
 

@@ -1,0 +1,4 @@
+# Source: none, OVHcloud publishes no list that covers the edge addresses of its CDN
+# Fetched: 2026-11-06
+# For CDN Infrastructure, its only list (https://docs.ovhcloud.com/en/guides/network/content-delivery-network-infrastructure/cdn-infrastructure-ip-range) holds addresses for origin servers to allow, and OVHcloud says it is not exhaustive. For the CDN option of web hosting, it gives one anycast address per cluster in a page (https://docs.ovhcloud.com/en/guides/web-cloud/web-hosting/clusters-and-shared-hosting-ip), not in a list.
+# The edge of auth.service-public.gouv.fr on 2026-11-06 (46.105.199.93) is none of those per-cluster addresses, and it sits in AS16276, where OVHcloud also hosts ordinary servers, such as that of www.data.gouv.fr (37.59.183.92) the same day. OVHcloud CDN is recognised by its headers.

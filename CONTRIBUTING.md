@@ -123,7 +123,7 @@ A challenge path prefix starts with `/` and holds no space, `*`, `?` or `#`. It 
 173.245.48.0/20
 ```
 
-A published list is either a text list, one range per line, or a JSON list in the shape of AWS's `ip-ranges.json`, which mixes all of AWS's services. For a JSON list, the `# Source:` line names after the URL the service whose IPv4 and IPv6 ranges are kept, so that it still says by itself where the ranges come from and how they were chosen:
+A published list is a text list, one range per line, a JSON list of all the provider's ranges in the shape of Fastly's `public-ip-list` (the arrays `addresses` and `ipv6_addresses`), or a JSON list in the shape of AWS's `ip-ranges.json`, which mixes all of AWS's services. A body that starts with `{` is read as JSON. For a list in the shape of AWS's, the `# Source:` line names after the URL the service whose IPv4 and IPv6 ranges are kept, so that it still says by itself where the ranges come from and how they were chosen:
 
 ```text
 # Source: https://ip-ranges.amazonaws.com/ip-ranges.json, service CLOUDFRONT

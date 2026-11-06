@@ -1,0 +1,24 @@
+{
+  "name": "Fastly",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-served-by",
+        "value": "cache-*",
+        "source": "https://www.fastly.com/documentation/reference/http/http-headers/X-Served-By/ (set by Fastly on all the responses it processes, as cache-{datacenter}{nodeid}-{datacenter}, one per server, separated by commas), and observed on 2026-11-06 on code.jquery.com, loaded by portail.chorus-pro.gouv.fr. Other servers send the same name with values of their own, hence the value"
+      },
+      {
+        "name": "x-timer",
+        "value": "S*,VS*,VE*",
+        "source": "https://www.fastly.com/documentation/reference/http/http-headers/X-Timer/ (S{unixStartTimeSeconds},VS0,VE{durationMilliseconds}, counted from when Fastly received the request), and observed on 2026-11-06 on code.jquery.com, loaded by portail.chorus-pro.gouv.fr"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "fastly.net",
+        "source": "https://www.fastly.com/documentation/guides/concepts/routing-traffic-to-fastly/ (a site's name is a CNAME to <letter>.sni.global.fastly.net, <something>.map.fastly.net, <something>.customer.fastly.net or nonssl.global.fastly.net), and observed on 2026-11-06 on i.pinimg.com (dualstack.pinterest.map.fastly.net) and cdn.tagcommander.com (j.sni.global.fastly.net), as the last name of the chain"
+      }
+    ]
+  }
+}
