@@ -506,6 +506,82 @@ export function formatRangesFile(file: {
   ].join("\n");
 }
 
+// A published list is a text list, one range per line, or a JSON list in the
+// shape AWS publishes, which mixes every service: the source line then names
+// the service kept, so that it says by itself how the ranges were chosen.
+export interface PublishedList {
+  url: string;
+  service: string | null;
+}
+
+const PUBLISHED_SOURCE = /^(https:\/\/\S+?)(?:, service ([A-Z0-9_]+))?$/;
+
+// Only lists served over HTTPS are refreshed, and an HTTPS source that cannot
+// be read is an error rather than a list silently left behind.
+export function parsePublishedSource(source: string): PublishedList | null {
+  if (!source.startsWith("https://")) {
+    return null;
+  }
+  const match = PUBLISHED_SOURCE.exec(source);
+  if (match?.[1] === undefined) {
+    throw new Error(
+      `"${source}" must be an HTTPS URL, optionally followed by ", service <NAME>"`,
+    );
+  }
+  return { url: match[1], service: match[2] ?? null };
+}
+
+function checkedRange(text: unknown, place: string): string {
+  if (typeof text !== "string") {
+    throw new Error(`${place}: must be a CIDR range`);
+  }
+  const range = parseCidr(text.trim());
+  if (!range.ok) {
+    throw new Error(`${place}: ${range.reason}`);
+  }
+  return text.trim();
+}
+
+function serviceRanges(body: string, service: string): string[] {
+  let root: unknown;
+  try {
+    root = JSON.parse(body);
+  } catch (error) {
+    throw new Error(`not valid JSON, ${(error as Error).message}`);
+  }
+  const ranges: string[] = [];
+  for (const [key, field] of [
+    ["prefixes", "ip_prefix"],
+    ["ipv6_prefixes", "ipv6_prefix"],
+  ] as const) {
+    const entries = isObject(root) ? root[key] : undefined;
+    if (!Array.isArray(entries)) {
+      throw new Error(`${key} must be an array`);
+    }
+    for (const [index, entry] of entries.entries()) {
+      if (isObject(entry) && entry["service"] === service) {
+        ranges.push(checkedRange(entry[field], `${key}[${index}].${field}`));
+      }
+    }
+  }
+  return ranges;
+}
+
+export function readPublishedList(list: PublishedList, body: string): string[] {
+  const ranges =
+    list.service === null
+      ? body
+          .split("\n")
+          .map((line, index) => ({ line: line.trim(), index }))
+          .filter(({ line }) => line !== "")
+          .map(({ line, index }) => checkedRange(line, `line ${index + 1}`))
+      : serviceRanges(body, list.service);
+  if (ranges.length === 0) {
+    throw new Error("the list is empty");
+  }
+  return ranges;
+}
+
 function readIfPresent(path: string): string | null {
   try {
     return readFileSync(path, "utf8");

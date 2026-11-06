@@ -122,6 +122,12 @@ A challenge path prefix starts with `/` and holds no space, `*`, `?` or `#`. It 
 173.245.48.0/20
 ```
 
+A published list is either a text list, one range per line, or a JSON list in the shape of AWS's `ip-ranges.json`, which mixes all of AWS's services. For a JSON list, the `# Source:` line names after the URL the service whose IPv4 and IPv6 ranges are kept, so that it still says by itself where the ranges come from and how they were chosen:
+
+```text
+# Source: https://ip-ranges.amazonaws.com/ip-ranges.json, service CLOUDFRONT
+```
+
 A list enters `ranges.txt` only if it covers the edge addresses browsers connect to, and a comment says why it is trusted. A list of the addresses a provider uses to reach origin servers is not enough by itself: Akamai's misses edges. When a provider publishes no list of its edges, `ranges.txt` keeps its header, with a `# Source:` that says so and the date of the check in `# Fetched:`, a comment says why, and it holds no range. The file records the check, so that the wrong list is not added later, and the provider is then recognised by its HTTP signatures and CNAME suffixes.
 
 `data/consent-cookies.json` lists the cookie name patterns of known consent and audience-measurement tools, each with its source: the tool's own documentation or code, where the name is written. Each pattern is the narrowest its source allows: the exact name when the name is fixed, otherwise the documented prefix with its separator, such as `_pk_id.*` rather than `_pk_*`. A cookie of the site that only resembles a tool's name then never passes for consent or audience measurement.
@@ -136,7 +142,7 @@ A list enters `ranges.txt` only if it covers the edge addresses browsers connect
 
 `npm run build` reads every provider folder and `data/consent-cookies.json`, checks them and writes the table the extension loads, `dist/providers.js`, whose default export is `{ providers, consentCookies }`. Invalid data fails the build with the file, the place and the reason: the line in `ranges.txt`, the field path in a JSON file (such as `signatures.headers[2].name` or `cookies[3].name`), or the parser message when a JSON file is not valid JSON.
 
-`npm run refresh-ranges` downloads again every list named by a `# Source:` HTTPS URL, checks each line and rewrites `ranges.txt` with the new date, keeping its comments. It runs on the development machine only, and the new ranges reach users with the next version. A `ranges.txt` with any other source is left for a person to update.
+`npm run refresh-ranges` downloads again every list named by a `# Source:` HTTPS URL, checks each range and rewrites `ranges.txt` with the new date, keeping its comments. It runs on the development machine only, and the new ranges reach users with the next version. A `ranges.txt` with any other source is left for a person to update, and an HTTPS source written in neither form fails its refresh.
 
 ## Tests
 

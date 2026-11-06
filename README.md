@@ -15,7 +15,7 @@ These promises are the design rules of the project, whose binding wording is in 
 
 ## Status
 
-Under construction. The toolbar icon shows, for each tab, whether its requests go through a known provider, at which leak level and whether the decryption is proven: the cloud takes the colour of the most serious request, the badge gives its level, and the tooltip counts the requests of the tab at each level, then names the provider, the case and the anti-bot mark of the most serious one. While the extension lacks the access to all sites, every tab says its view is partial. Nothing is counted or kept beyond the open tabs yet, and there is no map. The provider data covers Cloudflare, Akamai, Imperva and Radware, with IP ranges for Cloudflare and Imperva only, since Akamai and Radware publish no list of their edge addresses.
+Under construction. The toolbar icon shows, for each tab, whether its requests go through a known provider, at which leak level and whether the decryption is proven: the cloud takes the colour of the most serious request, the badge gives its level, and the tooltip counts the requests of the tab at each level, then names the provider, the case and the anti-bot mark of the most serious one. While the extension lacks the access to all sites, every tab says its view is partial. Nothing is counted or kept beyond the open tabs yet, and there is no map. The provider data covers Cloudflare, Akamai, Amazon CloudFront, Imperva and Radware, with IP ranges for Cloudflare, CloudFront and Imperva only, since Akamai and Radware publish no list of their edge addresses.
 
 ## Build, test and run
 

@@ -1,0 +1,38 @@
+{
+  "name": "Amazon CloudFront",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-amz-cf-id",
+        "source": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/standard-logs-reference.html (x-edge-request-id, which CloudFront also sends in the x-amz-cf-id response header), and observed on 2026-11-06 on www.leboncoin.fr, api.leboncoin.fr, img.leboncoin.fr and sdk.privacy-center.org"
+      },
+      {
+        "name": "x-amz-cf-pop",
+        "source": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-tutorial.html (example response), and observed on 2026-11-06 on www.leboncoin.fr, api.leboncoin.fr, img.leboncoin.fr and sdk.privacy-center.org"
+      },
+      {
+        "name": "via",
+        "value": "*.cloudfront.net (CloudFront)*",
+        "source": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/RequestAndResponseBehaviorCustomOrigin.html (CloudFront sets Via to <http-version> <alphanumeric-string>.cloudfront.net (CloudFront) in the response to the viewer), and observed on 2026-11-06 on www.leboncoin.fr, api.leboncoin.fr, img.leboncoin.fr and sdk.privacy-center.org. The pattern lets a proxy closer to the browser append its own hop"
+      },
+      {
+        "name": "x-cache",
+        "value": "* from cloudfront",
+        "source": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-tutorial.html (FunctionGeneratedResponse from cloudfront, in the example response), and observed on 2026-11-06 on www.leboncoin.fr, api.leboncoin.fr, img.leboncoin.fr and sdk.privacy-center.org (Hit, Miss and Error from cloudfront)"
+      }
+    ],
+    "server": [
+      {
+        "value": "CloudFront",
+        "source": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/functions-tutorial.html (example of a response that CloudFront generates itself)"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "cloudfront.net",
+        "source": "https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/CreatingCNAME.html (a site's own name is a CNAME to the domain name of its distribution, such as d111111abcdef8.cloudfront.net). A site whose DNS is Route 53 uses an alias record instead and shows no CNAME, as observed on 2026-11-06 on www.leboncoin.fr, api.leboncoin.fr and img.leboncoin.fr"
+      }
+    ]
+  }
+}
