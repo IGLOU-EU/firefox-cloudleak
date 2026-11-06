@@ -1,0 +1,3 @@
+# Source: none, Akamai publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-06
+# Its only public list, for Origin IP ACL (https://techdocs.akamai.com/origin-ip-acl/docs/welcome), holds the addresses its edge servers use to reach origin servers. On 2026-11-05 the edge of www.impots.gouv.fr (92.122.166.136) was outside it, so that list would miss edges. Akamai is recognised by its headers, cookies, server values and CNAME suffixes.

@@ -1,0 +1,26 @@
+{
+  "name": "Radware",
+  "country": "IL",
+  "signatures": {
+    "cookies": [
+      {
+        "name": "__uzm*",
+        "source": "https://github.com/Radware/rdwr-azureapim-securepath-connector (README, Bot Manager cookies), and observed on 2026-11-05 on www.caf.fr (__uzma to __uzmf)"
+      },
+      {
+        "name": "uzmx",
+        "source": "Observed on 2026-11-05 and 2026-11-06 on www.caf.fr"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "radwarecloud.net",
+        "source": "Observed on 2026-11-05 on www.caf.fr and www.radware.com, as the last name of the chain"
+      },
+      {
+        "suffix": "radwarecloud.com",
+        "source": "https://support.radware.com/app/answers/answer_view/a_id/18529/"
+      }
+    ]
+  }
+}

@@ -6,12 +6,12 @@
 
 import { cpSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { formatError, loadProviders } from "./providers.js";
+import { formatError, loadTable } from "./providers.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const dist = `${root}dist/`;
 
-const { table, errors } = loadProviders(`${root}data/providers`);
+const { table, errors } = loadTable(`${root}data`);
 if (errors.length > 0) {
   for (const error of errors) {
     console.error(formatError(error).replace(root, ""));
@@ -27,7 +27,7 @@ writeFileSync(
   [
     "// SPDX-License-Identifier: GPL-3.0-or-later",
     "// Copyright (C) 2026 Adrien Kara",
-    "// Generated from data/providers by the build. Do not edit.",
+    "// Generated from data/ by the build. Do not edit.",
     `export default ${JSON.stringify(table)};`,
     "",
   ].join("\n"),
@@ -37,4 +37,6 @@ for (const path of ["manifest.json", "_locales", "LICENSE"]) {
   cpSync(`${root}${path}`, `${dist}${path}`, { recursive: true });
 }
 
-console.log(`Built dist/ with ${table.length} provider(s).`);
+console.log(
+  `Built dist/ with ${table.providers.length} provider(s) and ${table.consentCookies.length} consent cookie pattern(s).`,
+);

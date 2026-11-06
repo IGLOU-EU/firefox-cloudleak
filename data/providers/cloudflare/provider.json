@@ -19,7 +19,51 @@
     ],
     "cookies": [
       {
+        "name": "__cflb",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
         "name": "__cf_bm",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "__cfseq*",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/ (names the __cfseq sequence cookies without giving their full names)"
+      },
+      {
+        "name": "cf_clearance",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "cf_ob_info",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "cf_use_ob",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "__cfwaitingroom*",
+        "source": "https://developers.cloudflare.com/waiting-room/reference/waiting-room-cookie/ (the name takes an optional suffix)"
+      },
+      {
+        "name": "__cfruid",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "_cfuvid",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "cf_chl_rc_i",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "cf_chl_rc_ni",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
+      },
+      {
+        "name": "cf_chl_rc_m",
         "source": "https://developers.cloudflare.com/fundamentals/reference/policies-compliances/cloudflare-cookies/"
       }
     ],
@@ -32,7 +76,23 @@
     "cname": [
       {
         "suffix": "cdn.cloudflare.net",
-        "source": "Observed on 2026-11-05 on www.ameli.fr and www.legifrance.gouv.fr"
+        "source": "Observed on 2026-11-05 on www.ameli.fr and www.legifrance.gouv.fr, as the last name of the chain"
+      }
+    ],
+    "challengeHosts": [
+      {
+        "host": "challenges.cloudflare.com",
+        "source": "https://developers.cloudflare.com/turnstile/reference/content-security-policy/"
+      },
+      {
+        "host": "*.challenges.cloudflare.com",
+        "source": "https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/, and observed on 2026-11-05 on www.legifrance.gouv.fr (brunhild.challenges.cloudflare.com)"
+      }
+    ],
+    "challengePaths": [
+      {
+        "prefix": "/cdn-cgi/challenge-platform/",
+        "source": "https://developers.cloudflare.com/fundamentals/reference/cdn-cgi-endpoint/, and observed on 2026-11-05 on www.legifrance.gouv.fr"
       }
     ]
   }

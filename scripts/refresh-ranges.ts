@@ -9,7 +9,7 @@ import { readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseCidr } from "../src/core/cidr.js";
-import { parseRangesFile } from "./providers.js";
+import { formatRangesFile, parseRangesFile } from "./providers.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const providersDir = join(root, "data", "providers");
@@ -49,7 +49,7 @@ for (const id of readdirSync(providersDir).sort()) {
   }
   // Only lists served over HTTPS are refreshed. Any other source, such as a
   // hand-made list, is left for a person to update.
-  const { sources, ranges: before } = parseRangesFile(current, path);
+  const { sources, comments, ranges: before } = parseRangesFile(current, path);
   const urls = sources.filter((source) => source.startsWith("https://"));
   if (urls.length === 0 || urls.length !== sources.length) {
     console.log(`${id}: skipped, its sources are not all published lists`);
@@ -57,13 +57,13 @@ for (const id of readdirSync(providersDir).sort()) {
   }
   try {
     const after = (await Promise.all(urls.map(fetchList))).flat();
-    const lines = [
-      ...urls.map((url) => `# Source: ${url}`),
-      `# Fetched: ${today}`,
-      ...after,
-      "",
-    ];
-    writeFileSync(`${path}.tmp`, lines.join("\n"));
+    const text = formatRangesFile({
+      sources: urls,
+      fetched: today,
+      comments,
+      ranges: after,
+    });
+    writeFileSync(`${path}.tmp`, text);
     renameSync(`${path}.tmp`, path);
     const added = after.filter((r) => !before.includes(r.toLowerCase()));
     const removed = before.filter(

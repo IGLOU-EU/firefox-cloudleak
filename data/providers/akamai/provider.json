@@ -1,0 +1,71 @@
+{
+  "name": "Akamai",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "akamai-cache-status",
+        "source": "https://techdocs.akamai.com/property-mgr/docs/return-cache-status (optional, and the customer sets its name), and observed on 2026-11-05 on www.impots.gouv.fr"
+      },
+      {
+        "name": "akamai-grn",
+        "source": "https://techdocs.akamai.com/property-mgr/docs/global-req-number (optional, and the customer sets its name), and observed on 2026-11-05 on www.akamai.com"
+      },
+      {
+        "name": "x-akam-sw-version",
+        "source": "Observed on 2026-11-05 on www.akamai.com"
+      },
+      {
+        "name": "server-timing",
+        "value": "ak_p;*",
+        "source": "Observed on 2026-11-05 on www.akamai.com"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "ak_bmsc",
+        "source": "https://techdocs.akamai.com/identity-cloud/docs/hosted-login-cookies-and-local-storage-1"
+      },
+      {
+        "name": "bm_sv",
+        "source": "https://techdocs.akamai.com/identity-cloud/docs/hosted-login-cookies-and-local-storage-1"
+      },
+      {
+        "name": "akaas_*",
+        "source": "Observed on 2026-11-05 on www.akamai.com"
+      }
+    ],
+    "server": [
+      {
+        "value": "AkamaiGHost",
+        "source": "https://techdocs.akamai.com/edgeworkers/docs/common-errors, and observed on 2026-11-06 on a1352.dscb.akamai.net"
+      },
+      {
+        "value": "AkamaiNetStorage",
+        "source": "https://techdocs.akamai.com/iot-token-access-control/docs/generate-jwt-ecdsa-keys"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "edgesuite.net",
+        "source": "https://techdocs.akamai.com/edge-hostnames/docs/edge-hn-terminology, and observed on 2026-11-05 on www.impots.gouv.fr"
+      },
+      {
+        "suffix": "edgekey.net",
+        "source": "https://techdocs.akamai.com/edge-hostnames/docs/edge-hn-terminology, and observed on 2026-11-05 on www.akamai.com, as the last name of the chain"
+      },
+      {
+        "suffix": "akamaized.net",
+        "source": "https://techdocs.akamai.com/edge-hostnames/docs/edge-hn-terminology"
+      },
+      {
+        "suffix": "akamaiedge.net",
+        "source": "https://techdocs.akamai.com/property-mgr/reference/modify-property-hostnames, and observed on 2026-11-05 on learn.microsoft.com and www.bing.com, as the last name of the chain"
+      },
+      {
+        "suffix": "akamai.net",
+        "source": "Observed on 2026-11-05 on www.impots.gouv.fr (a1352.dscb.akamai.net), as the last name of the chain"
+      }
+    ]
+  }
+}
