@@ -27,7 +27,7 @@ interface Tabs {
   recordOf(tabId: number): TabRecord;
   onCommitted(details: object): Promise<void>;
   onCompleted(details: object): Promise<void>;
-  onStatus(tabId: number, tab: object): Promise<void>;
+  onStatus(tabId: number, change: object, tab: object): Promise<void>;
   onAccessChange(): Promise<void>;
   forget(tabId: number): Promise<void>;
 }
@@ -239,8 +239,13 @@ async function commit(
   });
 }
 
+// The status Firefox gives when a tab commits a new document.
 async function status(tabId: number): Promise<void> {
-  await tabs.onStatus(tabId, { id: tabId, url: "https://site.example/" });
+  await tabs.onStatus(
+    tabId,
+    { status: "loading" },
+    { id: tabId, url: "https://site.example/" },
+  );
 }
 
 // A page through the edge with a session cookie: red, level 4.
@@ -444,13 +449,47 @@ describe("the toolbar button", () => {
     assert.deepEqual(sentSince(tab, mark), ["icon", "badge", "title"]);
   });
 
-  it("sends every value at each change of the tab's status, since Firefox clears them for a new document", async () => {
+  it("sends every value when the tab starts loading, since Firefox clears them for a new document", async () => {
     const tab = 401;
     await redPage(tab, 1000);
     const mark = calls.length;
     await status(tab);
     assert.deepEqual(sentSince(tab, mark), ["icon", "badge", "title"]);
     assert.deepEqual({ icon: shown(tab).icon, badge: shown(tab).badge }, RED);
+  });
+
+  // A new fragment, history.pushState or history.replaceState gives one
+  // status, "complete" once the page has loaded, and the tab keeps its
+  // values (ext-tabs-base.js and ext-browser.js, Firefox 159.0.1).
+  it("sends nothing when the URL changes within the document, which clears none of the values", async () => {
+    const tab = 402;
+    await redPage(tab, 1000);
+    const mark = calls.length;
+    for (const fragment of ["#a", "#b", "#c"]) {
+      await tabs.onStatus(
+        tab,
+        { status: "complete" },
+        { id: tab, url: `https://site.example/${fragment}` },
+      );
+    }
+    mock.timers.runAll();
+    assert.deepEqual(sentSince(tab, mark), []);
+    assert.deepEqual(iconOf(tab), RED);
+  });
+
+  it("sends what changed when the tab completes", async () => {
+    const tab = 403;
+    await commit(tab, "doc-403", 1000);
+    await status(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    const mark = calls.length;
+    await tabs.onStatus(
+      tab,
+      { status: "complete" },
+      { id: tab, url: "https://site.example/" },
+    );
+    assert.deepEqual(sentSince(tab, mark), ["icon", "badge", "title"]);
+    assert.equal(shown(tab).icon, "/icons/blue.svg");
   });
 });
 
@@ -468,7 +507,7 @@ describe("a page of the browser, without the access to all sites", () => {
   // its URL to no extension without the tabs permission, as for a site out
   // of reach (ext-tabs-base.js, Firefox 159.0.1).
   async function statusWithoutUrl(tabId: number): Promise<void> {
-    await tabs.onStatus(tabId, { id: tabId });
+    await tabs.onStatus(tabId, { status: "loading" }, { id: tabId });
   }
 
   const pages = [
@@ -519,6 +558,15 @@ describe("a page of the browser, without the access to all sites", () => {
       assert.equal(shown(tab).title, "titleNotObserved");
     });
   }
+
+  it("says not observed a site out of reach whose commit only its completion follows", async () => {
+    const tab = 713;
+    await redPage(tab, 1000);
+    await commit(tab, "doc-713-hidden", 2000, [], "https://hidden.example/");
+    await tabs.onStatus(tab, { status: "complete" }, { id: tab });
+    assert.equal(shown(tab).icon, "/icons/not-observed.svg");
+    assert.equal(shown(tab).title, "titleNotObserved");
+  });
 });
 
 describe("a closed tab", () => {

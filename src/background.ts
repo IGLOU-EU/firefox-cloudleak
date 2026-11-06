@@ -55,7 +55,7 @@ browser.webNavigation.onCompleted.addListener((details) =>
 );
 
 browser.tabs.onUpdated.addListener(
-  (tabId, _change, tab) => report(onStatus(tabId, tab)),
+  (tabId, change, tab) => report(onStatus(tabId, change, tab)),
   { properties: ["status"] },
 );
 browser.tabs.onRemoved.addListener((tabId) => report(forget(tabId)));
