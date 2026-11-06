@@ -18,12 +18,14 @@ import {
   type Leak,
   type RequestFacts,
 } from "../src/core/classify.js";
+import { displayOf, titleText } from "../src/core/display.js";
 import {
   addRequest,
   colourOfRequest,
   NEUTRAL,
   type TabState,
 } from "../src/core/tab-state.js";
+import { getMessageOf } from "./messages.js";
 
 // The colour and level the icon shows for a state.
 function shown(state: TabState | undefined) {
@@ -237,5 +239,27 @@ describe("Légifrance capture", () => {
       level: 2,
       partial: false,
     });
+  });
+
+  it("counts the requests of the visit in the tooltip, then names the possible session of the site", () => {
+    const state = FIXTURE.map((item) => classifyRequest(item, TABLE)).reduce(
+      addRequest,
+      NEUTRAL,
+    );
+    const title = displayOf(state, TABLE.providers).title;
+    assert.equal(
+      titleText(title, getMessageOf("fr")),
+      "Niveau 4, données personnelles\u00a0: 22 requêtes, déchiffrement prouvé\n" +
+        "Niveau 2, usage\u00a0: 55 requêtes\n" +
+        "\n" +
+        "Session possible\u00a0: les cookies que vous envoyez à ce site passent en clair chez Cloudflare, et l'un d'eux peut porter votre session.",
+    );
+    assert.equal(
+      titleText(title, getMessageOf("en")),
+      "Level 4, personal data: 22 requests, decryption proven\n" +
+        "Level 2, usage: 55 requests\n" +
+        "\n" +
+        "Possible session: the cookies you send to this site go through Cloudflare in clear, and one of them may hold your session.",
+    );
   });
 });

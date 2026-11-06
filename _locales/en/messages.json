@@ -8,85 +8,185 @@
     "description": "Description of the extension, shown in the add-ons manager."
   },
   "titleNeutral": {
-    "message": "No request of this tab goes through a known intermediary.",
-    "description": "Tooltip of the toolbar icon when no request of the tab goes through a known provider."
+    "message": "No request seen in this tab goes through a known intermediary.",
+    "description": "Tooltip of the toolbar icon when no request seen in the tab goes through a known provider."
   },
   "titleNotObserved": {
-    "message": "Site not observed: the extension's access to this site was withdrawn, it can say nothing about it.",
+    "message": "Site not observed: the extension's access to this site was withdrawn, so it can say nothing about it.",
     "description": "Tooltip of the toolbar icon when the extension has no access to the site of the tab and saw nothing."
   },
-  "titleLevel2": {
-    "message": "Level 2, usage: $PROVIDER$ sees which public resources this site makes you load, and when.",
-    "description": "Tooltip of the toolbar icon, blue, level 2.",
+  "countLevel2One": {
+    "message": "Level 2, usage: 1 request",
+    "description": "Line of the tooltip that counts the requests of the tab at level 2, blue, when there is one."
+  },
+  "countLevel2Many": {
+    "message": "Level 2, usage: $COUNT$ requests",
+    "description": "Line of the tooltip that counts the requests of the tab at level 2, blue, when there are several.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Cloudflare" }
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "countLevel3ProvenOne": {
+    "message": "Level 3, reading: 1 request, decryption proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 3, red, when there is one."
+  },
+  "countLevel3ProvenMany": {
+    "message": "Level 3, reading: $COUNT$ requests, decryption proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 3, red, when there are several.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "countLevel3UnprovenOne": {
+    "message": "Level 3, reading: 1 request, decryption not proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 3, orange, when there is one."
+  },
+  "countLevel3UnprovenMany": {
+    "message": "Level 3, reading: $COUNT$ requests, decryption not proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 3, orange, when there are several.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "countLevel4ProvenOne": {
+    "message": "Level 4, personal data: 1 request, decryption proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 4, red, when there is one."
+  },
+  "countLevel4ProvenMany": {
+    "message": "Level 4, personal data: $COUNT$ requests, decryption proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 4, red, when there are several.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "countLevel4UnprovenOne": {
+    "message": "Level 4, personal data: 1 request, decryption not proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 4, orange, when there is one."
+  },
+  "countLevel4UnprovenMany": {
+    "message": "Level 4, personal data: $COUNT$ requests, decryption not proven",
+    "description": "Line of the tooltip that counts the requests of the tab at level 4, orange, when there are several.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "12"
+      }
+    }
+  },
+  "titleLevel2": {
+    "message": "Usage: $PROVIDER$ sees which public resources this site makes you load, and when.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: blue, level 2.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
     }
   },
   "titleLevel3Unproven": {
-    "message": "Level 3, reading, decryption not proven: the pages you read go through $PROVIDER$, perhaps in clear.",
-    "description": "Tooltip of the toolbar icon, orange, level 3.",
+    "message": "Reading: the pages you read go through $PROVIDER$, perhaps in clear.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 3.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Akamai" }
+      "provider": {
+        "content": "$1",
+        "example": "Akamai"
+      }
     }
   },
   "titleLevel3Proven": {
-    "message": "Level 3, reading, decryption proven: the pages you read go in clear through $PROVIDER$.",
-    "description": "Tooltip of the toolbar icon, red, level 3.",
+    "message": "Reading: the pages you read go through $PROVIDER$ in clear.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 3.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Cloudflare" }
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
     }
   },
   "titleLevel4DataSentUnproven": {
-    "message": "Level 4, personal data, data sent, decryption not proven: what you send to this site goes through $PROVIDER$, perhaps in clear.",
-    "description": "Tooltip of the toolbar icon, orange, level 4, case of a request that sends data.",
+    "message": "Data sent: what your browser sends goes through $PROVIDER$, perhaps in clear.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 4, case of a request that sends data.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Akamai" }
+      "provider": {
+        "content": "$1",
+        "example": "Akamai"
+      }
     }
   },
   "titleLevel4DataSentProven": {
-    "message": "Level 4, personal data, data sent, decryption proven: what you send to this site goes in clear through $PROVIDER$.",
-    "description": "Tooltip of the toolbar icon, red, level 4, case of a request that sends data.",
+    "message": "Data sent: what your browser sends goes through $PROVIDER$ in clear.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 4, case of a request that sends data.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Cloudflare" }
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
     }
   },
   "titleLevel4SessionUnproven": {
-    "message": "Level 4, personal data, session, decryption not proven: your session on this site goes through $PROVIDER$, perhaps in clear.",
-    "description": "Tooltip of the toolbar icon, orange, level 4, case of a request that carries an Authorization header.",
+    "message": "Session: your session on this site goes through $PROVIDER$, perhaps in clear.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 4, case of a request that carries an Authorization header.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Akamai" }
+      "provider": {
+        "content": "$1",
+        "example": "Akamai"
+      }
     }
   },
   "titleLevel4SessionProven": {
-    "message": "Level 4, personal data, session, decryption proven: your session on this site goes in clear through $PROVIDER$.",
-    "description": "Tooltip of the toolbar icon, red, level 4, case of a request that carries an Authorization header.",
+    "message": "Session: your session on this site goes through $PROVIDER$ in clear.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 4, case of a request that carries an Authorization header.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Cloudflare" }
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
     }
   },
   "titleLevel4SessionPossibleUnproven": {
-    "message": "Level 4, personal data, possible session, decryption not proven: the cookies you send to this site, perhaps a session, go through $PROVIDER$, perhaps in clear.",
-    "description": "Tooltip of the toolbar icon, orange, level 4, case of a request that carries cookies of the site.",
+    "message": "Possible session: the cookies you send to this site go through $PROVIDER$, perhaps in clear, and one of them may hold your session.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 4, case of a request that carries cookies of the site.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Akamai" }
+      "provider": {
+        "content": "$1",
+        "example": "Akamai"
+      }
     }
   },
   "titleLevel4SessionPossibleProven": {
-    "message": "Level 4, personal data, possible session, decryption proven: the cookies you send to this site, perhaps a session, go in clear through $PROVIDER$.",
-    "description": "Tooltip of the toolbar icon, red, level 4, case of a request that carries cookies of the site.",
+    "message": "Possible session: the cookies you send to this site go through $PROVIDER$ in clear, and one of them may hold your session.",
+    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 4, case of a request that carries cookies of the site.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Cloudflare" }
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
     }
   },
   "titleAntiBot": {
-    "message": "Anti-bot: this request belongs to the anti-bot protection of $PROVIDER$, not to the site you visit.",
-    "description": "Sentence added to the tooltip when the most serious request belongs to the anti-bot machinery of the provider.",
+    "message": "Anti-bot: the most serious request belongs to the anti-bot protection of $PROVIDER$, not to the site you visit.",
+    "description": "Line added to the tooltip when the most serious request belongs to the anti-bot machinery of the provider.",
     "placeholders": {
-      "provider": { "content": "$1", "example": "Cloudflare" }
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
     }
   },
   "titlePartial": {
-    "message": "Partial view: the extension has no access to every site of this tab, it shows what it saw.",
-    "description": "Sentence added to the tooltip when the extension has no access to a site of the tab."
+    "message": "Partial view: the extension does not have access to every site, so it shows only what it saw.",
+    "description": "Line added to the tooltip when the extension lacks the access to all sites."
   }
 }
