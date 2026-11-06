@@ -9,7 +9,10 @@ import { after, describe, it } from "node:test";
 import {
   type DataError,
   formatError,
+  formatRangesFile,
   loadProviders,
+  loadTable,
+  parseConsentCookies,
   parseProviderJson,
   parseRangesFile,
 } from "../scripts/providers.js";
@@ -25,8 +28,21 @@ const VALID_PROVIDER = `{
     ],
     "cookies": [{ "name": "__ex_*", "source": "observed" }],
     "server": [{ "value": "ExampleCDN-*", "source": "observed" }],
-    "cname": [{ "suffix": "cdn.example.net", "source": "observed" }]
+    "cname": [{ "suffix": "cdn.example.net", "source": "observed" }],
+    "challengeHosts": [
+      { "host": "challenge.example.net", "source": "observed" },
+      { "host": "*.challenge.example.net", "source": "observed" }
+    ],
+    "challengePaths": [{ "prefix": "/ex-cgi/challenge/", "source": "observed" }]
   }
+}
+`;
+
+const VALID_CONSENT = `{
+  "cookies": [
+    { "name": "consent_tool", "source": "https://example.com/cookies" },
+    { "name": "_Audience_*", "source": "https://example.com/audience" }
+  ]
 }
 `;
 
@@ -77,7 +93,19 @@ describe("parseProviderJson", () => {
       cookies: ["__ex_*"],
       server: ["ExampleCDN-*"],
       cname: ["cdn.example.net"],
+      challengeHosts: ["challenge.example.net", "*.challenge.example.net"],
+      challengePaths: ["/ex-cgi/challenge/"],
     });
+  });
+
+  it("keeps two path prefixes that differ only by case", () => {
+    const text = VALID_PROVIDER.replace(
+      '"challengePaths": [{ "prefix": "/ex-cgi/challenge/", "source": "observed" }]',
+      '"challengePaths": [{ "prefix": "/Ex/", "source": "a" }, { "prefix": "/ex/", "source": "b" }]',
+    );
+    const { provider, errors } = parseProviderJson(text, "p");
+    assert.deepEqual(errors, []);
+    assert.deepEqual(provider?.challengePaths, ["/Ex/", "/ex/"]);
   });
 
   it("accepts a provider without parent nor signatures", () => {
@@ -190,12 +218,171 @@ describe("parseProviderJson", () => {
       "signatures.cookies[1].name",
       /given twice, first at signatures\.cookies\[0\]/,
     ],
+    [
+      "a server value given twice in another case",
+      '"server": [{ "value": "ExampleCDN-*", "source": "observed" }]',
+      '"server": [{ "value": "ExampleCDN-*", "source": "a" }, { "value": "examplecdn-*", "source": "b" }]',
+      "signatures.server[1].value",
+      /given twice, first at signatures\.server\[0\]/,
+    ],
+    [
+      "a challenge host in capitals",
+      '"host": "challenge.example.net"',
+      '"host": "Challenge.example.net"',
+      "signatures.challengeHosts[0].host",
+      /host pattern/,
+    ],
+    [
+      "a challenge host written as a URL",
+      '"host": "challenge.example.net"',
+      '"host": "https://challenge.example.net/"',
+      "signatures.challengeHosts[0].host",
+      /host pattern/,
+    ],
+    [
+      "a challenge host with an empty label",
+      '"host": "challenge.example.net"',
+      '"host": "challenge..example.net"',
+      "signatures.challengeHosts[0].host",
+      /host pattern/,
+    ],
+    [
+      "a challenge host with a doubled wildcard",
+      '"host": "*.challenge.example.net"',
+      '"host": "**.challenge.example.net"',
+      "signatures.challengeHosts[1].host",
+      /"\*\*"/,
+    ],
+    [
+      "a challenge host given twice",
+      '"host": "*.challenge.example.net"',
+      '"host": "challenge.example.net"',
+      "signatures.challengeHosts[1].host",
+      /given twice, first at signatures\.challengeHosts\[0\]/,
+    ],
+    [
+      "a challenge path without a leading slash",
+      '"prefix": "/ex-cgi/challenge/"',
+      '"prefix": "ex-cgi/challenge/"',
+      "signatures.challengePaths[0].prefix",
+      /path prefix/,
+    ],
+    [
+      "a wildcard in a challenge path",
+      '"prefix": "/ex-cgi/challenge/"',
+      '"prefix": "/ex-cgi/*/challenge/"',
+      "signatures.challengePaths[0].prefix",
+      /path prefix/,
+    ],
+    [
+      "a query in a challenge path",
+      '"prefix": "/ex-cgi/challenge/"',
+      '"prefix": "/ex-cgi/challenge?id="',
+      "signatures.challengePaths[0].prefix",
+      /path prefix/,
+    ],
+    [
+      "a space in a challenge path",
+      '"prefix": "/ex-cgi/challenge/"',
+      '"prefix": "/ex-cgi/my challenge/"',
+      "signatures.challengePaths[0].prefix",
+      /path prefix/,
+    ],
+    [
+      "a challenge path without source",
+      '"prefix": "/ex-cgi/challenge/", "source": "observed"',
+      '"prefix": "/ex-cgi/challenge/"',
+      "signatures.challengePaths[0].source",
+      /required/,
+    ],
   ];
   for (const [name, from, to, field, reason] of cases) {
     it(`rejects ${name} and names its field`, () => {
       assert.ok(VALID_PROVIDER.includes(from), from);
       assertOneFieldError(
         providerErrors(VALID_PROVIDER.replace(from, to)),
+        field,
+        reason,
+      );
+    });
+  }
+});
+
+describe("parseConsentCookies", () => {
+  function consentErrors(text: string): DataError[] {
+    return parseConsentCookies(text, "consent-cookies.json").errors;
+  }
+
+  it("reads the patterns and lowers their case", () => {
+    const { cookies, errors } = parseConsentCookies(VALID_CONSENT, "c");
+    assert.deepEqual(errors, []);
+    assert.deepEqual(cookies, ["consent_tool", "_audience_*"]);
+  });
+
+  it("gives the parser message for a JSON syntax error", () => {
+    assertOneFieldError(consentErrors('{ "cookies": [], }'), null, /JSON/);
+  });
+
+  it("refuses a value that is not an object", () => {
+    assertOneFieldError(consentErrors("[]"), null, /JSON object/);
+  });
+
+  it("requires the list", () => {
+    assertOneFieldError(consentErrors("{}"), "cookies", /required/);
+  });
+
+  const cases: [string, string, string, string, RegExp][] = [
+    [
+      "an unknown key",
+      '"cookies": [',
+      '"note": "x", "cookies": [',
+      "note",
+      /unknown key/,
+    ],
+    [
+      "a list that is not an array",
+      `"cookies": [
+    { "name": "consent_tool", "source": "https://example.com/cookies" },
+    { "name": "_Audience_*", "source": "https://example.com/audience" }
+  ]`,
+      '"cookies": { "name": "consent_tool", "source": "a" }',
+      "cookies",
+      /array/,
+    ],
+    [
+      "an entry without source",
+      '"name": "consent_tool", "source": "https://example.com/cookies"',
+      '"name": "consent_tool"',
+      "cookies[0].source",
+      /required/,
+    ],
+    [
+      "a name that is not a cookie name pattern",
+      '"name": "consent_tool"',
+      '"name": "consent tool"',
+      "cookies[0].name",
+      /name pattern/,
+    ],
+    [
+      "a pattern made only of wildcards",
+      '"name": "_Audience_*"',
+      '"name": "*"',
+      "cookies[1].name",
+      /only of "\*"/,
+    ],
+    [
+      "a pattern given twice in another case",
+      '"name": "_Audience_*"',
+      '"name": "Consent_Tool"',
+      "cookies[1].name",
+      /given twice, first at cookies\[0\]/,
+    ],
+  ];
+  for (const [name, from, to, field, reason] of cases) {
+    it(`rejects ${name} and names its field`, () => {
+      assert.ok(VALID_CONSENT.includes(from), from);
+      assertOneFieldError(
+        consentErrors(VALID_CONSENT.replace(from, to)),
         field,
         reason,
       );
@@ -212,9 +399,21 @@ describe("parseRangesFile", () => {
     assert.deepEqual(result.ranges, ["192.0.2.0/24", "2001:db8::/32"]);
   });
 
-  it("ignores blank lines and other comments", () => {
+  it("ignores blank lines and keeps other comments", () => {
     const text = `${VALID_RANGES}\n# Note\n\n198.51.100.0/24\n`;
-    assert.deepEqual(parseRangesFile(text, "r").errors, []);
+    const result = parseRangesFile(text, "r");
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.comments, ["# Note"]);
+  });
+
+  it("accepts a list with no range, for a provider that publishes none", () => {
+    const text = `# Source: none, Example CDN publishes no list of its edges
+# Fetched: 2026-11-06
+# Its only list holds the addresses that reach origin servers.
+`;
+    const result = parseRangesFile(text, "r");
+    assert.deepEqual(result.errors, []);
+    assert.deepEqual(result.ranges, []);
   });
 
   it("names the line of a malformed range and says why", () => {
@@ -246,6 +445,47 @@ describe("parseRangesFile", () => {
       1,
       /# Fetched:/,
     );
+  });
+});
+
+describe("formatRangesFile", () => {
+  it("writes the header, the comments, then one range per line", () => {
+    const text = `# Source: https://example.com/ips-v4
+# Source: https://example.com/ips-v6
+# Fetched: 2026-11-06
+# These are the addresses browsers connect to.
+192.0.2.0/24
+2001:db8::/32
+`;
+    const parsed = parseRangesFile(text, "r");
+    assert.deepEqual(parsed.errors, []);
+    assert.equal(
+      formatRangesFile({
+        sources: parsed.sources,
+        fetched: "2026-11-06",
+        comments: parsed.comments,
+        ranges: parsed.ranges,
+      }),
+      text,
+    );
+  });
+
+  it("keeps the comments when the ranges change", () => {
+    const parsed = parseRangesFile(
+      "# Source: https://example.com/ips\n# Fetched: 2026-11-05\n# Why.\n192.0.2.0/24\n",
+      "r",
+    );
+    const text = formatRangesFile({
+      sources: parsed.sources,
+      fetched: "2026-11-06",
+      comments: parsed.comments,
+      ranges: ["198.51.100.0/24"],
+    });
+    const again = parseRangesFile(text, "r");
+    assert.deepEqual(again.errors, []);
+    assert.equal(again.fetched, "2026-11-06");
+    assert.deepEqual(again.comments, ["# Why."]);
+    assert.deepEqual(again.ranges, ["198.51.100.0/24"]);
   });
 });
 
@@ -325,6 +565,75 @@ describe("loadProviders", () => {
         [join("two", "ranges.txt"), 3, null],
       ],
     );
+  });
+
+  describe("loadTable", () => {
+    it("gives the providers and the consent cookies in one table", () => {
+      const dir = folder("table", {
+        "providers/example/provider.json": `{
+          "name": "Example CDN",
+          "country": "US",
+          "signatures": {
+            "cookies": [{ "name": "__Ex", "source": "observed" }],
+            "challengeHosts": [{ "host": "*.challenge.example.net", "source": "observed" }],
+            "challengePaths": [{ "prefix": "/ex/", "source": "observed" }]
+          }
+        }`,
+        "providers/example/ranges.txt": VALID_RANGES,
+        "consent-cookies.json": VALID_CONSENT,
+      });
+      const { table, errors } = loadTable(dir);
+      assert.deepEqual(errors, []);
+      assert.deepEqual(table, {
+        providers: [
+          {
+            id: "example",
+            name: "Example CDN",
+            country: "US",
+            parent: null,
+            ranges: ["192.0.2.0/24", "2001:db8::/32"],
+            headers: [],
+            cookies: ["__ex"],
+            server: [],
+            cname: [],
+            challengeHosts: ["*.challenge.example.net"],
+            challengePaths: ["/ex/"],
+          },
+        ],
+        consentCookies: ["consent_tool", "_audience_*"],
+      });
+    });
+
+    it("requires the consent cookie list", () => {
+      const dir = folder("no-consent", {
+        "providers/example/provider.json": VALID_PROVIDER,
+      });
+      const { errors } = loadTable(dir);
+      assert.equal(errors.length, 1, JSON.stringify(errors));
+      assert.match(errors[0]?.file ?? "", /consent-cookies\.json$/);
+      assert.match(errors[0]?.reason ?? "", /missing/);
+    });
+
+    it("reports the errors of the providers and of the consent list", () => {
+      const dir = folder("both-invalid", {
+        "providers/example/provider.json": VALID_PROVIDER.replace(
+          '"country": "US"',
+          '"country": "us"',
+        ),
+        "consent-cookies.json": VALID_CONSENT.replace(
+          '"name": "consent_tool"',
+          '"name": "consent tool"',
+        ),
+      });
+      const { errors } = loadTable(dir);
+      assert.deepEqual(
+        errors.map((error) => [error.file.slice(dir.length + 1), error.field]),
+        [
+          [join("providers", "example", "provider.json"), "country"],
+          ["consent-cookies.json", "cookies[0].name"],
+        ],
+      );
+    });
   });
 });
 

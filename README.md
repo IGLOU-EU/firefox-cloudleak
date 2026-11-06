@@ -13,7 +13,7 @@ These promises are the design rules of the project, whose binding wording is in 
 
 ## Status
 
-Under construction, nothing usable yet. The extension builds, but it does not observe any request yet. Its provider data covers Cloudflare only.
+Under construction, nothing usable yet. The extension builds, but it does not observe any request yet. Its provider data covers Cloudflare, Akamai, Imperva and Radware, with IP ranges for Cloudflare and Imperva only, since Akamai and Radware publish no list of their edge addresses.
 
 ## Build, test and run
 

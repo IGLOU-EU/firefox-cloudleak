@@ -1,0 +1,68 @@
+{
+  "cookies": [
+    {
+      "name": "tarteaucitron",
+      "source": "https://github.com/AmauriC/tarteaucitron.js (README, default cookieName), and observed on 2026-11-05 on www.legifrance.gouv.fr"
+    },
+    {
+      "name": "axeptio_cookies",
+      "source": "https://support.axeptio.eu/en/articles/274085-does-axeptio-place-cookies"
+    },
+    {
+      "name": "axeptio_authorized_vendors",
+      "source": "https://support.axeptio.eu/en/articles/274085-does-axeptio-place-cookies"
+    },
+    {
+      "name": "axeptio_all_vendors",
+      "source": "https://support.axeptio.eu/en/articles/274085-does-axeptio-place-cookies"
+    },
+    {
+      "name": "didomi_token",
+      "source": "https://developers.didomi.io/cmp/web-sdk/consent-notice/cookies"
+    },
+    {
+      "name": "didomi_dcs",
+      "source": "https://developers.didomi.io/cmp/web-sdk/consent-notice/cookies"
+    },
+    {
+      "name": "euconsent-v2",
+      "source": "https://developers.didomi.io/cmp/web-sdk/consent-notice/cookies (IAB TCF consent string)"
+    },
+    {
+      "name": "OptanonConsent*",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a hash may end the name)"
+    },
+    {
+      "name": "OptanonAlertBoxClosed*",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a hash may end the name)"
+    },
+    {
+      "name": "eupubconsent-v2",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (IAB TCF consent string)"
+    },
+    {
+      "name": "_pk_*",
+      "source": "https://matomo.org/faq/general/faq_146/, and the default prefix of the tracker cookies at https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L2338"
+    },
+    {
+      "name": "mtm_consent",
+      "source": "https://developer.matomo.org/guides/tracking-consent"
+    },
+    {
+      "name": "mtm_cookie_consent",
+      "source": "https://developer.matomo.org/guides/tracking-consent"
+    },
+    {
+      "name": "mtm_consent_removed",
+      "source": "https://matomo.org/faq/general/faq_146/"
+    },
+    {
+      "name": "_ga",
+      "source": "https://support.google.com/analytics/answer/11397207"
+    },
+    {
+      "name": "_ga_*",
+      "source": "https://support.google.com/analytics/answer/11397207"
+    }
+  ]
+}

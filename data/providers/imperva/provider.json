@@ -1,0 +1,42 @@
+{
+  "name": "Imperva",
+  "country": "US",
+  "parent": { "name": "Thales", "country": "FR" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-iinfo",
+        "source": "https://docs-cybersec.thalesgroup.com/bundle/cloud-application-security/page/settings/caching.htm, and observed on 2026-11-05 on www.franceconnect.gouv.fr"
+      },
+      {
+        "name": "x-cdn",
+        "value": "Imperva",
+        "source": "Observed on 2026-11-05 on www.franceconnect.gouv.fr and www.imperva.com"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "visid_incap_*",
+        "source": "https://docs-cybersec.thalesgroup.com/bundle/cloud-application-security/page/release-notes/2021-04-25.htm, and observed on 2026-11-05 on www.franceconnect.gouv.fr"
+      },
+      {
+        "name": "incap_ses_*",
+        "source": "Observed on 2026-11-05 on www.franceconnect.gouv.fr and www.imperva.com"
+      },
+      {
+        "name": "nlbi_*",
+        "source": "Observed on 2026-11-05 on www.franceconnect.gouv.fr and www.imperva.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "incapdns.net",
+        "source": "https://docs-cybersec.thalesgroup.com/bundle/cloud-application-security/page/release-notes/2020-12-06.htm, and observed on 2026-11-05 on www.imperva.com, as the last name of the chain"
+      },
+      {
+        "suffix": "impervadns.net",
+        "source": "https://docs-cybersec.thalesgroup.com/bundle/cloud-application-security/page/release-notes/2020-12-06.htm, and observed on 2026-11-05 on www.franceconnect.gouv.fr, as the last name of the chain"
+      }
+    ]
+  }
+}

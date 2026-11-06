@@ -25,6 +25,8 @@ export interface Provider extends Company {
   cookies: string[];
   server: string[];
   cname: string[];
+  challengeHosts: string[];
+  challengePaths: string[];
 }
 
 // The generated table holds only what the extension uses. The sources stay
@@ -34,7 +36,13 @@ export interface ProviderEntry extends Provider {
   ranges: string[];
 }
 
+export interface ProviderTable {
+  providers: ProviderEntry[];
+  consentCookies: string[];
+}
+
 export const PROVIDER_FILES = ["provider.json", "ranges.txt", "logo.svg"];
+export const CONSENT_FILE = "consent-cookies.json";
 
 // The id names the folder, so the file system already forbids two equal ids.
 // Lowercase only keeps it so on file systems that ignore case.
@@ -45,6 +53,10 @@ const NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
 const VALUE_PATTERN = /^[\x20-\x7e]+$/;
 const DOMAIN =
   /^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
+// A path prefix is compared as it is, so "*" would be a literal character
+// that no one means, and the query and fragment are never part of a path.
+const PATH_PREFIX = /^\/[!-~]*$/;
+const NOT_IN_PATH = /[*?#]/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 type Report = (field: string, reason: string) => void;
@@ -131,7 +143,7 @@ function readCompany(
 
 interface Field {
   key: string;
-  kind: "name" | "value" | "domain";
+  kind: "name" | "value" | "domain" | "host" | "path";
   optional: boolean;
 }
 
@@ -140,6 +152,14 @@ function fieldProblem(field: Field, value: string): string | null {
     return DOMAIN.test(value)
       ? null
       : `"${value}" is not a lowercase domain name, write the suffix without "*" or a leading dot`;
+  }
+  if (field.kind === "path") {
+    return PATH_PREFIX.test(value) && !NOT_IN_PATH.test(value)
+      ? null
+      : `"${value}" is not a path prefix: it starts with "/" and holds no space, "*", "?" or "#"`;
+  }
+  if (field.kind === "host" && !DOMAIN.test(value.replaceAll("*", "a"))) {
+    return `"${value}" is not a lowercase host pattern: write a domain name, where "*" stands for any run of characters`;
   }
   if (field.kind === "name" && !NAME_PATTERN.test(value)) {
     return `"${value}" is not a valid name pattern: only letters, digits, the characters !#$%&'+-.^_\`|~ and the "*" wildcard are allowed`;
@@ -214,7 +234,13 @@ function readSignatures(
       );
       continue;
     }
-    const key = JSON.stringify(values);
+    // The extension ignores case everywhere but in paths, so two entries that
+    // differ only by case are the same signature.
+    const key = JSON.stringify(
+      values.map((text, i) =>
+        fields[i]?.kind === "path" ? text : (text?.toLowerCase() ?? null),
+      ),
+    );
     const first = seen.get(key);
     if (first !== undefined) {
       report(firstPath, `is given twice, first at ${first}`);
@@ -226,6 +252,32 @@ function readSignatures(
   return result;
 }
 
+function firstColumn(rows: (string | null)[][]): string[] {
+  return rows.map((row) => row[0] ?? "");
+}
+
+// A data file holds one JSON object. A syntax error is reported with the
+// parser message, which gives the position.
+function readJsonFile(
+  text: string,
+  file: string,
+  what: string,
+  errors: DataError[],
+): JsonObject | null {
+  let root: unknown;
+  try {
+    root = JSON.parse(text);
+  } catch (error) {
+    errors.push(fileError(file, (error as Error).message));
+    return null;
+  }
+  if (!isObject(root)) {
+    errors.push(fileError(file, `${what} must be a JSON object`));
+    return null;
+  }
+  return root;
+}
+
 export function parseProviderJson(
   text: string,
   file: string,
@@ -233,25 +285,8 @@ export function parseProviderJson(
   const errors: DataError[] = [];
   const report: Report = (field, reason) =>
     errors.push({ file, line: null, field, reason });
-  let root: unknown;
-  try {
-    root = JSON.parse(text);
-  } catch (error) {
-    errors.push({
-      file,
-      line: null,
-      field: null,
-      reason: (error as Error).message,
-    });
-    return { provider: null, errors };
-  }
-  if (!isObject(root)) {
-    errors.push({
-      file,
-      line: null,
-      field: null,
-      reason: "the provider must be a JSON object",
-    });
+  const root = readJsonFile(text, file, "the provider", errors);
+  if (root === null) {
     return { provider: null, errors };
   }
   readObject(
@@ -278,7 +313,17 @@ export function parseProviderJson(
       : readObject(
           root["signatures"],
           "signatures",
-          { required: [], optional: ["headers", "cookies", "server", "cname"] },
+          {
+            required: [],
+            optional: [
+              "headers",
+              "cookies",
+              "server",
+              "cname",
+              "challengeHosts",
+              "challengePaths",
+            ],
+          },
           report,
         );
   const name = (key: string): Field => ({ key, kind: "name", optional: false });
@@ -306,11 +351,22 @@ export function parseProviderJson(
     [{ key: "suffix", kind: "domain", optional: false }],
     report,
   );
+  const challengeHosts = readSignatures(
+    signatures?.["challengeHosts"],
+    "signatures.challengeHosts",
+    [{ key: "host", kind: "host", optional: false }],
+    report,
+  );
+  const challengePaths = readSignatures(
+    signatures?.["challengePaths"],
+    "signatures.challengePaths",
+    [{ key: "prefix", kind: "path", optional: false }],
+    report,
+  );
 
   if (errors.length > 0 || company === null) {
     return { provider: null, errors };
   }
-  const only = (rows: (string | null)[][]) => rows.map((row) => row[0] ?? "");
   return {
     provider: {
       ...company,
@@ -319,17 +375,41 @@ export function parseProviderJson(
         name: header ?? "",
         value: value ?? null,
       })),
-      cookies: only(cookies),
-      server: only(server),
-      cname: only(cname),
+      cookies: firstColumn(cookies),
+      server: firstColumn(server),
+      cname: firstColumn(cname),
+      challengeHosts: firstColumn(challengeHosts),
+      challengePaths: firstColumn(challengePaths),
     },
     errors,
   };
 }
 
+export function parseConsentCookies(
+  text: string,
+  file: string,
+): { cookies: string[]; errors: DataError[] } {
+  const errors: DataError[] = [];
+  const report: Report = (field, reason) =>
+    errors.push({ file, line: null, field, reason });
+  const root = readJsonFile(text, file, "the consent cookie list", errors);
+  if (root === null) {
+    return { cookies: [], errors };
+  }
+  readObject(root, "", { required: ["cookies"], optional: [] }, report);
+  const cookies = readSignatures(
+    root["cookies"],
+    "cookies",
+    [{ key: "name", kind: "name", optional: false }],
+    report,
+  );
+  return { cookies: errors.length > 0 ? [] : firstColumn(cookies), errors };
+}
+
 export interface RangesFile {
   sources: string[];
   fetched: string | null;
+  comments: string[];
   ranges: string[];
   errors: DataError[];
 }
@@ -338,6 +418,7 @@ export function parseRangesFile(text: string, file: string): RangesFile {
   const result: RangesFile = {
     sources: [],
     fetched: null,
+    comments: [],
     ranges: [],
     errors: [],
   };
@@ -354,9 +435,11 @@ export function parseRangesFile(text: string, file: string): RangesFile {
     if (line.startsWith("#")) {
       const header = /^#\s*(Source|Fetched):\s*(.*)$/.exec(line);
       const value = header?.[2]?.trim() ?? "";
-      if (header?.[1] === "Source" && value !== "") {
+      if (header === null) {
+        result.comments.push(line);
+      } else if (header[1] === "Source" && value !== "") {
         result.sources.push(value);
-      } else if (header?.[1] === "Fetched") {
+      } else if (header[1] === "Fetched") {
         fetchedLine = true;
         const date = new Date(`${value}T00:00:00Z`);
         if (
@@ -395,6 +478,23 @@ export function parseRangesFile(text: string, file: string): RangesFile {
     report(`a "# Fetched:" line must give the date of the list`, 1);
   }
   return result;
+}
+
+// The comments say what the list is and why it is trusted, so a refresh
+// that rewrites the ranges keeps them.
+export function formatRangesFile(file: {
+  sources: string[];
+  fetched: string;
+  comments: string[];
+  ranges: string[];
+}): string {
+  return [
+    ...file.sources.map((source) => `# Source: ${source}`),
+    `# Fetched: ${file.fetched}`,
+    ...file.comments,
+    ...file.ranges,
+    "",
+  ].join("\n");
 }
 
 function readIfPresent(path: string): string | null {
@@ -460,6 +560,26 @@ export function loadProviders(dir: string): {
     }
   }
   return { table, errors };
+}
+
+// The table that dist/providers.js exports: the providers from
+// data/providers and the consent cookies from data/consent-cookies.json.
+export function loadTable(dataDir: string): {
+  table: ProviderTable;
+  errors: DataError[];
+} {
+  const { table: providers, errors } = loadProviders(
+    join(dataDir, "providers"),
+  );
+  const consentPath = join(dataDir, CONSENT_FILE);
+  const text = readIfPresent(consentPath);
+  if (text === null) {
+    errors.push(fileError(consentPath, `${CONSENT_FILE} is missing`));
+    return { table: { providers, consentCookies: [] }, errors };
+  }
+  const consent = parseConsentCookies(text, consentPath);
+  errors.push(...consent.errors);
+  return { table: { providers, consentCookies: consent.cookies }, errors };
 }
 
 export function formatError(error: DataError): string {

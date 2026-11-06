@@ -60,6 +60,7 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 - `src/core/`: the pure core, with no browser API. It runs and is tested in Node, without Firefox.
 - `src/background.ts`: the background entry point of the extension.
 - `data/providers/`: one folder per provider (see "Provider data").
+- `data/consent-cookies.json`: the cookies of known consent and audience-measurement tools (see "Provider data").
 - `scripts/`: the build and the maintenance scripts, which run in Node on the development machine only.
 - `tests/`: the tests, run by the Node test runner.
 - `manifest.json`, `_locales/`: copied into the extension as they are.
@@ -90,16 +91,22 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | Field | Required | Content |
 | --- | --- | --- |
 | `name` | Yes | The provider's name |
-| `country` | Yes | ISO 3166-1 alpha-2 code of its country, in capitals |
+| `country` | Yes | ISO 3166-1 alpha-2 code of the country of the contracting entity, in capitals |
 | `parent` | No | Parent company, as `{ "name": ..., "country": ... }` |
 | `signatures.headers` | No | Response headers: `name`, optional `value`, `source` |
-| `signatures.cookies` | No | Cookies it sets: `name`, `source` |
+| `signatures.cookies` | No | Cookies the provider sets or uses itself: `name`, `source` |
 | `signatures.server` | No | Values of the `server` header: `value`, `source` |
 | `signatures.cname` | No | CNAME suffixes, as a lowercase domain name: `suffix`, `source` |
+| `signatures.challengeHosts` | No | Hosts that serve the provider's anti-bot challenge, as a lowercase host pattern: `host`, `source` |
+| `signatures.challengePaths` | No | Path prefixes of the challenge, compared to the path of the request URL: `prefix`, `source` |
 
-Every signature has a `source`: the URL of the provider's documentation, or where and when it was observed.
+Every signature has a `source`: the URL of the provider's documentation, or where and when it was observed. A signature that is only observed says so, with the date and the site.
 
-Names and values are patterns where `*` matches any run of characters and every other character is literal. They are never regular expressions. Header and cookie names are matched without regard to case. A pattern made only of `*`, or holding `**`, is refused. The `server` header goes in `signatures.server`, always with a value, because its name alone is on every site.
+Header names, cookie names, header values, `server` values and challenge hosts are patterns: `*` matches any run of characters, the empty run included, and every other character is literal. They are never regular expressions, and they are all compared without regard to case. A pattern made only of `*`, or holding `**`, is refused, and so are two entries of a list that differ only by case. The `server` header goes in `signatures.server`, always with a value, because its name alone is on every site.
+
+A CNAME suffix holds no `*` and matches on a label boundary, without regard to case: `cdn.cloudflare.net` matches `www.example.com.cdn.cloudflare.net`, not `xcdn.cloudflare.net`. It is compared to the last name of the CNAME chain, the only one Firefox gives, so a provider's suffixes cover the names its chains end with, not only the first hop: Akamai needs `akamai.net` for a chain that goes through `edgesuite.net` and ends at `a1352.dscb.akamai.net`.
+
+A challenge path prefix starts with `/` and holds no space, `*`, `?` or `#`. It is compared to the path of the URL as a plain prefix, with regard to case.
 
 `ranges.txt` holds one CIDR range per line. Its header gives the published list it comes from and the date it was fetched, and other `#` lines are comments:
 
@@ -109,9 +116,21 @@ Names and values are patterns where `*` matches any run of characters and every 
 173.245.48.0/20
 ```
 
-`npm run build` reads every provider folder, checks it and writes the table the extension loads. Invalid data fails the build with the file, the place and the reason: the line in `ranges.txt`, the field path in `provider.json` (such as `signatures.headers[2].name`), or the parser message when `provider.json` is not valid JSON.
+A list enters `ranges.txt` only if it covers the edge addresses browsers connect to, and a comment says why it is trusted. A list of the addresses a provider uses to reach origin servers is not enough by itself: Akamai's misses edges. When a provider publishes no list of its edges, `ranges.txt` keeps its header, with a `# Source:` that says so and the date of the check in `# Fetched:`, a comment says why, and it holds no range. The file records the check, so that the wrong list is not added later, and the provider is then recognised by its HTTP signatures and CNAME suffixes.
 
-`npm run refresh-ranges` downloads again every list named by a `# Source:` HTTPS URL, checks each line and rewrites `ranges.txt` with the new date. It runs on the development machine only, and the new ranges reach users with the next version. A `ranges.txt` with any other source is left for a person to update.
+`data/consent-cookies.json` lists the cookie name patterns of known consent and audience-measurement tools, each with its source: the tool's own documentation or code, where the name is written. A `*` goes only where the source says the name varies.
+
+```json
+{
+  "cookies": [
+    { "name": "tarteaucitron", "source": "https://github.com/AmauriC/tarteaucitron.js" }
+  ]
+}
+```
+
+`npm run build` reads every provider folder and `data/consent-cookies.json`, checks them and writes the table the extension loads, `dist/providers.js`, whose default export is `{ providers, consentCookies }`. Invalid data fails the build with the file, the place and the reason: the line in `ranges.txt`, the field path in a JSON file (such as `signatures.headers[2].name` or `cookies[3].name`), or the parser message when a JSON file is not valid JSON.
+
+`npm run refresh-ranges` downloads again every list named by a `# Source:` HTTPS URL, checks each line and rewrites `ranges.txt` with the new date, keeping its comments. It runs on the development machine only, and the new ranges reach users with the next version. A `ranges.txt` with any other source is left for a person to update.
 
 ## Tests
 
