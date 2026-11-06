@@ -31,6 +31,8 @@ function provider(
     cname: [],
     challengeHosts: [],
     challengePaths: [],
+    challengeHeaders: [],
+    challengeQueryNames: [],
     ...signatures,
   };
 }
@@ -46,6 +48,11 @@ const ALPHA = provider("alpha", {
   cname: ["cdn.alpha.example"],
   challengeHosts: ["challenge.alpha.example", "*.challenge.alpha.example"],
   challengePaths: ["/alpha-challenge/"],
+  challengeHeaders: [
+    { name: "x-alpha-mitigated", value: "challenge" },
+    { name: "x-alpha-challenge-id", value: null },
+  ],
+  challengeQueryNames: ["__alpha_chl_*"],
 });
 
 const BETA = provider("beta", {
@@ -74,6 +81,7 @@ function facts(changes: Partial<RequestFacts> = {}): RequestFacts {
     tls: true,
     host: "www.example.org",
     path: "/app.js",
+    queryNames: [],
     ip: UNKNOWN_IP,
     cookies: [],
     authorization: false,
@@ -103,8 +111,30 @@ function leakOf(changes: Partial<RequestFacts>): Leak {
   return result.leak;
 }
 
-const SESSION: Leak = { level: 4, case: "session", possible: false };
-const SESSION_POSSIBLE: Leak = { level: 4, case: "session", possible: true };
+const SESSION: Leak = {
+  level: 4,
+  case: "session",
+  possible: false,
+  challenge: false,
+};
+const SESSION_POSSIBLE: Leak = {
+  level: 4,
+  case: "session",
+  possible: true,
+  challenge: false,
+};
+const SESSION_IN_CHALLENGE: Leak = {
+  level: 4,
+  case: "session",
+  possible: false,
+  challenge: true,
+};
+const SESSION_POSSIBLE_IN_CHALLENGE: Leak = {
+  level: 4,
+  case: "session",
+  possible: true,
+  challenge: true,
+};
 const DATA_SENT: Leak = { level: 4, case: "data-sent", challenge: false };
 const CHALLENGE: Leak = { level: 4, case: "data-sent", challenge: true };
 
@@ -414,7 +444,7 @@ describe("classifyRequest, the level", () => {
     assert.deepEqual(leakOf({ authorization: true }), SESSION);
   });
 
-  it("puts Authorization before cookies, challenge and body", () => {
+  it("puts Authorization before cookies and body, and keeps the challenge mark", () => {
     assert.deepEqual(
       leakOf({
         authorization: true,
@@ -422,6 +452,10 @@ describe("classifyRequest, the level", () => {
         method: "POST",
         path: "/alpha-challenge/x",
       }),
+      SESSION_IN_CHALLENGE,
+    );
+    assert.deepEqual(
+      leakOf({ authorization: true, cookies: ["sid"], method: "POST" }),
       SESSION,
     );
   });
@@ -474,11 +508,109 @@ describe("classifyRequest, the level", () => {
     assert.deepEqual(leakOf({ cookies: [] }), { level: 2 });
   });
 
-  it("puts the cookies before the challenge", () => {
+  it("keeps the session case for a challenge request that carries a session, with the challenge mark", () => {
     assert.deepEqual(
       leakOf({ method: "POST", path: "/alpha-challenge/x", cookies: ["sid"] }),
-      SESSION_POSSIBLE,
+      SESSION_POSSIBLE_IN_CHALLENGE,
     );
+    assert.deepEqual(
+      leakOf({ queryNames: ["__alpha_chl_tk"], cookies: ["sid"] }),
+      SESSION_POSSIBLE_IN_CHALLENGE,
+    );
+    assert.deepEqual(
+      leakOf({
+        responseHeaders: [{ name: "x-alpha-mitigated", value: "challenge" }],
+        authorization: true,
+      }),
+      SESSION_IN_CHALLENGE,
+    );
+  });
+
+  it("gives level 4, data sent, challenge, for a challenge response header", () => {
+    assert.deepEqual(
+      leakOf({
+        responseHeaders: [{ name: "x-alpha-mitigated", value: "challenge" }],
+      }),
+      CHALLENGE,
+    );
+    assert.deepEqual(
+      leakOf({
+        responseHeaders: [{ name: "X-Alpha-Mitigated", value: "CHALLENGE" }],
+      }),
+      CHALLENGE,
+    );
+    assert.deepEqual(
+      leakOf({
+        responseHeaders: [{ name: "x-alpha-challenge-id", value: "" }],
+      }),
+      CHALLENGE,
+    );
+  });
+
+  it("does not take a challenge header with another value for a challenge", () => {
+    assert.deepEqual(
+      leakOf({
+        responseHeaders: [{ name: "x-alpha-mitigated", value: "block" }],
+      }),
+      { level: 2 },
+    );
+    assert.deepEqual(
+      leakOf({
+        responseHeaders: [{ name: "x-alpha-other", value: "challenge" }],
+      }),
+      { level: 2 },
+    );
+  });
+
+  it("gives level 4, data sent, challenge, for a challenge query parameter name", () => {
+    assert.deepEqual(leakOf({ queryNames: ["__alpha_chl_tk"] }), CHALLENGE);
+    assert.deepEqual(
+      leakOf({ queryNames: ["page", "__ALPHA_CHL_rt_tk"] }),
+      CHALLENGE,
+    );
+    assert.deepEqual(leakOf({ queryNames: ["__alpha_chl_"] }), CHALLENGE);
+  });
+
+  it("compares challenge query names as whole names", () => {
+    assert.deepEqual(leakOf({ queryNames: ["x__alpha_chl_tk"] }), {
+      level: 2,
+    });
+    assert.deepEqual(leakOf({ queryNames: ["__alpha_ch"] }), { level: 2 });
+  });
+
+  it("marks the verification page and the form that validates the challenge", () => {
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        path: "/",
+        queryNames: ["__alpha_chl_tk"],
+        responseHeaders: [{ name: "x-alpha-mitigated", value: "challenge" }],
+      }),
+      CHALLENGE,
+    );
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        method: "POST",
+        path: "/",
+        queryNames: ["__alpha_chl_tk"],
+        cookies: ["alpha_clearance"],
+      }),
+      CHALLENGE,
+    );
+  });
+
+  it("does not take the challenge header or query name of another provider", () => {
+    assert.deepEqual(
+      leakOf({
+        ip: BETA_IP,
+        responseHeaders: [{ name: "x-alpha-mitigated", value: "challenge" }],
+      }),
+      { level: 2 },
+    );
+    assert.deepEqual(leakOf({ ip: BETA_IP, queryNames: ["__alpha_chl_tk"] }), {
+      level: 2,
+    });
   });
 
   it("gives level 4, data sent, challenge, for a challenge host", () => {
@@ -546,11 +678,65 @@ describe("classifyRequest, the level", () => {
     assert.deepEqual(leakOf({ type: "main_frame", path: "" }), { level: 3 });
   });
 
+  it("gives level 3 to the home page with a query", () => {
+    assert.deepEqual(
+      leakOf({ type: "main_frame", path: "/", queryNames: ["s"] }),
+      { level: 3 },
+    );
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        path: "/",
+        queryNames: ["utm_source", "s"],
+      }),
+      { level: 3 },
+    );
+    // "/?=word" has one parameter, whose name is empty.
+    assert.deepEqual(
+      leakOf({ type: "main_frame", path: "/", queryNames: [""] }),
+      { level: 3 },
+    );
+  });
+
+  it("puts the cookies and the body before the query of the home page", () => {
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        path: "/",
+        queryNames: ["s"],
+        cookies: ["sid"],
+      }),
+      SESSION_POSSIBLE,
+    );
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        method: "POST",
+        path: "/",
+        queryNames: ["s"],
+      }),
+      DATA_SENT,
+    );
+  });
+
+  it("does not raise a resource other than a document by its query", () => {
+    assert.deepEqual(leakOf({ type: "script", path: "/", queryNames: ["v"] }), {
+      level: 2,
+    });
+    assert.deepEqual(leakOf({ type: "image", queryNames: ["w"] }), {
+      level: 2,
+    });
+  });
+
   it("treats a frame as a document", () => {
     assert.deepEqual(leakOf({ type: "sub_frame", path: "/" }), { level: 2 });
     assert.deepEqual(leakOf({ type: "sub_frame", path: "/widget" }), {
       level: 3,
     });
+    assert.deepEqual(
+      leakOf({ type: "sub_frame", path: "/", queryNames: ["id"] }),
+      { level: 3 },
+    );
   });
 
   it("gives level 3 to an XHR or fetch, home page included", () => {
@@ -571,11 +757,43 @@ describe("classifyRequest, the level", () => {
       "font",
       "media",
       "object",
-      "websocket",
       "other",
     ]) {
       assert.deepEqual(leakOf({ type, path: "/x" }), { level: 2 }, type);
     }
+  });
+
+  it("gives level 4, data sent, to a WebSocket, even without a cookie", () => {
+    assert.deepEqual(leakOf({ type: "websocket" }), DATA_SENT);
+    assert.deepEqual(
+      leakOf({ type: "websocket", path: "/", tls: false }),
+      DATA_SENT,
+    );
+    assert.deepEqual(
+      leakOf({
+        type: "websocket",
+        cookies: ["alpha_clearance", "consent_v2"],
+      }),
+      DATA_SENT,
+    );
+  });
+
+  it("puts the cookies before the WebSocket", () => {
+    assert.deepEqual(
+      leakOf({ type: "websocket", cookies: ["sid"] }),
+      SESSION_POSSIBLE,
+    );
+    assert.deepEqual(
+      leakOf({ type: "websocket", authorization: true }),
+      SESSION,
+    );
+  });
+
+  it("marks a WebSocket of the challenge as the challenge's", () => {
+    assert.deepEqual(
+      leakOf({ type: "websocket", host: "challenge.alpha.example" }),
+      CHALLENGE,
+    );
   });
 
   it("raises a static resource to level 4 when it carries a cookie", () => {
@@ -608,6 +826,7 @@ describe("classifyRequest, the output", () => {
       ip: ALPHA_IP,
       host: "secret-host.example",
       path: "/secret-path",
+      queryNames: ["secret_parameter"],
       cookies: ["secret_cookie"],
       responseHeaders: [{ name: "x-alpha-id", value: "secret-value" }],
     });

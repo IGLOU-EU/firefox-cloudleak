@@ -29,20 +29,28 @@
       "source": "https://developers.didomi.io/cmp/web-sdk/consent-notice/cookies (IAB TCF consent string)"
     },
     {
-      "name": "OptanonConsent*",
-      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a hash may end the name)"
+      "name": "OptanonConsent",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0"
     },
     {
-      "name": "OptanonAlertBoxClosed*",
-      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a hash may end the name)"
+      "name": "OptanonConsent_*",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a unique hash is added at the end when consent is managed apart from the root domain), with \"_\" before the hash in getCookieNameSuffix of https://cdn.cookielaw.org/scripttemplates/202609.2.0/otBannerSdk.js"
+    },
+    {
+      "name": "OptanonAlertBoxClosed",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0"
+    },
+    {
+      "name": "OptanonAlertBoxClosed_*",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a unique hash is added at the end when consent is managed apart from the root domain), with \"_\" before the hash in getCookieNameSuffix of https://cdn.cookielaw.org/scripttemplates/202609.2.0/otBannerSdk.js"
     },
     {
       "name": "eupubconsent-v2",
       "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (IAB TCF consent string)"
     },
     {
-      "name": "_pk_*",
-      "source": "https://matomo.org/faq/general/faq_146/, and the default prefix of the tracker cookies at https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L2338"
+      "name": "eupubconsent-v2_*",
+      "source": "https://my.onetrust.com/articles/en_US/Knowledge/UUID-2dc719a8-4be5-8d16-1dc8-c7b4147b88e0 (a unique hash is added at the end when consent is managed apart from the root domain), with \"_\" before the hash in getCookieNameSuffix of https://cdn.cookielaw.org/scripttemplates/202609.2.0/otBannerSdk.js"
     },
     {
       "name": "mtm_consent",
@@ -57,12 +65,40 @@
       "source": "https://matomo.org/faq/general/faq_146/"
     },
     {
+      "name": "_pk_id.*",
+      "source": "https://matomo.org/faq/general/faq_146/, with the name that getCookieName builds from the prefix, the name, \".\", the site id, \".\" and a domain hash: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L3400-L3404"
+    },
+    {
+      "name": "_pk_ses.*",
+      "source": "https://matomo.org/faq/general/faq_146/, with the name that getCookieName builds from the prefix, the name, \".\", the site id, \".\" and a domain hash: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L3400-L3404"
+    },
+    {
+      "name": "_pk_ref.*",
+      "source": "https://matomo.org/faq/general/faq_146/, with the name that getCookieName builds from the prefix, the name, \".\", the site id, \".\" and a domain hash: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L3400-L3404"
+    },
+    {
+      "name": "_pk_cvar.*",
+      "source": "https://matomo.org/faq/general/faq_146/, with the name that getCookieName builds from the prefix, the name, \".\", the site id, \".\" and a domain hash: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L3400-L3404"
+    },
+    {
+      "name": "_pk_hsr.*",
+      "source": "https://matomo.org/faq/general/faq_146/ (Heatmap feature), set through setSessionCookie, which names it with getCookieName: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L6304-L6315"
+    },
+    {
+      "name": "_pk_testcookie",
+      "source": "https://matomo.org/faq/general/faq_146/, with no suffix: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/js/piwik.js#L3423"
+    },
+    {
+      "name": "_pk_uid",
+      "source": "https://matomo.org/faq/general/faq_146/, and the cookie_name setting: https://github.com/matomo-org/matomo/blob/d52e77bc7d3a09ca99bbf6375b879cac8eefa1cb/config/global.ini.php#L1006"
+    },
+    {
       "name": "_ga",
       "source": "https://support.google.com/analytics/answer/11397207"
     },
     {
       "name": "_ga_*",
-      "source": "https://support.google.com/analytics/answer/11397207"
+      "source": "https://support.google.com/analytics/answer/11397207 (_ga_<container-id>)"
     }
   ]
 }

@@ -33,7 +33,12 @@ const VALID_PROVIDER = `{
       { "host": "challenge.example.net", "source": "observed" },
       { "host": "*.challenge.example.net", "source": "observed" }
     ],
-    "challengePaths": [{ "prefix": "/ex-cgi/challenge/", "source": "observed" }]
+    "challengePaths": [{ "prefix": "/ex-cgi/challenge/", "source": "observed" }],
+    "challengeHeaders": [
+      { "name": "X-Example-Mitigated", "value": "challenge", "source": "https://example.com/challenge" },
+      { "name": "x-example-challenge-id", "source": "observed" }
+    ],
+    "challengeQueryNames": [{ "name": "__Ex_Chl_*", "source": "observed" }]
   }
 }
 `;
@@ -95,6 +100,11 @@ describe("parseProviderJson", () => {
       cname: ["cdn.example.net"],
       challengeHosts: ["challenge.example.net", "*.challenge.example.net"],
       challengePaths: ["/ex-cgi/challenge/"],
+      challengeHeaders: [
+        { name: "x-example-mitigated", value: "challenge" },
+        { name: "x-example-challenge-id", value: null },
+      ],
+      challengeQueryNames: ["__ex_chl_*"],
     });
   });
 
@@ -293,6 +303,69 @@ describe("parseProviderJson", () => {
       '"prefix": "/ex-cgi/challenge/", "source": "observed"',
       '"prefix": "/ex-cgi/challenge/"',
       "signatures.challengePaths[0].source",
+      /required/,
+    ],
+    [
+      "a challenge header name with a space",
+      '"name": "X-Example-Mitigated"',
+      '"name": "X Example Mitigated"',
+      "signatures.challengeHeaders[0].name",
+      /name pattern/,
+    ],
+    [
+      "a challenge header value made only of wildcards",
+      '"value": "challenge"',
+      '"value": "*"',
+      "signatures.challengeHeaders[0].value",
+      /only of "\*"/,
+    ],
+    [
+      "a challenge header given twice in another case",
+      '"name": "x-example-challenge-id"',
+      '"name": "x-example-mitigated", "value": "Challenge"',
+      "signatures.challengeHeaders[1].name",
+      /given twice, first at signatures\.challengeHeaders\[0\]/,
+    ],
+    [
+      "a challenge header without source",
+      '"name": "x-example-challenge-id", "source": "observed"',
+      '"name": "x-example-challenge-id"',
+      "signatures.challengeHeaders[1].source",
+      /required/,
+    ],
+    [
+      "a challenge query name with a space",
+      '"name": "__Ex_Chl_*"',
+      '"name": "__ex chl"',
+      "signatures.challengeQueryNames[0].name",
+      /name pattern/,
+    ],
+    [
+      "a challenge query name written with a value",
+      '"name": "__Ex_Chl_*"',
+      '"name": "__ex_chl_tk=1"',
+      "signatures.challengeQueryNames[0].name",
+      /name pattern/,
+    ],
+    [
+      "a challenge query name made only of wildcards",
+      '"name": "__Ex_Chl_*"',
+      '"name": "*"',
+      "signatures.challengeQueryNames[0].name",
+      /only of "\*"/,
+    ],
+    [
+      "a challenge query name given twice in another case",
+      '"challengeQueryNames": [{ "name": "__Ex_Chl_*", "source": "observed" }]',
+      '"challengeQueryNames": [{ "name": "__ex_chl_*", "source": "a" }, { "name": "__EX_CHL_*", "source": "b" }]',
+      "signatures.challengeQueryNames[1].name",
+      /given twice, first at signatures\.challengeQueryNames\[0\]/,
+    ],
+    [
+      "a challenge query name without source",
+      '"name": "__Ex_Chl_*", "source": "observed"',
+      '"name": "__Ex_Chl_*"',
+      "signatures.challengeQueryNames[0].source",
       /required/,
     ],
   ];
@@ -576,7 +649,9 @@ describe("loadProviders", () => {
           "signatures": {
             "cookies": [{ "name": "__Ex", "source": "observed" }],
             "challengeHosts": [{ "host": "*.challenge.example.net", "source": "observed" }],
-            "challengePaths": [{ "prefix": "/ex/", "source": "observed" }]
+            "challengePaths": [{ "prefix": "/ex/", "source": "observed" }],
+            "challengeHeaders": [{ "name": "x-ex-mitigated", "value": "challenge", "source": "observed" }],
+            "challengeQueryNames": [{ "name": "__ex_chl_*", "source": "observed" }]
           }
         }`,
         "providers/example/ranges.txt": VALID_RANGES,
@@ -598,6 +673,8 @@ describe("loadProviders", () => {
             cname: [],
             challengeHosts: ["*.challenge.example.net"],
             challengePaths: ["/ex/"],
+            challengeHeaders: [{ name: "x-ex-mitigated", value: "challenge" }],
+            challengeQueryNames: ["__ex_chl_*"],
           },
         ],
         consentCookies: ["consent_tool", "_audience_*"],

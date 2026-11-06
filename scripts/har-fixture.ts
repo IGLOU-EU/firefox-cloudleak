@@ -2,8 +2,8 @@
 // Copyright (C) 2026 Adrien Kara
 
 // Turns a HAR capture into a test fixture of request facts. A capture holds
-// cookie values, request bodies and challenge tokens, and a fixture is
-// committed, so only what the classification reads is copied.
+// cookie values, request bodies, query values and challenge tokens, and a
+// fixture is committed, so only what the classification reads is copied.
 //
 // Usage: node build/scripts/har-fixture.js <capture.har> <fixture.json>,
 // then npm run format.
@@ -49,6 +49,15 @@ function isOpaqueToken(name: string): boolean {
   return name.startsWith("cf-chl-") || name === "www-authenticate";
 }
 
+// A redirect names a URL, whose query can hold what the user typed or a
+// token, so only the part before the query is kept.
+function responseValue(name: string, value: string): string {
+  if (isOpaqueToken(name)) {
+    return "redacted";
+  }
+  return name === "location" ? (value.split(/[?#]/)[0] ?? "") : value;
+}
+
 // A pair without "=" is a value with an empty name, as browsers read it, so
 // the value never passes for a name.
 function cookieName(pair: string): string {
@@ -77,6 +86,7 @@ function toFacts(entry: HarEntry, index: number): FixtureEntry | null {
     tls: url.protocol === "https:" || url.protocol === "wss:",
     host: url.hostname,
     path: url.pathname,
+    queryNames: [...url.searchParams.keys()],
     ip: entry.serverIPAddress || null,
     cookies: values(request, "cookie")
       .flatMap((value) => value.split(";"))
@@ -87,7 +97,7 @@ function toFacts(entry: HarEntry, index: number): FixtureEntry | null {
       .filter((header) => header.name.toLowerCase() !== "set-cookie")
       .map(({ name, value }) => ({
         name,
-        value: isOpaqueToken(name.toLowerCase()) ? "redacted" : value,
+        value: responseValue(name.toLowerCase(), value),
       })),
     setCookies: values(response, "set-cookie")
       .flatMap((value) => value.split("\n"))
