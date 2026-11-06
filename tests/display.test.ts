@@ -96,16 +96,56 @@ describe("displayOf", () => {
     ]);
   });
 
-  it("gives the colour of the most serious request to the icon and its level to the badge", () => {
+  it("gives the colour of the most serious request to the icon", () => {
     assert.equal(show(seen({ level: 2 }, true)).icon, "blue");
     assert.equal(show(seen({ level: 2 }, false)).icon, "blue");
     assert.equal(show(seen({ level: 3 }, false)).icon, "orange");
     assert.equal(show(seen({ level: 3 }, true)).icon, "red");
     assert.equal(show(seen(DATA_SENT, false)).icon, "orange");
     assert.equal(show(seen(DATA_SENT, true)).icon, "red");
-    assert.equal(show(seen({ level: 2 }, true)).badge, "2");
-    assert.equal(show(seen({ level: 3 }, true)).badge, "3");
-    assert.equal(show(seen(SESSION, false)).badge, "4");
+  });
+
+  it("counts in the badge the requests at the colour and level of the icon, and no others", () => {
+    const red4 = fold([
+      ...times(40, request({ level: 2 }, true)),
+      ...times(3, request({ level: 3 }, true)),
+      ...times(7, request(DATA_SENT, false)),
+      ...times(12, request(SESSION_POSSIBLE, true)),
+      request(CHALLENGE, true, "akamai"),
+    ]);
+    assert.equal(show(red4).icon, "red");
+    assert.equal(show(red4).badge, "13");
+    const red3 = fold([
+      ...times(5, request(SESSION, false)),
+      ...times(2, request({ level: 3 }, true)),
+    ]);
+    assert.equal(show(red3).icon, "red");
+    assert.equal(show(red3).badge, "2");
+    const orange4 = fold([
+      ...times(4, request({ level: 3 }, false)),
+      ...times(6, request(DATA_SENT, false)),
+    ]);
+    assert.equal(show(orange4).badge, "6");
+  });
+
+  it("counts together the proven and unproven requests of a level whose colour does not depend on the proof", () => {
+    const blue2 = fold([
+      ...times(2, request({ level: 2 }, true)),
+      ...times(3, request({ level: 2 }, false)),
+    ]);
+    assert.equal(show(blue2).icon, "blue");
+    assert.equal(show(blue2).badge, "5");
+  });
+
+  it("writes the count in the badge from 1 to 99, and a plus above", () => {
+    const at = (count: number) =>
+      show(fold(times(count, request({ level: 3 }, true)))).badge;
+    assert.equal(at(1), "1");
+    assert.equal(at(9), "9");
+    assert.equal(at(10), "10");
+    assert.equal(at(99), "99");
+    assert.equal(at(100), "+");
+    assert.equal(at(1000), "+");
   });
 
   it("names the case and the proof of the most serious request, with the name of the provider", () => {
@@ -182,7 +222,7 @@ describe("displayOf", () => {
   it("says when the view is partial, after the mark", () => {
     assert.deepEqual(show(markPartial(seen(CHALLENGE, true))), {
       icon: "red",
-      badge: "4",
+      badge: "1",
       title: [
         [line("countLevel4ProvenOne")],
         [
@@ -209,7 +249,7 @@ describe("displayOf", () => {
       ],
     );
     assert.equal(show(markMissed(seen({ level: 3 }, false))).icon, "orange");
-    assert.equal(show(markMissed(seen({ level: 3 }, false))).badge, "3");
+    assert.equal(show(markMissed(seen({ level: 3 }, false))).badge, "1");
   });
 
   it("falls back on the identifier of a provider missing from the table", () => {

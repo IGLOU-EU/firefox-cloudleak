@@ -122,7 +122,7 @@ async function settle(
     ...entry.request,
     ...responseSideOf(details),
   };
-  fold(entry.tabId, entry.navigation, await classify(facts));
+  fold(entry.tabId, entry.navigation, await classify(facts, details.timeStamp));
 }
 
 export async function onErrorOccurred(
@@ -134,11 +134,11 @@ export async function onErrorOccurred(
 
 // The CNAME chain costs a DNS resolution, so it is read only when the address
 // and the response do not already name the provider.
-async function classify(facts: RequestFacts) {
+async function classify(facts: RequestFacts, timeStamp: number) {
   const direct = classifyRequest(facts, table);
   if (direct !== null) {
     return direct;
   }
-  const name = await canonicalNameOf(facts.host);
+  const name = await canonicalNameOf(facts.host, timeStamp);
   return name === null ? null : classifyByCname(facts, name, table);
 }
