@@ -27,11 +27,11 @@ export function displayOf(
   providers: readonly { readonly id: string; readonly name: string }[],
 ): Display {
   if (state.kind === "neutral") {
-    const title = [line("titleNeutral")];
-    if (state.partial) {
-      title.push(line("titlePartial"));
-    }
-    return { icon: "neutral", badge: "", title: [title] };
+    return {
+      icon: "neutral",
+      badge: "",
+      title: [[line("titleNeutral"), ...partialLines(state)]],
+    };
   }
   if (state.kind === "not-observed") {
     return {
@@ -48,9 +48,7 @@ export function displayOf(
   if (request.leak.level === 4 && request.leak.challenge) {
     meaning.push(line("titleAntiBot", provider));
   }
-  if (state.partial) {
-    meaning.push(line("titlePartial"));
-  }
+  meaning.push(...partialLines(state));
   return {
     icon: colourOfRequest(request),
     badge: String(request.leak.level),
@@ -71,6 +69,18 @@ export function titleText(
         .join("\n"),
     )
     .join("\n\n");
+}
+
+// Each reason for a partial view has its own line, since only the first is in
+// the user's hands: granting the access to all sites.
+function partialLines(state: {
+  readonly partial: boolean;
+  readonly missed: boolean;
+}): TitleLine[] {
+  return [
+    ...(state.partial ? [line("titlePartial")] : []),
+    ...(state.missed ? [line("titleMissed")] : []),
+  ];
 }
 
 function line(message: string, ...substitutions: string[]): TitleLine {

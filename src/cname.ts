@@ -21,8 +21,11 @@ export function canonicalNameOf(host: string): Promise<string | null> {
   const name = browser.dns.resolve(host, ["canonical_name"]).then(
     (record) => record.canonicalName || null,
     (error: unknown) => {
-      // A failure is not an answer: the next request tries again.
-      names.delete(host);
+      // Kept like an answer until the page is suspended, and the next wake-up
+      // asks again. Behind a SOCKS proxy that resolves names itself, every
+      // call fails (NS_ERROR_UNKNOWN_PROXY_HOST, ext-dns.js, Firefox
+      // 159.0.1), and asking again at each request would cost a round trip
+      // to Firefox and a log line each time.
       console.error(`Cloud Leak: DNS resolution failed: ${String(error)}`);
       return null;
     },

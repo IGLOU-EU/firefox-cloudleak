@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   type Classification,
+  classifyByCname,
   classifyRequest,
   colourOf,
   type Leak,
@@ -836,6 +837,98 @@ describe("classifyRequest, the output", () => {
       leak: SESSION_POSSIBLE,
     });
     assert.doesNotMatch(JSON.stringify(result), /secret/);
+  });
+});
+
+// A provider whose ranges count how many times they are read, to tell a
+// lookup that parses them at each request from one that parses them once.
+function countingRanges(ranges: string[]): {
+  readonly entry: ProviderEntry;
+  readonly reads: () => number;
+} {
+  let reads = 0;
+  const entry = {
+    ...provider("counted", { cname: ["edge.counted.example"] }),
+    get ranges() {
+      reads += 1;
+      return ranges;
+    },
+  };
+  return { entry, reads: () => reads };
+}
+
+describe("classifyRequest, the address ranges", () => {
+  it("parses the ranges of a provider once, however many requests it classifies", () => {
+    const { entry, reads } = countingRanges(["192.0.2.0/24", "2001:db8::/32"]);
+    const table: ProviderTable = { providers: [entry], consentCookies: [] };
+    for (const ip of [ALPHA_IP, UNKNOWN_IP, "2001:db8::1", UNKNOWN_IP]) {
+      classifyRequest(facts({ ip }), table);
+    }
+    assert.equal(reads(), 1);
+    assert.equal(
+      classifyRequest(facts({ ip: ALPHA_IP }), table)?.provider,
+      "counted",
+    );
+    assert.equal(classifyRequest(facts({ ip: UNKNOWN_IP }), table), null);
+  });
+
+  it("keeps skipping a range it cannot parse once the ranges are parsed", () => {
+    const table: ProviderTable = {
+      providers: [provider("broken", { ranges: ["192.0.2.0/33", "nope"] })],
+      consentCookies: [],
+    };
+    assert.equal(classifyRequest(facts({ ip: ALPHA_IP }), table), null);
+    assert.equal(classifyRequest(facts({ ip: ALPHA_IP }), table), null);
+  });
+});
+
+describe("classifyByCname", () => {
+  it("names the provider of the canonical name as the CNAME step of classifyRequest does", () => {
+    for (const changes of [
+      {},
+      { method: "POST" },
+      { cookies: ["session"] },
+      { tls: false },
+      { type: "main_frame", path: "/" },
+      { host: "challenge.alpha.example" },
+    ]) {
+      for (const name of [
+        "www.example.org.cdn.alpha.example",
+        "EDGE.BETA.EXAMPLE",
+        "cdn.alpha.example",
+      ]) {
+        assert.deepEqual(
+          classifyByCname(facts(changes), name, TABLE),
+          classifyRequest({ ...facts(changes), cnames: [name] }, TABLE),
+        );
+      }
+    }
+  });
+
+  it("finds no provider for a name no provider claims, or one that only resembles a suffix", () => {
+    assert.equal(classifyByCname(facts(), "www.example.org", TABLE), null);
+    assert.equal(classifyByCname(facts(), "xcdn.alpha.example", TABLE), null);
+    assert.equal(classifyByCname(facts(), "", TABLE), null);
+  });
+
+  it("looks at the canonical name alone, since the address and the response already named no provider", () => {
+    const { entry, reads } = countingRanges(["192.0.2.0/24"]);
+    const table: ProviderTable = {
+      providers: [BETA, entry],
+      consentCookies: [],
+    };
+    assert.equal(
+      classifyByCname(
+        facts({
+          ip: BETA_IP,
+          responseHeaders: [{ name: "x-beta", value: "1" }],
+        }),
+        "edge.counted.example",
+        table,
+      )?.provider,
+      "counted",
+    );
+    assert.equal(reads(), 0);
   });
 });
 

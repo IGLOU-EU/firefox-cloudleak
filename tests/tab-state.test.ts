@@ -12,6 +12,7 @@ import {
 } from "../src/core/classify.js";
 import {
   addRequest,
+  markMissed,
   markPartial,
   NEUTRAL,
   NOT_OBSERVED,
@@ -72,8 +73,8 @@ function kept(state: TabState): Classification | null {
 
 describe("addRequest", () => {
   it("stays neutral while no request goes through a known provider", () => {
-    assert.deepEqual(view(fold([])), NEUTRAL);
-    assert.deepEqual(view(fold([null, null])), NEUTRAL);
+    assert.deepEqual(fold([]), NEUTRAL);
+    assert.deepEqual(fold([null, null]), NEUTRAL);
   });
 
   it("takes the colour and level of the first request seen", () => {
@@ -234,7 +235,11 @@ describe("addRequest", () => {
       { level: 2, proven: null, count: 1 },
     ]);
     addRequest(NEUTRAL, RED_4);
-    assert.deepEqual(NEUTRAL, { kind: "neutral", partial: false });
+    assert.deepEqual(NEUTRAL, {
+      kind: "neutral",
+      partial: false,
+      missed: false,
+    });
     addRequest(NOT_OBSERVED, RED_4);
     assert.deepEqual(NOT_OBSERVED, { kind: "not-observed" });
   });
@@ -335,6 +340,63 @@ describe("markPartial", () => {
     markPartial(state);
     assert.deepEqual(view(state), seen("blue", 2));
     markPartial(NEUTRAL);
-    assert.deepEqual(NEUTRAL, { kind: "neutral", partial: false });
+    assert.deepEqual(NEUTRAL, {
+      kind: "neutral",
+      partial: false,
+      missed: false,
+    });
+  });
+});
+
+describe("markMissed", () => {
+  function missedOf(state: TabState): boolean | null {
+    return state.kind === "not-observed" ? null : state.missed;
+  }
+
+  it("says a tab where nothing was seen missed requests, and keeps it neutral", () => {
+    const missed = markMissed(NEUTRAL);
+    assert.deepEqual(missed, { kind: "neutral", partial: false, missed: true });
+    assert.deepEqual(view(missed), view(NEUTRAL));
+  });
+
+  it("keeps what the tab saw, its counts and its partial view", () => {
+    const state = markPartial(fold([BLUE_2, RED_4]));
+    const missed = markMissed(state);
+    assert.equal(missedOf(missed), true);
+    assert.deepEqual(view(missed), seen("red", 4, true));
+    assert.deepEqual(
+      missed.kind === "seen" ? missed.tallies : null,
+      state.kind === "seen" ? state.tallies : null,
+    );
+  });
+
+  it("keeps the requests missed whatever request comes next", () => {
+    const missed = markMissed(NEUTRAL);
+    assert.equal(missedOf(fold([BLUE_2], missed)), true);
+    assert.equal(missedOf(fold([BLUE_2, RED_4, null], missed)), true);
+    assert.equal(missedOf(fold([BLUE_2])), false);
+  });
+
+  it("keeps the requests missed when the view becomes partial, and the partial view when requests are missed", () => {
+    const both = { kind: "neutral", partial: true, missed: true };
+    assert.deepEqual(markPartial(markMissed(NEUTRAL)), both);
+    assert.deepEqual(markMissed(markPartial(NEUTRAL)), both);
+  });
+
+  it("leaves a tab not observed as it is, since it already says it can say nothing", () => {
+    assert.equal(markMissed(NOT_OBSERVED), NOT_OBSERVED);
+  });
+
+  it("returns the state itself when it already missed requests", () => {
+    const missed = markMissed(fold([BLUE_2]));
+    assert.equal(markMissed(missed), missed);
+  });
+
+  it("does not change the state it is given", () => {
+    const state = fold([BLUE_2]);
+    markMissed(state);
+    assert.equal(missedOf(state), false);
+    markMissed(NEUTRAL);
+    assert.equal(missedOf(NEUTRAL), false);
   });
 });

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import { cidrContains, parseCidr, parseIp } from "./cidr.js";
+import { type Cidr, cidrContains, parseCidr, parseIp } from "./cidr.js";
 import { matchesPattern } from "./pattern.js";
 import type { ProviderEntry, ProviderTable } from "./provider-table.js";
 
@@ -73,10 +73,17 @@ export function findProvider(
   return (
     findByAddress(facts.ip, table.providers) ??
     table.providers.find((provider) => hasHttpSignal(facts, provider)) ??
-    table.providers.find((provider) =>
-      (facts.cnames ?? []).some((name) => endsWithSuffix(name, provider.cname)),
-    ) ??
+    findByCname(facts.cnames ?? [], table.providers) ??
     null
+  );
+}
+
+function findByCname(
+  names: readonly string[],
+  providers: readonly ProviderEntry[],
+): ProviderEntry | undefined {
+  return providers.find((provider) =>
+    names.some((name) => endsWithSuffix(name, provider.cname)),
   );
 }
 
@@ -99,11 +106,26 @@ function findByAddress(
     return undefined;
   }
   return providers.find((provider) =>
-    provider.ranges.some((text) => {
-      const range = parseCidr(text);
-      return range.ok && cidrContains(range.value, address.value);
-    }),
+    rangesOf(provider).some((range) => cidrContains(range, address.value)),
   );
+}
+
+// Parsing a range costs far more than comparing an address with it, and the
+// table does not change while the extension runs, so each provider's ranges
+// are parsed once per wake-up. The build refuses an invalid range, and one
+// that slips through is skipped.
+const parsedRanges = new WeakMap<ProviderEntry, readonly Cidr[]>();
+
+function rangesOf(provider: ProviderEntry): readonly Cidr[] {
+  let ranges = parsedRanges.get(provider);
+  if (ranges === undefined) {
+    ranges = provider.ranges.flatMap((text) => {
+      const range = parseCidr(text);
+      return range.ok ? [range.value] : [];
+    });
+    parsedRanges.set(provider, ranges);
+  }
+  return ranges;
 }
 
 function matchesAny(patterns: readonly string[], text: string): boolean {
@@ -225,9 +247,27 @@ export function classifyRequest(
   table: ProviderTable,
 ): Classification | null {
   const provider = findProvider(facts, table);
-  if (provider === null) {
-    return null;
-  }
+  return provider === null ? null : classificationOf(facts, provider, table);
+}
+
+// The CNAME step alone, for a request the address and the response left
+// without a provider: the other steps would fail again on the same facts.
+export function classifyByCname(
+  facts: RequestFacts,
+  name: string,
+  table: ProviderTable,
+): Classification | null {
+  const provider = findByCname([name], table.providers);
+  return provider === undefined
+    ? null
+    : classificationOf({ ...facts, cnames: [name] }, provider, table);
+}
+
+function classificationOf(
+  facts: RequestFacts,
+  provider: ProviderEntry,
+  table: ProviderTable,
+): Classification {
   return {
     provider: provider.id,
     proven: isDecryptionProven(facts, provider),

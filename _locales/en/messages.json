@@ -188,5 +188,9 @@
   "titlePartial": {
     "message": "Partial view: the extension does not have access to every site, so it shows only what it saw.",
     "description": "Line added to the tooltip when the extension lacks the access to all sites."
+  },
+  "titleMissed": {
+    "message": "Partial view: the extension did not see every request of this page, such as those a service worker serves, so it shows only what it saw.",
+    "description": "Line added to the tooltip when the extension got the response of a request whose sending it never saw, or started after the page did."
   }
 }

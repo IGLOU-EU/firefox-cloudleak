@@ -23,6 +23,10 @@ export type TabState =
       // The extension lacks the access to all sites, so a request it did not
       // see may have gone through a provider.
       readonly partial: boolean;
+      // Firefox gave the response of a request whose sending the extension
+      // never saw, or the extension started after the page did, so requests
+      // of the page went unseen whatever the access to sites.
+      readonly missed: boolean;
     }
   | { readonly kind: "not-observed" }
   | {
@@ -35,10 +39,16 @@ export type TabState =
       // The extension had no access to at least one site of the tab, so
       // what it shows is what it saw, not the whole of the tab.
       readonly partial: boolean;
+      // As for a neutral state.
+      readonly missed: boolean;
     };
 
 // No request of the tab went through a known provider.
-export const NEUTRAL: TabState = { kind: "neutral", partial: false };
+export const NEUTRAL: TabState = {
+  kind: "neutral",
+  partial: false,
+  missed: false,
+};
 
 // The extension has no access to the site the tab shows and saw nothing
 // through a known provider, so it cannot know.
@@ -69,6 +79,7 @@ export function addRequest(
     request: kept,
     tallies: count(state.kind === "seen" ? state.tallies : [], request),
     partial: isPartial(state),
+    missed: state.kind !== "not-observed" && state.missed,
   };
 }
 
@@ -146,4 +157,14 @@ export function markPartial(state: TabState): TabState {
     return state;
   }
   return { ...state, partial: true };
+}
+
+// Requests of the page went unseen. What was seen stays true, and a tab where
+// nothing was seen stays neutral. A tab not observed already says the
+// extension can say nothing of it.
+export function markMissed(state: TabState): TabState {
+  if (state.kind === "not-observed" || state.missed) {
+    return state;
+  }
+  return { ...state, missed: true };
 }

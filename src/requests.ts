@@ -2,7 +2,11 @@
 // Copyright (C) 2026 Adrien Kara
 
 import { canonicalNameOf } from "./cname.js";
-import { classifyRequest, type RequestFacts } from "./core/classify.js";
+import {
+  classifyByCname,
+  classifyRequest,
+  type RequestFacts,
+} from "./core/classify.js";
 import {
   leftTheBrowser,
   type RequestSide,
@@ -11,7 +15,7 @@ import {
 } from "./core/request-facts.js";
 import { navigationAt } from "./core/tab-record.js";
 import table from "./providers.js";
-import { fold, navigate, ready, recordOf } from "./tabs.js";
+import { fold, missRequest, navigate, ready, recordOf } from "./tabs.js";
 
 // The request side waits here for its response, joined by request id. Each
 // entry goes at the response, the redirect or the error, so none outlives
@@ -65,13 +69,47 @@ export async function onSendHeaders(
 }
 
 // A redirect is a response of its own: the provider read it, and the request
-// goes on under the same request id with a new onSendHeaders.
-export async function onResponse(
+// goes on under the same request id with a new onSendHeaders. An upgrade to
+// HTTPS gives its redirect before the request is sent, so a redirect without
+// its request says nothing (WebRequest.sys.mjs, Firefox 159.0.1).
+export async function onBeforeRedirect(
+  details: browser.webRequest._OnBeforeRedirectDetails,
+): Promise<void> {
+  await ready;
+  await settle(details);
+}
+
+// A response of a tab whose request the extension never saw means it missed
+// requests: Firefox sends no onSendHeaders for a request a service worker
+// intercepts (nsHttpChannel.cpp, Firefox 159.0.1), the worker's own requests
+// belong to no tab, and the page forgets the requests it waited on when it is
+// suspended. The display then says the view is partial, as it cannot know
+// what those requests carried.
+export async function onResponseStarted(
+  details: browser.webRequest._OnResponseStartedDetails,
+): Promise<void> {
+  await ready;
+  if (pending.has(details.requestId) || !inTab(details)) {
+    await settle(details);
+    return;
+  }
+  const { tabId, requestId, type, timeStamp } = details;
+  if (type === "main_frame") {
+    navigate(tabId, requestId, timeStamp);
+  }
+  missRequest(
+    tabId,
+    type === "main_frame"
+      ? requestId
+      : navigationAt(recordOf(tabId), timeStamp),
+  );
+}
+
+async function settle(
   details:
     | browser.webRequest._OnBeforeRedirectDetails
     | browser.webRequest._OnResponseStartedDetails,
 ): Promise<void> {
-  await ready;
   const entry = pending.get(details.requestId);
   if (entry === undefined) {
     return;
@@ -102,7 +140,5 @@ async function classify(facts: RequestFacts) {
     return direct;
   }
   const name = await canonicalNameOf(facts.host);
-  return name === null
-    ? null
-    : classifyRequest({ ...facts, cnames: [name] }, table);
+  return name === null ? null : classifyByCname(facts, name, table);
 }
