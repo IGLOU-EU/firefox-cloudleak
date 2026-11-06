@@ -241,6 +241,13 @@ function firstColumn(rows: (string | null)[][]): string[] {
   return rows.map((row) => row[0] ?? "");
 }
 
+function headerColumns(rows: (string | null)[][]): ProviderEntry["headers"] {
+  return rows.map(([name, value]) => ({
+    name: name ?? "",
+    value: value ?? null,
+  }));
+}
+
 // A data file holds one JSON object. A syntax error is reported with the
 // parser message, which gives the position.
 function readJsonFile(
@@ -307,15 +314,21 @@ export function parseProviderJson(
               "cname",
               "challengeHosts",
               "challengePaths",
+              "challengeHeaders",
+              "challengeQueryNames",
             ],
           },
           report,
         );
   const name = (key: string): Field => ({ key, kind: "name", optional: false });
+  const headerFields: Field[] = [
+    name("name"),
+    { key: "value", kind: "value", optional: true },
+  ];
   const headers = readSignatures(
     signatures?.["headers"],
     "signatures.headers",
-    [name("name"), { key: "value", kind: "value", optional: true }],
+    headerFields,
     report,
   );
   const cookies = readSignatures(
@@ -348,6 +361,18 @@ export function parseProviderJson(
     [{ key: "prefix", kind: "path", optional: false }],
     report,
   );
+  const challengeHeaders = readSignatures(
+    signatures?.["challengeHeaders"],
+    "signatures.challengeHeaders",
+    headerFields,
+    report,
+  );
+  const challengeQueryNames = readSignatures(
+    signatures?.["challengeQueryNames"],
+    "signatures.challengeQueryNames",
+    [name("name")],
+    report,
+  );
 
   if (errors.length > 0 || company === null) {
     return { provider: null, errors };
@@ -356,15 +381,14 @@ export function parseProviderJson(
     provider: {
       ...company,
       parent,
-      headers: headers.map(([header, value]) => ({
-        name: header ?? "",
-        value: value ?? null,
-      })),
+      headers: headerColumns(headers),
       cookies: firstColumn(cookies),
       server: firstColumn(server),
       cname: firstColumn(cname),
       challengeHosts: firstColumn(challengeHosts),
       challengePaths: firstColumn(challengePaths),
+      challengeHeaders: headerColumns(challengeHeaders),
+      challengeQueryNames: firstColumn(challengeQueryNames),
     },
     errors,
   };

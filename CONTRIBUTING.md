@@ -18,6 +18,7 @@ Firefox hands the extension the values of the `Cookie` and `Authorization` reque
 - The `requestBody` option is never requested. Whether a request carries a body is inferred from its method.
 - Cookie and `Authorization` values are never kept: never written to any storage or log, and never passed beyond the function that reads the names.
 - The public listing of the extension states both points.
+- The request URL comes with its query. The classification reads only the names of the query parameters, never their values, and keeps nothing of the URL.
 
 ## One fact, one place
 
@@ -99,10 +100,14 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | `signatures.cname` | No | CNAME suffixes, as a lowercase domain name: `suffix`, `source` |
 | `signatures.challengeHosts` | No | Hosts that serve the provider's anti-bot challenge, as a lowercase host pattern: `host`, `source` |
 | `signatures.challengePaths` | No | Path prefixes of the challenge, compared to the path of the request URL: `prefix`, `source` |
+| `signatures.challengeHeaders` | No | Response headers of the challenge, such as its verification page: `name`, optional `value`, `source` |
+| `signatures.challengeQueryNames` | No | Names of the URL query parameters the challenge adds, compared to each parameter name of the request URL, never to a value: `name`, `source` |
 
 Every signature has a `source`: the URL of the provider's documentation, or where and when it was observed. A signature that is only observed says so, with the date and the site.
 
-Header names, cookie names, header values, `server` values and challenge hosts are patterns: `*` matches any run of characters, the empty run included, and every other character is literal. They are never regular expressions, and they are all compared without regard to case. A pattern made only of `*`, or holding `**`, is refused, and so are two entries of a list that differ only by case. The `server` header goes in `signatures.server`, always with a value, because its name alone is on every site.
+A request that matches any challenge signature of its provider (host, path prefix, response header or query parameter name) is a request of the challenge. A challenge header is written as in `signatures.headers`, and it is not a signal of the provider: a header that is both goes in both lists.
+
+Header names, cookie names, header values, `server` values, challenge hosts and challenge query parameter names are patterns: `*` matches any run of characters, the empty run included, and every other character is literal. They are never regular expressions, and they are all compared without regard to case. A pattern made only of `*`, or holding `**`, is refused, and so are two entries of a list that differ only by case. The `server` header goes in `signatures.server`, always with a value, because its name alone is on every site.
 
 A CNAME suffix holds no `*` and matches on a label boundary, without regard to case: `cdn.cloudflare.net` matches `www.example.com.cdn.cloudflare.net`, not `xcdn.cloudflare.net`. It is compared to the last name of the CNAME chain, the only one Firefox gives, so a provider's suffixes cover the names its chains end with, not only the first hop: Akamai needs `akamai.net` for a chain that goes through `edgesuite.net` and ends at `a1352.dscb.akamai.net`.
 
@@ -118,7 +123,7 @@ A challenge path prefix starts with `/` and holds no space, `*`, `?` or `#`. It 
 
 A list enters `ranges.txt` only if it covers the edge addresses browsers connect to, and a comment says why it is trusted. A list of the addresses a provider uses to reach origin servers is not enough by itself: Akamai's misses edges. When a provider publishes no list of its edges, `ranges.txt` keeps its header, with a `# Source:` that says so and the date of the check in `# Fetched:`, a comment says why, and it holds no range. The file records the check, so that the wrong list is not added later, and the provider is then recognised by its HTTP signatures and CNAME suffixes.
 
-`data/consent-cookies.json` lists the cookie name patterns of known consent and audience-measurement tools, each with its source: the tool's own documentation or code, where the name is written. A `*` goes only where the source says the name varies.
+`data/consent-cookies.json` lists the cookie name patterns of known consent and audience-measurement tools, each with its source: the tool's own documentation or code, where the name is written. Each pattern is the narrowest its source allows: the exact name when the name is fixed, otherwise the documented prefix with its separator, such as `_pk_id.*` rather than `_pk_*`. A cookie of the site that only resembles a tool's name then never passes for consent or audience measurement.
 
 ```json
 {

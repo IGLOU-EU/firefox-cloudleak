@@ -12,7 +12,9 @@ export interface ResponseHeader {
 
 // What the classification needs to know about one request, and nothing more.
 // Cookie and Authorization values never enter it, and the URL enters only as
-// the host and path that the challenge and home page rules compare.
+// the host, the path and the query parameter names that the challenge and
+// home page rules compare. A query value can hold what the user typed or a
+// token, so it never enters.
 export interface RequestFacts {
   readonly method: string;
   // The webRequest resource type, such as "main_frame" or "xmlhttprequest".
@@ -21,6 +23,8 @@ export interface RequestFacts {
   readonly tls: boolean;
   readonly host: string;
   readonly path: string;
+  // Names of the URL query parameters, empty when the URL has no query.
+  readonly queryNames: readonly string[];
   // Null when Firefox gives no address, as for a response from the cache.
   readonly ip: string | null;
   // Names of the cookies the request carries.
@@ -39,7 +43,12 @@ export type LeakLevel = 1 | 2 | 3 | 4;
 
 export type Leak =
   | { readonly level: 2 | 3 }
-  | { readonly level: 4; readonly case: "session"; readonly possible: boolean }
+  | {
+      readonly level: 4;
+      readonly case: "session";
+      readonly possible: boolean;
+      readonly challenge: boolean;
+    }
   | {
       readonly level: 4;
       readonly case: "data-sent";
@@ -101,6 +110,18 @@ function matchesAny(patterns: readonly string[], text: string): boolean {
   return patterns.some((pattern) => matchesPattern(pattern, text));
 }
 
+function matchesHeader(
+  signatures: ProviderEntry["headers"],
+  header: ResponseHeader,
+): boolean {
+  return signatures.some(
+    (signature) =>
+      matchesPattern(signature.name, header.name) &&
+      (signature.value === null ||
+        matchesPattern(signature.value, header.value)),
+  );
+}
+
 function isSignal(header: ResponseHeader, provider: ProviderEntry): boolean {
   if (
     header.name.toLowerCase() === "server" &&
@@ -108,12 +129,7 @@ function isSignal(header: ResponseHeader, provider: ProviderEntry): boolean {
   ) {
     return true;
   }
-  return provider.headers.some(
-    (signature) =>
-      matchesPattern(signature.name, header.name) &&
-      (signature.value === null ||
-        matchesPattern(signature.value, header.value)),
-  );
+  return matchesHeader(provider.headers, header);
 }
 
 // Only the provider's own servers add its headers and cookies to a response,
@@ -137,10 +153,19 @@ export function isDecryptionProven(
   return !facts.tls || hasHttpSignal(facts, provider);
 }
 
+// The verification page and the form that validates the challenge are
+// recognised by their response header and query parameter names, which say
+// only that they belong to the challenge.
 function isChallenge(facts: RequestFacts, provider: ProviderEntry): boolean {
   return (
     matchesAny(provider.challengeHosts, facts.host) ||
-    provider.challengePaths.some((prefix) => facts.path.startsWith(prefix))
+    provider.challengePaths.some((prefix) => facts.path.startsWith(prefix)) ||
+    facts.responseHeaders.some((header) =>
+      matchesHeader(provider.challengeHeaders, header),
+    ) ||
+    facts.queryNames.some((name) =>
+      matchesAny(provider.challengeQueryNames, name),
+    )
   );
 }
 
@@ -158,26 +183,36 @@ export function leakOf(
   provider: ProviderEntry,
   consentCookies: readonly string[],
 ): Leak {
+  // The mark tells the user a request belongs to the challenge and not to the
+  // site, even when the session that goes with it is the more serious leak.
+  const challenge = isChallenge(facts, provider);
   if (facts.authorization) {
-    return { level: 4, case: "session", possible: false };
+    return { level: 4, case: "session", possible: false, challenge };
   }
   const siteCookie = facts.cookies.some(
     (name) =>
       !matchesAny(provider.cookies, name) && !matchesAny(consentCookies, name),
   );
   if (siteCookie) {
-    return { level: 4, case: "session", possible: true };
+    return { level: 4, case: "session", possible: true, challenge };
   }
   // The bodies a challenge sends are opaque, so they count as data sent.
-  if (isChallenge(facts, provider)) {
+  if (challenge) {
     return { level: 4, case: "data-sent", challenge: true };
   }
-  if (BODY_METHODS.includes(facts.method.toUpperCase())) {
+  // A WebSocket stays open through the edge, and the extension sees only its
+  // opening, never the messages that follow in both directions.
+  if (
+    facts.type === "websocket" ||
+    BODY_METHODS.includes(facts.method.toUpperCase())
+  ) {
     return { level: 4, case: "data-sent", challenge: false };
   }
   if (facts.type === "main_frame" || facts.type === "sub_frame") {
-    // The home page tells little more than the visit of the site.
-    return { level: facts.path === "/" ? 2 : 3 };
+    // The home page tells little more than the visit of the site, unless a
+    // query says what the user looks for.
+    const home = facts.path === "/" && facts.queryNames.length === 0;
+    return { level: home ? 2 : 3 };
   }
   if (facts.type === "xmlhttprequest") {
     return { level: 3 };

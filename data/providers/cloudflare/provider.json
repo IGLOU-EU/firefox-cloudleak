@@ -87,12 +87,29 @@
       {
         "host": "*.challenges.cloudflare.com",
         "source": "https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/, and observed on 2026-11-05 on www.legifrance.gouv.fr (brunhild.challenges.cloudflare.com)"
+      },
+      {
+        "host": "*.dnstest.dev",
+        "source": "https://developers.cloudflare.com/cloudflare-challenges/troubleshooting/challenge-solve-issues/#failed-subdomain-network-requests-during-turnstile-challenges (subdomains under dnstest.dev, whose requests are part of Turnstile's normal execution)"
       }
     ],
     "challengePaths": [
       {
         "prefix": "/cdn-cgi/challenge-platform/",
         "source": "https://developers.cloudflare.com/fundamentals/reference/cdn-cgi-endpoint/, and observed on 2026-11-05 on www.legifrance.gouv.fr"
+      }
+    ],
+    "challengeHeaders": [
+      {
+        "name": "cf-mitigated",
+        "value": "challenge",
+        "source": "https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/, and observed on 2026-11-05 on www.legifrance.gouv.fr (the verification page)"
+      }
+    ],
+    "challengeQueryNames": [
+      {
+        "name": "__cf_*",
+        "source": "Observed on 2026-11-05 on www.legifrance.gouv.fr (__cf_chl_tk on the verification page and on the form that validates the challenge), and not found in Cloudflare's documentation on 2026-11-06. The whole __cf_ prefix is kept so that a renamed challenge parameter is still recognised"
       }
     ]
   }

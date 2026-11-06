@@ -1,0 +1,140 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 Adrien Kara
+
+// The committed data, read as the build reads it, classifies the requests its
+// sources describe.
+
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
+import { loadTable } from "../scripts/providers.js";
+import {
+  classifyRequest,
+  type Leak,
+  type RequestFacts,
+} from "../src/core/classify.js";
+
+const { table, errors } = loadTable(
+  fileURLToPath(new URL("../../data", import.meta.url)),
+);
+
+const CLOUDFLARE_IP = "104.16.0.1";
+
+// A script loaded through a Cloudflare edge, at level 2: each test changes
+// only the facts it is about.
+function leakOf(changes: Partial<RequestFacts>): Leak | null {
+  const result = classifyRequest(
+    {
+      method: "GET",
+      type: "script",
+      tls: true,
+      host: "www.example.org",
+      path: "/app.js",
+      queryNames: [],
+      ip: CLOUDFLARE_IP,
+      cookies: [],
+      authorization: false,
+      responseHeaders: [],
+      setCookies: [],
+      ...changes,
+    },
+    table,
+  );
+  assert.equal(result?.provider, "cloudflare");
+  return result?.leak ?? null;
+}
+
+const CHALLENGE: Leak = { level: 4, case: "data-sent", challenge: true };
+const SESSION_POSSIBLE: Leak = {
+  level: 4,
+  case: "session",
+  possible: true,
+  challenge: false,
+};
+
+describe("the committed data", () => {
+  it("loads without error", () => {
+    assert.deepEqual(errors, []);
+  });
+
+  it("marks the requests of Turnstile to subdomains of dnstest.dev as Cloudflare's challenge", () => {
+    assert.deepEqual(leakOf({ host: "a1b2c3.dnstest.dev" }), CHALLENGE);
+    assert.deepEqual(leakOf({ host: "dnstest.dev" }), { level: 2 });
+    assert.deepEqual(leakOf({ host: "dnstest.dev.example.org" }), {
+      level: 2,
+    });
+  });
+
+  it("marks Cloudflare's verification page by its response header", () => {
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        path: "/",
+        responseHeaders: [{ name: "cf-mitigated", value: "challenge" }],
+      }),
+      CHALLENGE,
+    );
+  });
+
+  it("marks the requests that carry a parameter of Cloudflare's challenge", () => {
+    assert.deepEqual(
+      leakOf({
+        type: "main_frame",
+        method: "POST",
+        path: "/",
+        queryNames: ["__cf_chl_tk"],
+      }),
+      CHALLENGE,
+    );
+    assert.deepEqual(leakOf({ queryNames: ["__cf_chl_rt_tk"] }), CHALLENGE);
+    assert.deepEqual(leakOf({ queryNames: ["__cf_future_tk"] }), CHALLENGE);
+    assert.deepEqual(leakOf({ queryNames: ["cf_chl_tk"] }), { level: 2 });
+    assert.deepEqual(leakOf({ queryNames: ["__cfx"] }), { level: 2 });
+  });
+
+  it("keeps the request at the level of its type for the cookies of known consent and measurement tools", () => {
+    for (const name of [
+      "tarteaucitron",
+      "axeptio_cookies",
+      "didomi_token",
+      "euconsent-v2",
+      "OptanonConsent",
+      "OptanonConsent_1a2b3c",
+      "OptanonAlertBoxClosed",
+      "OptanonAlertBoxClosed_1a2b3c",
+      "eupubconsent-v2",
+      "eupubconsent-v2_1",
+      "mtm_consent",
+      "mtm_cookie_consent",
+      "mtm_consent_removed",
+      "_pk_id.1.a1b2",
+      "_pk_ses.1.a1b2",
+      "_pk_ref.12.ffff",
+      "_pk_cvar.1.a1b2",
+      "_pk_hsr.1.a1b2",
+      "_pk_testcookie",
+      "_pk_uid",
+      "_ga",
+      "_ga_ABC123XYZ",
+    ]) {
+      assert.deepEqual(leakOf({ cookies: [name] }), { level: 2 }, name);
+    }
+  });
+
+  it("never takes a cookie of the site that only resembles them for consent or measurement", () => {
+    for (const name of [
+      "_pk_session",
+      "_pk_sid",
+      "_pk_idx",
+      "_pk_id",
+      "OptanonConsentSession",
+      "OptanonAlertBoxClosedX",
+      "_gax",
+      "ga",
+      "tarteaucitron_session",
+      "mtm_consent_session",
+    ]) {
+      assert.deepEqual(leakOf({ cookies: [name] }), SESSION_POSSIBLE, name);
+    }
+  });
+});

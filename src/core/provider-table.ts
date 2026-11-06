@@ -21,4 +21,6 @@ export interface ProviderEntry {
   cname: string[]; // CNAME suffixes, no wildcard
   challengeHosts: string[]; // host patterns of the provider's anti-bot challenge
   challengePaths: string[]; // path prefixes of the challenge, compared to the URL path
+  challengeHeaders: { name: string; value: string | null }[]; // response headers of the challenge, as in headers
+  challengeQueryNames: string[]; // URL query parameter name patterns of the challenge
 }

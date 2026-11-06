@@ -8,7 +8,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 import type { FixtureEntry } from "../scripts/har-fixture.js";
+import { loadTable } from "../scripts/providers.js";
 import {
   type Classification,
   classifyRequest,
@@ -16,59 +18,13 @@ import {
   type Leak,
   type RequestFacts,
 } from "../src/core/classify.js";
-import type { ProviderTable } from "../src/core/provider-table.js";
-import { addRequest, NEUTRAL } from "../src/core/tab-state.js";
+import { addRequest, NEUTRAL, type TabState } from "../src/core/tab-state.js";
 
-// data/providers/cloudflare as of 2026-11-05, with the challenge signatures,
-// cf_clearance and the consent cookie the data does not hold yet.
-const TABLE: ProviderTable = {
-  providers: [
-    {
-      id: "cloudflare",
-      name: "Cloudflare",
-      country: "US",
-      parent: null,
-      ranges: [
-        "173.245.48.0/20",
-        "103.21.244.0/22",
-        "103.22.200.0/22",
-        "103.31.4.0/22",
-        "141.101.64.0/18",
-        "108.162.192.0/18",
-        "190.93.240.0/20",
-        "188.114.96.0/20",
-        "197.234.240.0/22",
-        "198.41.128.0/17",
-        "162.158.0.0/15",
-        "104.16.0.0/13",
-        "104.24.0.0/14",
-        "172.64.0.0/13",
-        "131.0.72.0/22",
-        "2400:cb00::/32",
-        "2606:4700::/32",
-        "2803:f800::/32",
-        "2405:b500::/32",
-        "2405:8100::/32",
-        "2a06:98c0::/29",
-        "2c0f:f248::/32",
-      ],
-      headers: [
-        { name: "cf-ray", value: null },
-        { name: "cf-cache-status", value: null },
-        { name: "cf-mitigated", value: "challenge" },
-      ],
-      cookies: ["__cf_bm", "cf_clearance"],
-      server: ["cloudflare"],
-      cname: ["cdn.cloudflare.net"],
-      challengeHosts: [
-        "challenges.cloudflare.com",
-        "*.challenges.cloudflare.com",
-      ],
-      challengePaths: ["/cdn-cgi/challenge-platform/"],
-    },
-  ],
-  consentCookies: ["tarteaucitron"],
-};
+// The committed data, so that the visit is classified as the extension
+// classifies it.
+const TABLE = loadTable(
+  fileURLToPath(new URL("../../data", import.meta.url)),
+).table;
 
 const FIXTURE = JSON.parse(
   readFileSync(
@@ -93,8 +49,12 @@ function range(first: number, last: number): number[] {
 }
 
 const CHALLENGE: Leak = { level: 4, case: "data-sent", challenge: true };
-const DATA_SENT: Leak = { level: 4, case: "data-sent", challenge: false };
-const SESSION_POSSIBLE: Leak = { level: 4, case: "session", possible: true };
+const SESSION_POSSIBLE: Leak = {
+  level: 4,
+  case: "session",
+  possible: true,
+  challenge: false,
+};
 const USAGE: Leak = { level: 2 };
 
 function assertEntries(entries: number[], leak: Leak): void {
@@ -123,16 +83,56 @@ describe("Légifrance capture", () => {
     }
   });
 
+  it("keeps the names of the query parameters and nothing of their values", () => {
+    assert.deepEqual(factsOf(1).queryNames, ["__cf_chl_tk"]);
+    assert.deepEqual(factsOf(4).queryNames, ["onload", "render"]);
+    assert.deepEqual(factsOf(15).queryNames, []);
+    for (const item of FIXTURE) {
+      for (const name of item.queryNames) {
+        assert.doesNotMatch(name, /[=&]/, `entry ${item.entry}`);
+      }
+    }
+  });
+
+  it("keeps a redirect without the query of its URL", () => {
+    const location = factsOf(74).responseHeaders.find(
+      (header) => header.name.toLowerCase() === "location",
+    );
+    assert.equal(
+      location?.value,
+      "/cdn-cgi/challenge-platform/h/b/scripts/jsd/8340802ab0bb/main.js",
+    );
+  });
+
+  it("classifies the verification page, entry 1, as data sent by the challenge", () => {
+    const facts = factsOf(1);
+    assert.equal(facts.type, "main_frame");
+    assert.equal(facts.path, "/");
+    assert.ok(
+      facts.responseHeaders.some(
+        (header) =>
+          header.name.toLowerCase() === "cf-mitigated" &&
+          header.value === "challenge",
+      ),
+    );
+    assertEntries([1], CHALLENGE);
+  });
+
   it("classifies the challenge requests, entries 2 to 13, as data sent by the challenge", () => {
     assertEntries([2, 4, ...range(6, 13)], CHALLENGE);
   });
 
-  it("keeps the first home page load and the favicons of the challenge at level 2", () => {
-    assertEntries([1, 3, 5], USAGE);
+  it("keeps the favicons loaded during the challenge at level 2", () => {
+    assertEntries([3, 5], USAGE);
   });
 
-  it("classifies the form the challenge posts to the home page as data sent, without the challenge mark", () => {
-    assertEntries([14], DATA_SENT);
+  it("classifies the form that validates the challenge, entry 14, as data sent by the challenge", () => {
+    const facts = factsOf(14);
+    assert.equal(facts.method, "POST");
+    assert.equal(facts.path, "/");
+    assert.deepEqual(facts.queryNames, ["__cf_chl_tk"]);
+    assert.deepEqual(facts.cookies, ["cf_clearance"]);
+    assertEntries([14], CHALLENGE);
   });
 
   it("keeps the home page and its resources at level 2, cf_clearance being ignored", () => {
@@ -157,12 +157,24 @@ describe("Légifrance capture", () => {
       "tarteaucitron",
       "lf-demo-accueil",
     ]);
-    assertEntries(range(71, 75), SESSION_POSSIBLE);
+    assertEntries(range(71, 73), SESSION_POSSIBLE);
   });
 
   it("classifies entries 76 to 80 as a possible session, JSESSIONID included", () => {
     assert.ok(factsOf(76).cookies.includes("JSESSIONID"));
-    assertEntries(range(76, 80), SESSION_POSSIBLE);
+    assertEntries([76, 77, 78, 80], SESSION_POSSIBLE);
+  });
+
+  it("keeps the possible session on the challenge requests that carry the cookies of the site, with the challenge mark", () => {
+    for (const entry of [74, 75, 79]) {
+      assert.ok(factsOf(entry).path.startsWith("/cdn-cgi/challenge-platform/"));
+    }
+    assertEntries([74, 75, 79], {
+      level: 4,
+      case: "session",
+      possible: true,
+      challenge: true,
+    });
   });
 
   it("colours every level 4 request red, the decryption being proven", () => {
@@ -174,24 +186,34 @@ describe("Légifrance capture", () => {
     }
   });
 
-  it("turns the tab red at level 4 from the second request on", () => {
+  it("turns the tab red at level 4 from the verification page on", () => {
     const states = FIXTURE.map((item) => classifyRequest(item, TABLE)).reduce(
       (history, result) => {
         const last = history.at(-1) ?? NEUTRAL;
         history.push(addRequest(last, result));
         return history;
       },
-      [] as ReturnType<typeof addRequest>[],
+      [] as TabState[],
     );
-    assert.deepEqual(states[0], { kind: "seen", colour: "blue", level: 2 });
-    assert.deepEqual(states[1], { kind: "seen", colour: "red", level: 4 });
-    assert.deepEqual(states.at(-1), { kind: "seen", colour: "red", level: 4 });
+    const red: TabState = {
+      kind: "seen",
+      colour: "red",
+      level: 4,
+      partial: false,
+    };
+    assert.deepEqual(states[0], red);
+    assert.deepEqual(states.at(-1), red);
   });
 
   it("keeps the tab blue at level 2 over the home page and its resources alone", () => {
     const state = FIXTURE.filter((item) => item.entry >= 15 && item.entry <= 70)
       .map((item) => classifyRequest(item, TABLE))
       .reduce(addRequest, NEUTRAL);
-    assert.deepEqual(state, { kind: "seen", colour: "blue", level: 2 });
+    assert.deepEqual(state, {
+      kind: "seen",
+      colour: "blue",
+      level: 2,
+      partial: false,
+    });
   });
 });

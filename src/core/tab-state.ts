@@ -15,25 +15,34 @@ export type TabState =
       readonly kind: "seen";
       readonly colour: Colour;
       readonly level: LeakLevel;
+      // The extension had no access to at least one site of the tab, so
+      // what it shows is what it saw, not the whole of the tab.
+      readonly partial: boolean;
     };
 
 // No request of the tab went through a known provider.
 export const NEUTRAL: TabState = { kind: "neutral" };
 
-// The extension has no access to the site, so it cannot know.
+// The extension had no access to a site of the tab and saw nothing through a
+// known provider, so it cannot know.
 export const NOT_OBSERVED: TabState = { kind: "not-observed" };
 
 const COLOUR_RANK: Record<Colour, number> = { blue: 0, orange: 1, red: 2 };
 
+function isPartial(state: TabState): boolean {
+  return (
+    state.kind === "not-observed" || (state.kind === "seen" && state.partial)
+  );
+}
+
 // The tab shows its most serious request, so that one alarming request is
-// never hidden by many harmless ones. A site the extension cannot observe
-// stays so: what it sees there is partial, and a partial view must not pass
-// for the whole.
+// never hidden by many harmless ones, even when the view is partial: what was
+// seen is still true.
 export function addRequest(
   state: TabState,
   request: Classification | null,
 ): TabState {
-  if (request === null || state.kind === "not-observed") {
+  if (request === null) {
     return state;
   }
   const level = request.leak.level;
@@ -44,5 +53,14 @@ export function addRequest(
       return state;
     }
   }
-  return { kind: "seen", colour, level };
+  return { kind: "seen", colour, level, partial: isPartial(state) };
+}
+
+// The extension has no access to a site of the tab. A tab where nothing was
+// seen must not pass for one where nothing goes through a provider.
+export function markPartial(state: TabState): TabState {
+  if (state.kind !== "seen") {
+    return NOT_OBSERVED;
+  }
+  return state.partial ? state : { ...state, partial: true };
 }
