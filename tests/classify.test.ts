@@ -28,6 +28,7 @@ function provider(
     ranges: [],
     headers: [],
     cookies: [],
+    siteConnectorCookies: [],
     server: [],
     cname: [],
     challengeHosts: [],
@@ -45,6 +46,7 @@ const ALPHA = provider("alpha", {
     { name: "x-alpha-cache", value: "HIT*" },
   ],
   cookies: ["__alpha_*", "alpha_clearance"],
+  siteConnectorCookies: ["alphabot_*"],
   server: ["AlphaCDN-*"],
   cname: ["cdn.alpha.example"],
   challengeHosts: ["challenge.alpha.example", "*.challenge.alpha.example"],
@@ -248,6 +250,39 @@ describe("classifyRequest, the provider", () => {
 
   it("never finds a provider by the cookies the request carries", () => {
     assert.equal(providerOf({ cookies: ["alpha_clearance"] }), null);
+    assert.equal(providerOf({ cookies: ["alphabot_a"] }), null);
+  });
+
+  it("finds a provider by a cookie that a connector at the site may set", () => {
+    assert.equal(providerOf({ setCookies: ["alphabot_a"] }), "alpha");
+    assert.equal(providerOf({ setCookies: ["ALPHABOT_A"] }), "alpha");
+    assert.equal(providerOf({ setCookies: ["alphabot"] }), null);
+  });
+
+  it("looks at a connector cookie after the IP and before the CNAME chain", () => {
+    assert.equal(
+      providerOf({ ip: BETA_IP, setCookies: ["alphabot_a"] }),
+      "beta",
+    );
+    assert.equal(
+      providerOf({
+        setCookies: ["alphabot_a"],
+        cnames: ["site.edge.beta.example"],
+      }),
+      "alpha",
+    );
+  });
+
+  // The provider whose signal proves it relayed the response is the one that
+  // read it, whatever its place in the table.
+  it("prefers the provider shown by a signal to the one a connector cookie names", () => {
+    assert.equal(
+      providerOf({
+        setCookies: ["alphabot_a"],
+        responseHeaders: [{ name: "x-beta", value: "1" }],
+      }),
+      "beta",
+    );
   });
 
   it("finds a provider from the cache, without an address, by its headers", () => {
@@ -432,6 +467,29 @@ describe("classifyRequest, the proof of decryption", () => {
     assert.equal(provenFor({ ip: ALPHA_IP, tls: false }), true);
   });
 
+  it("is not proven by a cookie that a connector at the site may set", () => {
+    assert.equal(provenFor({ setCookies: ["alphabot_a"] }), false);
+    assert.equal(
+      provenFor({ ip: ALPHA_IP, setCookies: ["alphabot_a"] }),
+      false,
+    );
+  });
+
+  it("is proven beside a connector cookie by another signal of the provider, or by plain HTTP", () => {
+    assert.equal(
+      provenFor({
+        setCookies: ["alphabot_a"],
+        responseHeaders: [{ name: "x-alpha-id", value: "42" }],
+      }),
+      true,
+    );
+    assert.equal(
+      provenFor({ setCookies: ["alphabot_a", "alpha_clearance"] }),
+      true,
+    );
+    assert.equal(provenFor({ setCookies: ["alphabot_a"], tls: false }), true);
+  });
+
   it("is proven when the provider is found by its signal alone", () => {
     assert.equal(
       provenFor({ ip: null, responseHeaders: [{ name: "x-beta", value: "" }] }),
@@ -486,6 +544,14 @@ describe("classifyRequest, the level", () => {
   it("keeps a cookie left after dropping the provider's and the consent ones", () => {
     assert.deepEqual(
       leakOf({ cookies: ["alpha_clearance", "consent_v2", "sid"] }),
+      SESSION_POSSIBLE,
+    );
+  });
+
+  it("counts the connector cookies the request carries as cookies of the site", () => {
+    assert.deepEqual(leakOf({ cookies: ["alphabot_a"] }), SESSION_POSSIBLE);
+    assert.deepEqual(
+      leakOf({ setCookies: ["alphabot_a"], cookies: ["ALPHABOT_A"] }),
       SESSION_POSSIBLE,
     );
   });

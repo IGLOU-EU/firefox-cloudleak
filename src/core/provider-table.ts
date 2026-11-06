@@ -17,6 +17,7 @@ export interface ProviderEntry {
   ranges: string[]; // CIDR
   headers: { name: string; value: string | null }[]; // name pattern, value pattern or null (presence)
   cookies: string[]; // cookie name patterns set or used by the provider itself
+  siteConnectorCookies: string[]; // cookie name patterns a connector installed at the site may also set
   server: string[]; // `server` header value patterns
   cname: string[]; // CNAME suffixes, no wildcard
   challengeHosts: string[]; // host patterns of the provider's anti-bot challenge

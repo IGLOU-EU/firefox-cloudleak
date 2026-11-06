@@ -44,6 +44,7 @@ const EDGE: ProviderEntry = {
   ranges: ["192.0.2.0/24"],
   headers: [{ name: "x-edge", value: null }],
   cookies: [],
+  siteConnectorCookies: [],
   server: [],
   cname: ["edge.example.net"],
   challengeHosts: [],

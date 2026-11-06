@@ -310,6 +310,7 @@ export function parseProviderJson(
             optional: [
               "headers",
               "cookies",
+              "siteConnectorCookies",
               "server",
               "cname",
               "challengeHosts",
@@ -334,6 +335,12 @@ export function parseProviderJson(
   const cookies = readSignatures(
     signatures?.["cookies"],
     "signatures.cookies",
+    [name("name")],
+    report,
+  );
+  const siteConnectorCookies = readSignatures(
+    signatures?.["siteConnectorCookies"],
+    "signatures.siteConnectorCookies",
     [name("name")],
     report,
   );
@@ -383,6 +390,7 @@ export function parseProviderJson(
       parent,
       headers: headerColumns(headers),
       cookies: firstColumn(cookies),
+      siteConnectorCookies: firstColumn(siteConnectorCookies),
       server: firstColumn(server),
       cname: firstColumn(cname),
       challengeHosts: firstColumn(challengeHosts),

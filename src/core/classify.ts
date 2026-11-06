@@ -65,7 +65,9 @@ export type Colour = "blue" | "orange" | "red";
 
 // The search stops at the first step that answers: the address says where
 // the request went, the response shows a provider the address does not
-// reveal, and the CNAME chain names one that shows in neither.
+// reveal, and the CNAME chain names one that shows in neither. Within the
+// response, a signal that proves who relayed it outweighs a cookie that the
+// site itself may have set for another provider.
 export function findProvider(
   facts: RequestFacts,
   table: ProviderTable,
@@ -73,6 +75,9 @@ export function findProvider(
   return (
     findByAddress(facts.ip, table.providers) ??
     table.providers.find((provider) => hasHttpSignal(facts, provider)) ??
+    table.providers.find((provider) =>
+      setsSiteConnectorCookie(facts, provider),
+    ) ??
     findByCname(facts.cnames ?? [], table.providers) ??
     null
   );
@@ -167,6 +172,18 @@ export function hasHttpSignal(
   );
 }
 
+// Some anti-bot products also hand their cookies to a connector installed at
+// the site, which sets them without the provider ever being in the path. Such
+// a cookie shows the provider saw the request, not that it read the traffic.
+function setsSiteConnectorCookie(
+  facts: RequestFacts,
+  provider: ProviderEntry,
+): boolean {
+  return facts.setCookies.some((name) =>
+    matchesAny(provider.siteConnectorCookies, name),
+  );
+}
+
 // A missing signal proves nothing: a provider can strip its own headers.
 export function isDecryptionProven(
   facts: RequestFacts,
@@ -199,7 +216,8 @@ const BODY_METHODS = ["POST", "PUT", "PATCH"];
 // provider's own cookies only tell it its own state, and consent and
 // audience-measurement cookies are not a session, so neither raises the
 // level. Any other cookie may be a session, and a doubt is never resolved on
-// the reassuring side.
+// the reassuring side, which holds for the cookies a connector at the site
+// sets too: they belong to the site as much as to the provider.
 export function leakOf(
   facts: RequestFacts,
   provider: ProviderEntry,
