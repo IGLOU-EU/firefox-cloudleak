@@ -9,6 +9,7 @@ import {
   requestSideOf,
   responseSideOf,
 } from "./core/request-facts.js";
+import { navigationAt } from "./core/tab-record.js";
 import table from "./providers.js";
 import { fold, navigate, ready, recordOf } from "./tabs.js";
 
@@ -17,7 +18,7 @@ import { fold, navigate, ready, recordOf } from "./tabs.js";
 // its request.
 interface Pending {
   readonly tabId: number;
-  // The navigation of the tab when the request was sent.
+  // The navigation of the document the request was sent for.
   readonly navigation: string;
   readonly request: RequestSide;
 }
@@ -45,14 +46,20 @@ export async function onSendHeaders(
     return;
   }
   // Read before waiting, so that the headers are not held across the wait.
-  const { tabId, requestId, type } = details;
+  // The time stamp is taken when Firefox sends the request, before the
+  // batch that delivers the event (WebRequest.sys.mjs and
+  // ConduitsParent.sys.mjs, Firefox 159.0.1).
+  const { tabId, requestId, type, timeStamp } = details;
   await ready;
   if (type === "main_frame") {
-    navigate(tabId, requestId);
+    navigate(tabId, requestId, timeStamp);
   }
   pending.set(requestId, {
     tabId,
-    navigation: recordOf(tabId).navigation,
+    navigation:
+      type === "main_frame"
+        ? requestId
+        : navigationAt(recordOf(tabId), timeStamp),
     request,
   });
 }

@@ -10,18 +10,45 @@ import {
   type TabState,
 } from "./tab-state.js";
 
-// What the extension keeps of a tab between two wake-ups: the navigation it
-// shows, and the state of that navigation. Nothing of the URL.
-export interface TabRecord {
-  // The request id of the top-level document, which a redirect keeps, so
-  // that a redirect does not start the tab over.
+// One document of a tab and what its requests showed. Nothing of the URL: the
+// document is named by the id Firefox gives it, a random value.
+export interface DocumentRecord {
+  // Null while the navigation that opens it has not committed.
+  readonly document: string | null;
+  // When the tab last showed it, in milliseconds since the epoch on
+  // Firefox's clock, the one of the request and navigation events. Zero
+  // while it has not committed.
+  readonly shownAt: number;
+  // What the requests of the document carry to find it: the request id of
+  // its top-level document, which a redirect keeps, or its own id when no
+  // request the extension saw opened it.
   readonly navigation: string;
   readonly state: TabState;
 }
 
+// What the extension keeps of a tab between two wake-ups: the document it
+// shows, and the documents it showed before, which Back and Forward bring
+// back from the back-forward cache without sending any request.
+export interface TabRecord extends DocumentRecord {
+  // The most recently shown first, all committed.
+  readonly previous: readonly DocumentRecord[];
+}
+
+// Firefox keeps at most 8 pages in its back-forward cache for the whole
+// browser, and only those within 3 entries of the current one, so a tab
+// brings back at most 6 of them. The 8 shown last leave room for a history
+// that branched (nsSHistory.cpp and nsSHistory.h, Firefox 159.0.1).
+export const PREVIOUS_DOCUMENTS = 8;
+
 // A tab the extension has not seen navigate yet, such as one opened before
-// it was installed.
-export const EMPTY_RECORD: TabRecord = { navigation: "", state: NEUTRAL };
+// it was installed: it shows a document whose id the extension never got.
+export const EMPTY_RECORD: TabRecord = {
+  document: "",
+  shownAt: 0,
+  navigation: "",
+  state: NEUTRAL,
+  previous: [],
+};
 
 // The navigation of a page whose site the extension has no access to: it
 // receives no request id for its document.
@@ -29,39 +56,166 @@ export const HIDDEN_SITE = "hidden";
 
 // Partial when the extension lacks the access to all sites: a request of a
 // site it cannot see may go through a provider.
+function startState(partial: boolean): TabState {
+  return partial ? markPartial(NEUTRAL) : NEUTRAL;
+}
+
+// The document the tab leaves goes first among the previous ones. A
+// navigation that never committed showed nothing, and is not kept.
+function remember(record: TabRecord): readonly DocumentRecord[] {
+  if (record.document === null) {
+    return record.previous;
+  }
+  const { previous, ...left } = record;
+  return [
+    left,
+    ...previous.filter((entry) => entry.document !== left.document),
+  ].slice(0, PREVIOUS_DOCUMENTS);
+}
+
+// Firefox delivers request events in batches and navigation events at once,
+// so a top-level request can reach the extension after the commit of the
+// document it opened. Such a request was sent before that commit, and opens
+// the first document the tab committed after it was sent, which keeps the
+// requests already counted for it.
 export function startNavigation(
   record: TabRecord,
   navigation: string,
   partial: boolean,
+  sentAt: number,
 ): TabRecord {
   if (record.navigation === navigation) {
     return record;
   }
-  return { navigation, state: partial ? markPartial(NEUTRAL) : NEUTRAL };
+  const opened = [record, ...record.previous]
+    .filter((entry) => entry.document !== null && entry.shownAt > sentAt)
+    .reduce<DocumentRecord | null>(
+      (first, entry) =>
+        first === null || entry.shownAt < first.shownAt ? entry : first,
+      null,
+    );
+  if (opened !== null) {
+    return replace(record, opened, { ...opened, navigation });
+  }
+  return {
+    document: null,
+    shownAt: 0,
+    navigation,
+    state: startState(partial),
+    previous: remember(record),
+  };
 }
 
-// A request counts for the navigation during which it was sent: one that ends
-// after the user left the page says nothing of the new page.
+// Firefox commits a document. One the tab showed before comes back with what
+// it saw, as Back and Forward bring it back from the back-forward cache, and
+// with a partial view if the extension lost the access to all sites since.
+// The pending navigation takes the document it opened. Any other document
+// was opened by no request the extension saw, such as a local file or an
+// about: page, and starts over.
+export function showDocument(
+  record: TabRecord,
+  document: string,
+  shownAt: number,
+  partial: boolean,
+): TabRecord {
+  if (record.document === document) {
+    return record;
+  }
+  const saved = record.previous.find((entry) => entry.document === document);
+  if (saved !== undefined) {
+    const others = record.previous.filter((entry) => entry !== saved);
+    return {
+      ...saved,
+      shownAt,
+      state: partial ? markPartial(saved.state) : saved.state,
+      previous: remember({ ...record, previous: others }),
+    };
+  }
+  if (record.document === null) {
+    return { ...record, document, shownAt };
+  }
+  return {
+    document,
+    shownAt,
+    navigation: document,
+    state: startState(partial),
+    previous: remember(record),
+  };
+}
+
+// Firefox signals no commit for a page it loads in its own process, such as
+// its settings, only its completion. A document the tab already knows has
+// committed, and its completion changes nothing.
+export function showCompletedDocument(
+  record: TabRecord,
+  document: string,
+  completedAt: number,
+  partial: boolean,
+): TabRecord {
+  const known =
+    record.document === document ||
+    record.previous.some((entry) => entry.document === document);
+  return known ? record : showDocument(record, document, completedAt, partial);
+}
+
+// A request belongs to the document the tab showed when it was sent: one sent
+// before the tab showed its document comes from the page it left, even when
+// Firefox delivers it after the commit. A pending navigation takes every
+// request until it commits.
+export function navigationAt(record: TabRecord, sentAt: number): string {
+  if (record.document === null || sentAt >= record.shownAt) {
+    return record.navigation;
+  }
+  const shownThen = record.previous.find((entry) => entry.shownAt <= sentAt);
+  return shownThen?.navigation ?? record.navigation;
+}
+
+// A request counts for the document it was sent for, the one shown or one
+// shown before. A request of a navigation the tab no longer keeps says
+// nothing of any document it keeps.
 export function foldRequest(
   record: TabRecord,
   navigation: string,
   request: Classification | null,
 ): TabRecord {
-  if (navigation !== record.navigation) {
+  const entry =
+    record.navigation === navigation
+      ? record
+      : record.previous.find((saved) => saved.navigation === navigation);
+  if (entry === undefined) {
     return record;
   }
-  const state = addRequest(record.state, request);
-  return state === record.state ? record : { navigation, state };
+  const state = addRequest(entry.state, request);
+  return state === entry.state
+    ? record
+    : replace(record, entry, { ...entry, state });
 }
 
-// What the tab shows is out of reach: it starts over as not observed, then
-// keeps what frames of other sites let the extension see, as a partial view.
+// What the tab shows is out of reach. A document no request opened is that
+// page: it becomes not observed, then keeps what frames of other sites let
+// the extension see, as a partial view. A document opened by a request the
+// extension saw is in reach, so the page out of reach is the next one, whose
+// commit has not arrived yet: it waits for it. A navigation the extension saw
+// and that has not committed is in reach too, so the page out of reach is
+// the one still shown, already marked.
 export function markHiddenSite(record: TabRecord): TabRecord {
-  if (record.navigation !== HIDDEN_SITE) {
-    return { navigation: HIDDEN_SITE, state: NOT_OBSERVED };
+  const openedByRequest =
+    record.navigation !== record.document && record.navigation !== HIDDEN_SITE;
+  if (openedByRequest && record.document === null) {
+    return record;
   }
-  const state = markPartial(record.state);
-  return state === record.state ? record : { navigation: HIDDEN_SITE, state };
+  if (openedByRequest) {
+    return {
+      document: null,
+      shownAt: 0,
+      navigation: HIDDEN_SITE,
+      state: NOT_OBSERVED,
+      previous: remember(record),
+    };
+  }
+  const state =
+    record.state.kind === "neutral" ? NOT_OBSERVED : markPartial(record.state);
+  return state === record.state ? record : { ...record, state };
 }
 
 // The access to all sites was withdrawn while the tab was open: the requests
@@ -70,4 +224,22 @@ export function markHiddenSite(record: TabRecord): TabRecord {
 export function markPartialView(record: TabRecord): TabRecord {
   const state = markPartial(record.state);
   return state === record.state ? record : { ...record, state };
+}
+
+// Puts a changed document in the place of the one it changes, the one shown
+// or one shown before.
+function replace(
+  record: TabRecord,
+  entry: DocumentRecord,
+  changed: DocumentRecord,
+): TabRecord {
+  if (entry === record) {
+    return { ...record, ...changed };
+  }
+  return {
+    ...record,
+    previous: record.previous.map((saved) =>
+      saved === entry ? changed : saved,
+    ),
+  };
 }

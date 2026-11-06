@@ -9,6 +9,8 @@ import {
   foldRequest,
   markHiddenSite,
   markPartialView,
+  showCompletedDocument,
+  showDocument,
   startNavigation,
   type TabRecord,
 } from "./core/tab-record.js";
@@ -55,9 +57,54 @@ export function recordOf(tabId: number): TabRecord {
   return records.get(tabId) ?? EMPTY_RECORD;
 }
 
-export function navigate(tabId: number, navigation: string): void {
+export function navigate(
+  tabId: number,
+  navigation: string,
+  sentAt: number,
+): void {
   update(tabId, (record) =>
-    startNavigation(record, navigation, !hasAllSites()),
+    startNavigation(record, navigation, !hasAllSites(), sentAt),
+  );
+}
+
+// The webNavigation types stop at Firefox 143, while Firefox gives the
+// documentId of a frame's document from 153 on (browser-compat-data,
+// webextensions.api.webNavigation.onCommitted.documentId), and gives none
+// only to a frame left without a document (ExtensionDocumentId.sys.mjs,
+// Firefox 159.0.1).
+type DocumentDetails = {
+  readonly tabId: number;
+  readonly frameId: number;
+  readonly timeStamp: number;
+  readonly documentId?: string;
+};
+
+// The icon speaks of the page the tab shows, not of its frames. The
+// documentId of a page brought back from the back-forward cache is the one
+// it had when first loaded (MDN, Work with documentId).
+export async function onCommitted(details: DocumentDetails): Promise<void> {
+  if (details.frameId !== 0 || details.documentId === undefined) {
+    return;
+  }
+  const { tabId, documentId, timeStamp } = details;
+  await ready;
+  update(tabId, (record) =>
+    showDocument(record, documentId, timeStamp, !hasAllSites()),
+  );
+}
+
+// A page Firefox loads in its own process, such as about:preferences, gets
+// no onCommitted, since the event needs a content process to report it, but
+// it gets onCompleted (WebNavigationContent.cpp and WebNavigation.sys.mjs,
+// Firefox 159.0.1).
+export async function onCompleted(details: DocumentDetails): Promise<void> {
+  if (details.frameId !== 0 || details.documentId === undefined) {
+    return;
+  }
+  const { tabId, documentId, timeStamp } = details;
+  await ready;
+  update(tabId, (record) =>
+    showCompletedDocument(record, documentId, timeStamp, !hasAllSites()),
   );
 }
 
