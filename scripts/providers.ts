@@ -4,6 +4,10 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parseCidr } from "../src/core/cidr.js";
+import type {
+  ProviderEntry,
+  ProviderTable,
+} from "../src/core/provider-table.js";
 
 // An error names the line in ranges.txt and the field path in provider.json,
 // so the person fixing the data finds the place without searching.
@@ -14,32 +18,13 @@ export interface DataError {
   reason: string;
 }
 
-export interface Company {
-  name: string;
-  country: string;
-}
-
-export interface Provider extends Company {
-  parent: Company | null;
-  headers: { name: string; value: string | null }[];
-  cookies: string[];
-  server: string[];
-  cname: string[];
-  challengeHosts: string[];
-  challengePaths: string[];
-}
-
-// The generated table holds only what the extension uses. The sources stay
-// in the data folder, which is where they are read and checked.
-export interface ProviderEntry extends Provider {
-  id: string;
-  ranges: string[];
-}
-
-export interface ProviderTable {
-  providers: ProviderEntry[];
-  consentCookies: string[];
-}
+// The table shape belongs to the classification core, which reads it, so the
+// data pipeline derives its own types from it instead of keeping a copy. The
+// generated table holds only what the extension uses: the sources stay in the
+// data folder, which is where they are read and checked.
+export type { ProviderEntry, ProviderTable };
+export type Company = NonNullable<ProviderEntry["parent"]>;
+export type Provider = Omit<ProviderEntry, "id" | "ranges">;
 
 export const PROVIDER_FILES = ["provider.json", "ranges.txt", "logo.svg"];
 export const CONSENT_FILE = "consent-cookies.json";
