@@ -1,20 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import {
-  type Classification,
-  type Colour,
-  colourOf,
-  type LeakLevel,
-} from "./classify.js";
+import { type Classification, type Colour, colourOf } from "./classify.js";
 
 export type TabState =
   | { readonly kind: "neutral" }
   | { readonly kind: "not-observed" }
   | {
       readonly kind: "seen";
-      readonly colour: Colour;
-      readonly level: LeakLevel;
+      // The most serious request of the tab, which gives the icon its colour
+      // and level and the tooltip its provider and case.
+      readonly request: Classification;
       // The extension had no access to at least one site of the tab, so
       // what it shows is what it saw, not the whole of the tab.
       readonly partial: boolean;
@@ -45,15 +41,34 @@ export function addRequest(
   if (request === null) {
     return state;
   }
-  const level = request.leak.level;
-  const colour = colourOf(level, request.proven);
-  if (state.kind === "seen") {
-    const rank = COLOUR_RANK[colour] - COLOUR_RANK[state.colour];
-    if (rank < 0 || (rank === 0 && level <= state.level)) {
-      return state;
-    }
+  if (state.kind === "seen" && !isMoreSerious(request, state.request)) {
+    return state;
   }
-  return { kind: "seen", colour, level, partial: isPartial(state) };
+  return { kind: "seen", request, partial: isPartial(state) };
+}
+
+export function colourOfRequest(request: Classification): Colour {
+  return colourOf(request.leak.level, request.proven);
+}
+
+// At the same colour and level, a request of the site replaces one of the
+// anti-bot machinery: the mark would otherwise suggest that the leak comes
+// from the protection alone, while the site leaks as much.
+function isMoreSerious(request: Classification, kept: Classification): boolean {
+  const colour =
+    COLOUR_RANK[colourOfRequest(request)] - COLOUR_RANK[colourOfRequest(kept)];
+  if (colour !== 0) {
+    return colour > 0;
+  }
+  const level = request.leak.level - kept.leak.level;
+  if (level !== 0) {
+    return level > 0;
+  }
+  return isAntiBot(kept) && !isAntiBot(request);
+}
+
+function isAntiBot(request: Classification): boolean {
+  return request.leak.level === 4 && request.leak.challenge;
 }
 
 // The extension has no access to a site of the tab. A tab where nothing was

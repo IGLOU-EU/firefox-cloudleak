@@ -1,0 +1,3 @@
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Adrien Kara -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"><path d="M4 15A3 3 0 0 1 1.87 9.887A5 5 0 0 1 11.27 6.5A3 3 0 0 1 14.212 9.974A3 3 0 0 1 12 15Z" fill="#d67200"/><path d="M6.25 8.1A1.75 1.75 0 1 1 9.125 9.441C8.625 9.741 8 9.991 8 10.6" fill="none" stroke="#ffffff" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="13.15" r="1.05" fill="#ffffff"/></svg>

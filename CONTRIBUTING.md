@@ -59,12 +59,13 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 ## Layout
 
 - `src/core/`: the pure core, with no browser API. It runs and is tested in Node, without Firefox.
-- `src/background.ts`: the background entry point of the extension.
+- `src/background.ts`: the background entry point of the extension, which only adds the listeners.
+- The other files of `src/`: the thin adapters between Firefox and the core (requests, tabs, toolbar icon, DNS, permissions). They hold no classification logic.
 - `data/providers/`: one folder per provider (see "Provider data").
 - `data/consent-cookies.json`: the cookies of known consent and audience-measurement tools (see "Provider data").
 - `scripts/`: the build and the maintenance scripts, which run in Node on the development machine only.
 - `tests/`: the tests, run by the Node test runner.
-- `manifest.json`, `_locales/`: copied into the extension as they are.
+- `manifest.json`, `_locales/`, `icons/`: copied into the extension as they are. The icons are the toolbar states of the validated mock-up, drawn as SVG.
 
 The build compiles `src/` with the WebExtension types only, and `scripts/` and `tests/` with the Node types only. The core compiles in both, so a Node API or a browser API in the core fails the build.
 

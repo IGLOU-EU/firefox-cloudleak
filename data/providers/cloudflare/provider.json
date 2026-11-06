@@ -108,8 +108,8 @@
     ],
     "challengeQueryNames": [
       {
-        "name": "__cf_*",
-        "source": "Observed on 2026-11-05 on www.legifrance.gouv.fr (__cf_chl_tk on the verification page and on the form that validates the challenge), and not found in Cloudflare's documentation on 2026-11-06. The whole __cf_ prefix is kept so that a renamed challenge parameter is still recognised"
+        "name": "__cf_*_tk",
+        "source": "Observed on 2026-11-05 on www.legifrance.gouv.fr (__cf_chl_tk on the verification page and on the form that validates the challenge), and not found in Cloudflare's documentation on 2026-11-06. The pattern keeps the __cf_ prefix and the _tk ending of the observed token, without the chl infix that Cloudflare documents nowhere, so that a renamed challenge token is still recognised and other __cf_ parameters are not"
       }
     ]
   }
