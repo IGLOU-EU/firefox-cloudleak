@@ -6,7 +6,7 @@ This file is the reference for how work is done on this repository: the design r
 
 These four rules settle every design choice. They are not negotiable, and only the owner can change one.
 
-1. **Everything local.** The extension makes no request on its own initiative, downloads no list and sends nothing to anyone. Accepted consequence: the provider lists are embedded and change only with a new version of the extension.
+1. **Everything local.** The extension makes no request to anyone on its own initiative, downloads no list and sends nothing to anyone. Accepted consequence: the provider lists are embedded and change only with a new version of the extension. One exception, which Firefox imposes: to read the canonical name of a host that neither its IP nor its HTTP signals tie to a provider, the extension asks Firefox's own resolver, through `dns.resolve`, for a name the page has just resolved. Firefox keeps the page's answer in its DNS cache under the site's partition key and the extension's request under an empty one, so the request misses the cache and the resolver sees the same name once more, about once a minute ([bug 2051290](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290)). The resolver learns nothing it did not already know, so the step stays.
 2. **No URL kept.** Only aggregated counts are kept: site, method, request type, provider, level.
 3. **Never claim more than what is observed.** When the extension cannot know, the display says so, and a doubt is never resolved on the reassuring side.
 4. **Never slow down browsing.** No blocking listener: the extension receives the event, returns at once and does its work afterwards.
