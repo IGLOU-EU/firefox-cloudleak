@@ -4,6 +4,7 @@
 import type { Classification } from "./classify.js";
 import {
   addRequest,
+  clearPartial,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -25,6 +26,11 @@ export interface DocumentRecord {
   // request the extension saw opened it.
   readonly navigation: string;
   readonly state: TabState;
+  // A page of the browser rather than of a website, such as a new tab, the
+  // settings, a local file or a source view: no site whose access the user
+  // could withdraw, so it is never out of reach nor partial for want of that
+  // access. False while the navigation has not committed.
+  readonly browserPage: boolean;
 }
 
 // What the extension keeps of a tab between two wake-ups: the document it
@@ -49,6 +55,7 @@ export const EMPTY_RECORD: TabRecord = {
   shownAt: 0,
   navigation: "",
   state: markMissed(NEUTRAL),
+  browserPage: false,
   previous: [],
 };
 
@@ -104,6 +111,7 @@ export function startNavigation(
     shownAt: 0,
     navigation,
     state: startState(partial),
+    browserPage: false,
     previous: remember(record),
   };
 }
@@ -112,40 +120,51 @@ export function startNavigation(
 // it saw, as Back and Forward bring it back from the back-forward cache, and
 // with a partial view if the extension lost the access to all sites since.
 // The pending navigation takes the document it opened. Any other document
-// was opened by no request the extension saw, such as a local file or an
-// about: page, and starts over. Back and Forward can also bring back a
-// document the tab does not know, loaded before the extension started or
-// shown before the documents the tab keeps: the extension missed its
-// requests.
+// was opened by no request the extension saw, such as a page of the browser
+// or of a site out of reach, and starts over. Back and Forward can also bring
+// back a document the tab does not know, loaded before the extension started
+// or shown before the documents the tab keeps: the extension missed its
+// requests. A page of the browser is never partial for want of the access to
+// all sites, even when the navigation that opens it is, such as the wait for
+// a site out of reach, which was waiting for no site.
 export function showDocument(
   record: TabRecord,
   document: string,
   shownAt: number,
   partial: boolean,
   backOrForward = false,
+  browserPage = false,
 ): TabRecord {
   if (record.document === document) {
     return record;
   }
+  const lacking = partial && !browserPage;
   const saved = record.previous.find((entry) => entry.document === document);
   if (saved !== undefined) {
     const others = record.previous.filter((entry) => entry !== saved);
     return {
       ...saved,
       shownAt,
-      state: partial ? markPartial(saved.state) : saved.state,
+      state: lacking ? markPartial(saved.state) : saved.state,
       previous: remember({ ...record, previous: others }),
     };
   }
   if (record.document === null) {
-    return { ...record, document, shownAt };
+    return {
+      ...record,
+      document,
+      shownAt,
+      state: browserPage ? clearPartial(record.state) : record.state,
+      browserPage,
+    };
   }
-  const state = startState(partial);
+  const state = startState(lacking);
   return {
     document,
     shownAt,
     navigation: document,
     state: backOrForward ? markMissed(state) : state,
+    browserPage,
     previous: remember(record),
   };
 }
@@ -158,11 +177,14 @@ export function showCompletedDocument(
   document: string,
   completedAt: number,
   partial: boolean,
+  browserPage = false,
 ): TabRecord {
   const known =
     record.document === document ||
     record.previous.some((entry) => entry.document === document);
-  return known ? record : showDocument(record, document, completedAt, partial);
+  return known
+    ? record
+    : showDocument(record, document, completedAt, partial, false, browserPage);
 }
 
 // What the tab shows. A navigation that has not committed shows nothing yet,
@@ -242,8 +264,13 @@ function changeState(
 // extension saw is in reach, so the page out of reach is the next one, whose
 // commit has not arrived yet: it waits for it. A navigation the extension saw
 // and that has not committed is in reach too, so the page out of reach is
-// the one still shown, already marked.
+// the one still shown, already marked. Firefox withholds the URL of a page of
+// the browser too, which is no site out of reach: it stays as it is, and a
+// site the tab opens next is marked once it commits.
 export function markHiddenSite(record: TabRecord): TabRecord {
+  if (record.browserPage) {
+    return record;
+  }
   const openedByRequest =
     record.navigation !== record.document && record.navigation !== HIDDEN_SITE;
   if (openedByRequest && record.document === null) {
@@ -255,6 +282,7 @@ export function markHiddenSite(record: TabRecord): TabRecord {
       shownAt: 0,
       navigation: HIDDEN_SITE,
       state: NOT_OBSERVED,
+      browserPage: false,
       previous: remember(record),
     };
   }
@@ -267,13 +295,17 @@ export function markHiddenSite(record: TabRecord): TabRecord {
 // of the sites now out of reach go unseen from then on, and a later grant
 // does not bring back those it missed.
 // The page still shown during a pending navigation receives the requests of
-// that time, so it becomes partial too.
+// that time, so it becomes partial too. A page of the browser is no site the
+// withdrawal concerns, and stays as it is.
 export function markPartialView(record: TabRecord): TabRecord {
   const shown = displayedDocument(record);
   const marked =
-    shown === record
+    shown === record || shown.browserPage
       ? record
       : changeState(record, shown.navigation, markPartial);
+  if (marked.browserPage) {
+    return marked;
+  }
   const state = markPartial(marked.state);
   return state === marked.state ? marked : { ...marked, state };
 }

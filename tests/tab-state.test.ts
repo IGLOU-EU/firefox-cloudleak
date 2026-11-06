@@ -12,6 +12,7 @@ import {
 } from "../src/core/classify.js";
 import {
   addRequest,
+  clearPartial,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -398,5 +399,28 @@ describe("markMissed", () => {
     assert.equal(missedOf(state), false);
     markMissed(NEUTRAL);
     assert.equal(missedOf(NEUTRAL), false);
+  });
+});
+
+describe("clearPartial", () => {
+  it("takes the partial view off what was seen, and keeps its counts and the requests missed", () => {
+    const state = markMissed(markPartial(fold([BLUE_2, RED_4])));
+    const cleared = clearPartial(state);
+    assert.deepEqual(view(cleared), seen("red", 4));
+    assert.deepEqual(
+      cleared.kind === "seen" ? [cleared.tallies, cleared.missed] : null,
+      state.kind === "seen" ? [state.tallies, true] : null,
+    );
+  });
+
+  it("makes neutral a tab not observed, since what was out of reach is no site", () => {
+    assert.deepEqual(clearPartial(NOT_OBSERVED), NEUTRAL);
+    assert.deepEqual(clearPartial(markPartial(NEUTRAL)), NEUTRAL);
+  });
+
+  it("returns the state itself when the view is not partial", () => {
+    const state = fold([BLUE_2]);
+    assert.equal(clearPartial(state), state);
+    assert.equal(clearPartial(NEUTRAL), NEUTRAL);
   });
 });

@@ -65,6 +65,17 @@ function load(
   return showDocument(folded, document, at + 10, false);
 }
 
+// A page of the browser, such as a new tab, committed while the extension
+// lacks the access to all sites, which would make the view of a site partial.
+function showBrowserPage(
+  record: TabRecord,
+  document: string,
+  at: number,
+  backOrForward = false,
+): TabRecord {
+  return showDocument(record, document, at, true, backOrForward, true);
+}
+
 // What the tab shows of a record: its document and its state.
 function shown(record: DocumentRecord) {
   return { document: record.document, state: record.state };
@@ -184,7 +195,7 @@ describe("showDocument", () => {
     assert.equal(record.shownAt, 120);
   });
 
-  it("starts neutral a document no request opened, such as a local file or an about: page", () => {
+  it("starts neutral a document of a site that no request the extension saw opened", () => {
     const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
     const file = showDocument(a, "doc-file", 300, false);
     assert.deepEqual(shown(file), { document: "doc-file", state: NEUTRAL });
@@ -288,6 +299,61 @@ describe("showDocument", () => {
     );
   });
 
+  it("starts a page of the browser neutral, such as a new tab or a local file, with no partial view without the access to all sites", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+    const newTab = showBrowserPage(a, "doc-newtab", 300);
+    assert.deepEqual(shown(newTab), { document: "doc-newtab", state: NEUTRAL });
+    assert.equal(newTab.browserPage, true);
+    assert.deepEqual(newTab.previous[0]?.state, seen(RED_3));
+    assert.equal(showDocument(a, "doc-site", 300, true).browserPage, false);
+  });
+
+  it("brings back a page of the browser with no partial view while the extension lacks the access to all sites", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
+    const newTab = showDocument(a, "doc-newtab", 200, false, false, true);
+    const b = load(newTab, "2", "doc-b", 300, RED_3);
+    const back = showBrowserPage(b, "doc-newtab", 400, true);
+    assert.deepEqual(shown(back), { document: "doc-newtab", state: NEUTRAL });
+  });
+
+  for (const commitFirst of [false, true]) {
+    it(`gives a page of the browser opened by a request the extension saw, such as view-source:, what the request showed, with no partial view${commitFirst ? ", when the commit arrives before the request" : ""}`, () => {
+      const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
+      const source = commitFirst
+        ? foldRequest(
+            startNavigation(
+              showBrowserPage(a, "doc-source", 210),
+              "2",
+              true,
+              200,
+            ),
+            "2",
+            RED_3,
+          )
+        : showBrowserPage(
+            foldRequest(startNavigation(a, "2", true, 200), "2", RED_3),
+            "doc-source",
+            210,
+          );
+      assert.deepEqual(shown(source), {
+        document: "doc-source",
+        state: seen(RED_3),
+      });
+      assert.equal(source.browserPage, true);
+    });
+  }
+
+  it("shows neutral the page of the browser that the wait for a site out of reach commits, with what the wait saw and no partial view", () => {
+    const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, null));
+    const reader = showBrowserPage(hidden, "doc-reader", 300);
+    assert.deepEqual(shown(reader), { document: "doc-reader", state: NEUTRAL });
+    const after = foldRequest(hidden, navigationAt(hidden, 250), BLUE_2);
+    assert.deepEqual(
+      showBrowserPage(after, "doc-reader", 300).state,
+      seen(BLUE_2),
+    );
+  });
+
   it("leaves the record as it is on a second commit of the document the tab shows", () => {
     const record = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
     assert.equal(showDocument(record, "doc-a", 500, false), record);
@@ -318,17 +384,26 @@ describe("showDocument", () => {
 });
 
 describe("showCompletedDocument", () => {
-  it("starts neutral a document the tab completed without a commit, such as the browser's settings page", () => {
+  it("starts neutral a document the tab completed without a commit, such as the browser's settings page, with no partial view", () => {
     const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
-    const settings = showCompletedDocument(a, "doc-settings", 300, false);
+    const settings = showCompletedDocument(a, "doc-settings", 300, true, true);
     assert.deepEqual(shown(settings), {
       document: "doc-settings",
       state: NEUTRAL,
     });
+    assert.equal(settings.browserPage, true);
     assert.deepEqual(settings.previous[0]?.state, seen(RED_3));
     assert.deepEqual(
-      showCompletedDocument(a, "doc-settings", 300, true).state,
+      showCompletedDocument(a, "doc-site", 300, true).state,
       markPartial(NEUTRAL),
+    );
+  });
+
+  it("shows neutral the settings page that the wait for a site out of reach completes", () => {
+    const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, RED_3));
+    assert.deepEqual(
+      shown(showCompletedDocument(hidden, "doc-settings", 300, true, true)),
+      { document: "doc-settings", state: NEUTRAL },
     );
   });
 
@@ -368,6 +443,7 @@ describe("navigationAt", () => {
       shownAt: 0,
       navigation: "1",
       state: NEUTRAL,
+      browserPage: false,
       previous: [],
     };
     assert.equal(navigationAt(record, 50), "1");
@@ -393,6 +469,7 @@ describe("navigationAt", () => {
       shownAt: 100,
       navigation: "1",
       state: NEUTRAL,
+      browserPage: false,
       previous: [],
     };
     assert.equal(navigationAt(record, 50), "1");
@@ -508,6 +585,7 @@ describe("displayedDocument", () => {
       shownAt: 0,
       navigation: "1",
       state: NEUTRAL,
+      browserPage: false,
       previous: [],
     };
     assert.equal(displayedDocument(record), record);
@@ -622,6 +700,18 @@ describe("markHiddenSite", () => {
     assert.equal(next.navigation, "3");
     assert.deepEqual(next.state, NEUTRAL);
   });
+
+  it("leaves a page of the browser as it is, whose URL Firefox withholds as for a site out of reach", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+    const newTab = showBrowserPage(a, "doc-newtab", 300);
+    assert.equal(markHiddenSite(newTab), newTab);
+    const source = showBrowserPage(
+      startNavigation(a, "2", true, 200),
+      "doc-source",
+      210,
+    );
+    assert.equal(markHiddenSite(source), source);
+  });
 });
 
 describe("markPartialView", () => {
@@ -668,6 +758,25 @@ describe("markPartialView", () => {
     assert.deepEqual(displayedDocument(partial).state, seen(RED_3, true));
     assert.deepEqual(partial.state, markPartial(NEUTRAL));
     assert.equal(markPartialView(partial), partial);
+  });
+
+  it("leaves a page of the browser as it is", () => {
+    const newTab = showDocument(
+      EMPTY_RECORD,
+      "doc-newtab",
+      100,
+      false,
+      false,
+      true,
+    );
+    assert.equal(markPartialView(newTab), newTab);
+  });
+
+  it("makes partial a navigation pending from a page of the browser, not the page still shown", () => {
+    const newTab = showBrowserPage(EMPTY_RECORD, "doc-newtab", 100);
+    const partial = markPartialView(startNavigation(newTab, "2", false, 200));
+    assert.deepEqual(displayedDocument(partial).state, NEUTRAL);
+    assert.deepEqual(partial.state, markPartial(NEUTRAL));
   });
 });
 

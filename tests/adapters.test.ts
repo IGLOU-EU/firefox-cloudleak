@@ -8,7 +8,7 @@
 
 import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
-import { describe, it, mock } from "node:test";
+import { after, before, describe, it, mock } from "node:test";
 import type {
   ProviderEntry,
   ProviderTable,
@@ -26,7 +26,9 @@ interface Tabs {
   readonly ready: Promise<void>;
   recordOf(tabId: number): TabRecord;
   onCommitted(details: object): Promise<void>;
+  onCompleted(details: object): Promise<void>;
   onStatus(tabId: number, tab: object): Promise<void>;
+  onAccessChange(): Promise<void>;
   forget(tabId: number): Promise<void>;
 }
 
@@ -60,6 +62,7 @@ const STORED: TabRecord = {
   shownAt: 100,
   navigation: "r900",
   state: { kind: "neutral", partial: false, missed: false },
+  browserPage: false,
   previous: [],
 };
 
@@ -74,6 +77,7 @@ const session = new Map<string, unknown>([
   [`tab:${CLOSED_AT_WAKE_UP}`, STORED],
 ]);
 const resolved: string[] = [];
+let allSites = true;
 let resolve: (host: string) => Promise<{ canonicalName?: string }> = () =>
   Promise.resolve({ canonicalName: "" });
 
@@ -108,7 +112,7 @@ function record(tabId: number, kind: Call["kind"], value: string): void {
       },
     },
   },
-  permissions: { contains: () => Promise.resolve(true) },
+  permissions: { contains: () => Promise.resolve(allSites) },
   tabs: { query: () => Promise.resolve([]) },
   action: {
     setIcon: (details: { tabId: number; path: string }) => {
@@ -222,6 +226,7 @@ async function commit(
   documentId: string,
   timeStamp: number,
   transitionQualifiers: string[] = [],
+  url = "https://site.example/",
 ): Promise<void> {
   await tabs.onCommitted({
     tabId,
@@ -229,6 +234,7 @@ async function commit(
     documentId,
     timeStamp,
     transitionQualifiers,
+    url,
   });
 }
 
@@ -406,7 +412,13 @@ describe("a page whose start the extension did not see", () => {
   it("starts over complete a page a link opens without a request, such as a local file", async () => {
     const tab = 302;
     await redPage(tab, 1000);
-    await commit(tab, "doc-file", 2000, ["from_address_bar"]);
+    await commit(
+      tab,
+      "doc-file",
+      2000,
+      ["from_address_bar"],
+      "file:///home/user/page.html",
+    );
     await status(tab);
     assert.doesNotMatch(shown(tab).title ?? "", /titleMissed/);
   });
@@ -439,6 +451,73 @@ describe("the toolbar button", () => {
     assert.deepEqual(sentSince(tab, mark), ["icon", "badge", "title"]);
     assert.deepEqual({ icon: shown(tab).icon, badge: shown(tab).badge }, RED);
   });
+});
+
+describe("a page of the browser, without the access to all sites", () => {
+  before(async () => {
+    allSites = false;
+    await tabs.onAccessChange();
+  });
+  after(async () => {
+    allSites = true;
+    await tabs.onAccessChange();
+  });
+
+  // No access to sites covers the scheme of such a page, so Firefox gives
+  // its URL to no extension without the tabs permission, as for a site out
+  // of reach (ext-tabs-base.js, Firefox 159.0.1).
+  async function statusWithoutUrl(tabId: number): Promise<void> {
+    await tabs.onStatus(tabId, { id: tabId });
+  }
+
+  const pages = [
+    "about:newtab",
+    "about:reader?url=https%3A%2F%2Fsite.example%2F",
+    "view-source:https://site.example/",
+    "file:///home/user/page.html",
+    "moz-extension://5f0c7a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50/page.html",
+  ];
+
+  for (const [index, url] of pages.entries()) {
+    it(`shows ${url} neutral, neither not observed nor partial, even when the tab's status comes before the commit`, async () => {
+      const tab = 700 + index;
+      await redPage(tab, 1000);
+      await statusWithoutUrl(tab);
+      await commit(tab, `doc-${tab}-page`, 2000, [], url);
+      await statusWithoutUrl(tab);
+      mock.timers.runAll();
+      assert.deepEqual(iconOf(tab), NEUTRAL);
+      assert.equal(shown(tab).title, "titleNeutral");
+    });
+  }
+
+  it("shows the settings page neutral, which Firefox completes without a commit", async () => {
+    const tab = 710;
+    await redPage(tab, 1000);
+    await statusWithoutUrl(tab);
+    await tabs.onCompleted({
+      tabId: tab,
+      frameId: 0,
+      documentId: "doc-settings",
+      timeStamp: 2000,
+      url: "about:preferences",
+    });
+    await statusWithoutUrl(tab);
+    mock.timers.runAll();
+    assert.deepEqual(iconOf(tab), NEUTRAL);
+    assert.equal(shown(tab).title, "titleNeutral");
+  });
+
+  for (const [index, url] of ["https://hidden.example/", ""].entries()) {
+    it(`still says not observed a page ${url === "" ? "whose URL Firefox did not give" : "of a site out of reach"}`, async () => {
+      const tab = 711 + index;
+      await commit(tab, `doc-${tab}`, 1000, [], url);
+      await statusWithoutUrl(tab);
+      mock.timers.runAll();
+      assert.equal(shown(tab).icon, "/icons/not-observed.svg");
+      assert.equal(shown(tab).title, "titleNotObserved");
+    });
+  }
 });
 
 describe("a closed tab", () => {
