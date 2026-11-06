@@ -168,3 +168,13 @@ export function markMissed(state: TabState): TabState {
   }
   return { ...state, missed: true };
 }
+
+// A page of the browser is no site whose access the user could withdraw, so
+// the lack of that access says nothing of it. What was seen and what was
+// missed stay true.
+export function clearPartial(state: TabState): TabState {
+  if (state.kind === "not-observed") {
+    return NEUTRAL;
+  }
+  return state.partial ? { ...state, partial: false } : state;
+}

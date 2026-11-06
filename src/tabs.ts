@@ -89,7 +89,24 @@ type DocumentDetails = {
   // "forward_back" for Back and Forward (ext-webNavigation.js, Firefox
   // 159.0.1). onCompleted gives none.
   readonly transitionQualifiers?: readonly string[];
+  // Only its scheme is ever read, by isBrowserPage.
+  readonly url: string;
 };
+
+// The schemes that "*" covers in a match pattern, the only ones a site whose
+// access the user grants or withdraws can have.
+const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
+
+// Firefox gives the URL of the document, view-source: and about:reader
+// included (WebNavigation.sys.mjs, WebNavigationContent.cpp and
+// nsViewSourceChannel.cpp, Firefox 159.0.1). Its scheme alone tells a page of
+// the browser from a website, and goes no further than this function: the
+// rest of the URL is never read, and nothing of it is kept. A URL without a
+// scheme is taken for a website, so that the doubt does not reassure.
+function isBrowserPage(url: string): boolean {
+  const scheme = /^([a-z][a-z\d+.-]*):/i.exec(url)?.[1];
+  return scheme !== undefined && !WEB_SCHEMES.has(scheme.toLowerCase());
+}
 
 // The icon speaks of the page the tab shows, not of its frames. The
 // documentId of a page brought back from the back-forward cache is the one
@@ -101,9 +118,17 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
   const { tabId, documentId, timeStamp } = details;
   const backOrForward =
     details.transitionQualifiers?.includes("forward_back") === true;
+  const browserPage = isBrowserPage(details.url);
   await ready;
   update(tabId, (record) =>
-    showDocument(record, documentId, timeStamp, !hasAllSites(), backOrForward),
+    showDocument(
+      record,
+      documentId,
+      timeStamp,
+      !hasAllSites(),
+      backOrForward,
+      browserPage,
+    ),
   );
 }
 
@@ -116,9 +141,16 @@ export async function onCompleted(details: DocumentDetails): Promise<void> {
     return;
   }
   const { tabId, documentId, timeStamp } = details;
+  const browserPage = isBrowserPage(details.url);
   await ready;
   update(tabId, (record) =>
-    showCompletedDocument(record, documentId, timeStamp, !hasAllSites()),
+    showCompletedDocument(
+      record,
+      documentId,
+      timeStamp,
+      !hasAllSites(),
+      browserPage,
+    ),
   );
 }
 
@@ -141,7 +173,8 @@ function show(tabId: number, everything: boolean): void {
 
 // Firefox gives the URL of a tab only for a site the extension has access
 // to, so a missing URL, without the access to all sites, means a site it
-// cannot see (ext-tabs-base.js, Firefox 159.0.1). A new document clears the
+// cannot see or a page of the browser, which its commit told apart
+// (ext-tabs-base.js, Firefox 159.0.1). A new document clears the
 // icon of the tab, and its status changes right after, so the icon is shown
 // again at each change (ExtensionActions.sys.mjs and ext-browser.js, Firefox
 // 159.0.1).
