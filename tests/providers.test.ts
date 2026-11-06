@@ -14,7 +14,9 @@ import {
   loadTable,
   parseConsentCookies,
   parseProviderJson,
+  parsePublishedSource,
   parseRangesFile,
+  readPublishedList,
 } from "../scripts/providers.js";
 
 const VALID_PROVIDER = `{
@@ -559,6 +561,142 @@ describe("formatRangesFile", () => {
     assert.equal(again.fetched, "2026-11-06");
     assert.deepEqual(again.comments, ["# Why."]);
     assert.deepEqual(again.ranges, ["198.51.100.0/24"]);
+  });
+});
+
+describe("parsePublishedSource", () => {
+  it("reads a published text list", () => {
+    assert.deepEqual(parsePublishedSource("https://example.com/ips-v4"), {
+      url: "https://example.com/ips-v4",
+      service: null,
+    });
+  });
+
+  it("reads a JSON list and the service whose ranges it keeps", () => {
+    assert.deepEqual(
+      parsePublishedSource(
+        "https://example.com/ip-ranges.json, service EXAMPLE_CDN",
+      ),
+      { url: "https://example.com/ip-ranges.json", service: "EXAMPLE_CDN" },
+    );
+  });
+
+  it("leaves a source that is not served over HTTPS to a person", () => {
+    assert.equal(
+      parsePublishedSource("none, Example CDN publishes no list"),
+      null,
+    );
+    assert.equal(parsePublishedSource("http://example.com/ips"), null);
+  });
+
+  it("refuses an HTTPS source it cannot read, rather than skipping it", () => {
+    for (const source of [
+      "https://example.com/ip-ranges.json, services EXAMPLE_CDN",
+      "https://example.com/ip-ranges.json service EXAMPLE_CDN",
+      "https://example.com/ip-ranges.json, service ",
+      "https://example.com/ip-ranges.json, service example_cdn",
+    ]) {
+      assert.throws(
+        () => parsePublishedSource(source),
+        /, service <NAME>/,
+        source,
+      );
+    }
+  });
+});
+
+describe("readPublishedList", () => {
+  const TEXT = { url: "https://example.com/ips-v4", service: null };
+  const JSON_LIST = {
+    url: "https://example.com/ip-ranges.json",
+    service: "EXAMPLE_CDN",
+  };
+  const AWS_LIKE = JSON.stringify({
+    syncToken: "1793927225",
+    createDate: "2026-11-06-01-07-05",
+    prefixes: [
+      { ip_prefix: "192.0.2.0/24", region: "GLOBAL", service: "AMAZON" },
+      { ip_prefix: "192.0.2.0/24", region: "GLOBAL", service: "EXAMPLE_CDN" },
+      {
+        ip_prefix: "198.51.100.0/24",
+        region: "GLOBAL",
+        service: "EXAMPLE_CDN_ORIGIN_FACING",
+      },
+      {
+        ip_prefix: "203.0.113.0/25",
+        region: "eu-west-3",
+        service: "EXAMPLE_CDN",
+      },
+    ],
+    ipv6_prefixes: [
+      {
+        ipv6_prefix: "2001:db8::/32",
+        region: "GLOBAL",
+        service: "EXAMPLE_CDN",
+      },
+      {
+        ipv6_prefix: "2001:db8:1::/48",
+        region: "GLOBAL",
+        service: "example_cdn",
+      },
+    ],
+  });
+
+  it("reads a text list, one range per line", () => {
+    assert.deepEqual(
+      readPublishedList(TEXT, "192.0.2.0/24\n\n  2001:db8::/32  \n"),
+      ["192.0.2.0/24", "2001:db8::/32"],
+    );
+  });
+
+  it("names the line of a malformed range in a text list", () => {
+    assert.throws(
+      () => readPublishedList(TEXT, "192.0.2.0/24\n192.0.2.1/24\n"),
+      /^Error: line 2: .*host bits/,
+    );
+  });
+
+  it("keeps from a JSON list the IPv4 and IPv6 ranges of its service only", () => {
+    assert.deepEqual(readPublishedList(JSON_LIST, AWS_LIKE), [
+      "192.0.2.0/24",
+      "203.0.113.0/25",
+      "2001:db8::/32",
+    ]);
+  });
+
+  it("names the entry of a malformed range in a JSON list", () => {
+    const body = AWS_LIKE.replace("203.0.113.0/25", "203.0.113.1/25");
+    assert.throws(
+      () => readPublishedList(JSON_LIST, body),
+      /^Error: prefixes\[3\]\.ip_prefix: .*host bits/,
+    );
+  });
+
+  it("refuses a JSON list it cannot read", () => {
+    assert.throws(
+      () => readPublishedList(JSON_LIST, "192.0.2.0/24\n"),
+      /not valid JSON/,
+    );
+    assert.throws(
+      () => readPublishedList(JSON_LIST, '{ "prefixes": [] }'),
+      /ipv6_prefixes must be an array/,
+    );
+    assert.throws(
+      () =>
+        readPublishedList(
+          JSON_LIST,
+          '{ "prefixes": [{ "service": "EXAMPLE_CDN" }], "ipv6_prefixes": [] }',
+        ),
+      /prefixes\[0\]\.ip_prefix: /,
+    );
+  });
+
+  it("refuses a list that gives no range", () => {
+    assert.throws(() => readPublishedList(TEXT, "\n"), /the list is empty/);
+    assert.throws(
+      () => readPublishedList({ ...JSON_LIST, service: "OTHER_CDN" }, AWS_LIKE),
+      /the list is empty/,
+    );
   });
 });
 
