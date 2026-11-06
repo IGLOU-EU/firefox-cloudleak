@@ -30,8 +30,8 @@ interface Sent {
 const sent = new Map<number, Sent>();
 
 // Firefox clears the values of a tab when it shows a new document, and the
-// tab's status changes right after, so the caller renders everything again
-// at each change of status. The tooltip keeps its line breaks: Firefox styles
+// tab's status turns to "loading" right after, so the caller renders
+// everything again then. The tooltip keeps its line breaks: Firefox styles
 // tooltips with white-space: pre-wrap (xul.css) and breaks a line in the
 // tooltip of this same button for its own "Permission needed"
 // (originControls.ftl), both in Firefox 159.0.1.

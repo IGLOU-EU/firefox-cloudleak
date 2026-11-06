@@ -175,18 +175,23 @@ function show(tabId: number, everything: boolean): void {
 // to, so a missing URL, without the access to all sites, means a site it
 // cannot see or a page of the browser, which its commit told apart
 // (ext-tabs-base.js, Firefox 159.0.1). A new document clears the
-// icon of the tab, and its status changes right after, so the icon is shown
-// again at each change (ExtensionActions.sys.mjs and ext-browser.js, Firefox
+// icon of the tab, and its commit gives the status "loading" right after,
+// so the icon is shown again whole then. A new fragment, history.pushState
+// or history.replaceState gives a status too, "complete" once the page has
+// loaded, and clears nothing, so only what changed is sent: a page that
+// rewrites its URL every second would otherwise repaint the button as often
+// (ExtensionActions.sys.mjs, ext-browser.js and ext-tabs-base.js, Firefox
 // 159.0.1).
 export async function onStatus(
   tabId: number,
+  change: browser.tabs._OnUpdatedChangeInfo,
   tab: browser.tabs.Tab,
 ): Promise<void> {
   await ready;
   if (tab.url === undefined && !hasAllSites()) {
     update(tabId, markHiddenSite);
   }
-  show(tabId, true);
+  show(tabId, change.status === "loading");
 }
 
 // A withdrawal of the access to all sites makes every open tab partial at
