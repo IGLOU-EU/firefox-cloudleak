@@ -377,6 +377,65 @@ describe("the committed data", () => {
     });
   });
 
+  describe("Radware", () => {
+    // The redirection that opened the personal area of impots.gouv.fr on
+    // 2026-11-06, from an address of Celeste, with no other sign of Radware.
+    const IMPOTS = {
+      type: "main_frame",
+      host: "cfspart-idp.impots.gouv.fr",
+      path: "/oauth2/authorize",
+      ip: "145.242.11.213",
+      cookies: [
+        "ctxcfs",
+        "fidgfippartpdata",
+        "__uzma",
+        "__uzmb",
+        "__uzmc",
+        "__uzmd",
+        "__uzme",
+        "cfsotp",
+        "SL_ClassKey",
+        "fidgfippart",
+      ],
+      responseHeaders: [
+        { name: "server", value: "Apache" },
+        { name: "via", value: "dpapusa206" },
+      ],
+      setCookies: ["__uzmc", "__uzmd"],
+    };
+
+    it("names Radware on the personal area of impots.gouv.fr, without proof, as its Bot Manager cookies alone show", () => {
+      assert.deepEqual(classify(IMPOTS), {
+        provider: "radware",
+        proven: false,
+        leak: SESSION_POSSIBLE,
+      });
+    });
+
+    it("names Radware by the uzmx cookie of www.caf.fr, without proof", () => {
+      assert.deepEqual(
+        classify({
+          type: "main_frame",
+          host: "www.caf.fr",
+          path: "/",
+          cnames: ["www.caf.fr.radwarecloud.net"],
+          setCookies: ["uzmx"],
+        }),
+        { provider: "radware", proven: false, leak: { level: 2 } },
+      );
+    });
+
+    it("counts the Bot Manager cookies the browser sends as cookies of the site", () => {
+      for (const name of ["__uzma", "__uzmf", "uzmx"]) {
+        assert.deepEqual(
+          classify({ setCookies: ["__uzmc"], cookies: [name] }),
+          { provider: "radware", proven: false, leak: SESSION_POSSIBLE },
+          name,
+        );
+      }
+    });
+  });
+
   it("never takes a cookie of the site that only resembles them for consent or measurement", () => {
     for (const name of [
       "_pk_session",

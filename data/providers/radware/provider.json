@@ -2,10 +2,10 @@
   "name": "Radware",
   "country": "IL",
   "signatures": {
-    "cookies": [
+    "siteConnectorCookies": [
       {
         "name": "__uzm*",
-        "source": "https://github.com/Radware/rdwr-azureapim-securepath-connector (README, Bot Manager cookies), and observed on 2026-11-05 on www.caf.fr (__uzma to __uzmf)"
+        "source": "https://github.com/Radware/rdwr-azureapim-securepath-connector (README: the connector, a policy of the site's API gateway, calls Radware's service on every request and passes on the __uzm cookies it returns), and observed on 2026-11-05 on www.caf.fr (__uzma to __uzmf)"
       },
       {
         "name": "uzmx",

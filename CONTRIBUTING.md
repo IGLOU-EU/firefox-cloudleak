@@ -54,7 +54,7 @@ Every string shown to the user goes through `_locales` from the moment it is wri
   2. **Usage**: which public resource is loaded, and from which site.
   3. **Reading**: which pages the user reads.
   4. **Personal data**: what the user sends, and what concerns them: cookies, forms, request bodies, pages of a logged-in area.
-- **Proven decryption**: the response carries an HTTP signal of the provider (a header or a cookie it sets), or the request went over HTTP without TLS. The provider read the traffic in clear.
+- **Proven decryption**: the response carries an HTTP signal of the provider (a header, or a cookie only its own servers set, see "Provider data"), or the request went over HTTP without TLS. The provider read the traffic in clear.
 - **Unproven decryption**: the request reached the provider, for instance by its IP address, but nothing in the response proves it read the traffic. An absent signal proves nothing.
 
 ## Layout
@@ -98,6 +98,7 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | `parent` | No | Parent company, as `{ "name": ..., "country": ... }` |
 | `signatures.headers` | No | Response headers: `name`, optional `value`, `source` |
 | `signatures.cookies` | No | Cookies the provider sets or uses itself: `name`, `source` |
+| `signatures.siteConnectorCookies` | No | Cookies of a provider's product that a connector installed at the site can also set, without the provider being in the network path: `name`, `source` |
 | `signatures.server` | No | Values of the `server` header: `value`, `source` |
 | `signatures.cname` | No | CNAME suffixes, as a lowercase domain name: `suffix`, `source` |
 | `signatures.challengeHosts` | No | Hosts that serve the provider's anti-bot challenge, as a lowercase host pattern: `host`, `source` |
@@ -106,6 +107,8 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | `signatures.challengeQueryNames` | No | Names of the URL query parameters the challenge adds, compared to each parameter name of the request URL, never to a value: `name`, `source` |
 
 Every signature has a `source`: the URL of the provider's documentation, or where and when it was observed. A signature that is only observed says so, with the date and the site.
+
+A cookie goes in `signatures.siteConnectorCookies`, not in `signatures.cookies`, when its source shows that a connector at the site can set it, as Radware's Bot Manager does from the site's gateway. A cookie in `signatures.cookies` proves that the provider's servers relayed the response, and one in `signatures.siteConnectorCookies` only that its product saw the request. A response that sets one names the provider at the same step as the other HTTP signals, after any provider whose own signal the response carries, but never proves the decryption: the proof still needs another HTTP signal of that provider, or plain HTTP. When the browser sends one, it raises the level like any cookie of the site.
 
 A request that matches any challenge signature of its provider (host, path prefix, response header or query parameter name) is a request of the challenge. A challenge header is written as in `signatures.headers`, and it is not a signal of the provider: a header that is both goes in both lists.
 

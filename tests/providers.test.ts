@@ -29,6 +29,7 @@ const VALID_PROVIDER = `{
       { "name": "x-example-cache", "value": "HIT*", "source": "observed" }
     ],
     "cookies": [{ "name": "__ex_*", "source": "observed" }],
+    "siteConnectorCookies": [{ "name": "__Ex_Bot_*", "source": "https://example.com/connector" }],
     "server": [{ "value": "ExampleCDN-*", "source": "observed" }],
     "cname": [{ "suffix": "cdn.example.net", "source": "observed" }],
     "challengeHosts": [
@@ -98,6 +99,7 @@ describe("parseProviderJson", () => {
         { name: "x-example-cache", value: "HIT*" },
       ],
       cookies: ["__ex_*"],
+      siteConnectorCookies: ["__ex_bot_*"],
       server: ["ExampleCDN-*"],
       cname: ["cdn.example.net"],
       challengeHosts: ["challenge.example.net", "*.challenge.example.net"],
@@ -229,6 +231,41 @@ describe("parseProviderJson", () => {
       '"cookies": [{ "name": "__ex_*", "source": "a" }, { "name": "__EX_*", "source": "b" }]',
       "signatures.cookies[1].name",
       /given twice, first at signatures\.cookies\[0\]/,
+    ],
+    [
+      "a connector cookie name with a space",
+      '"name": "__Ex_Bot_*"',
+      '"name": "__ex bot"',
+      "signatures.siteConnectorCookies[0].name",
+      /name pattern/,
+    ],
+    [
+      "a connector cookie made only of wildcards",
+      '"name": "__Ex_Bot_*"',
+      '"name": "*"',
+      "signatures.siteConnectorCookies[0].name",
+      /only of "\*"/,
+    ],
+    [
+      "a connector cookie list that is not an array",
+      '"siteConnectorCookies": [{ "name": "__Ex_Bot_*", "source": "https://example.com/connector" }]',
+      '"siteConnectorCookies": "__Ex_Bot_*"',
+      "signatures.siteConnectorCookies",
+      /array/,
+    ],
+    [
+      "a connector cookie given twice in another case",
+      '"siteConnectorCookies": [{ "name": "__Ex_Bot_*", "source": "https://example.com/connector" }]',
+      '"siteConnectorCookies": [{ "name": "__ex_bot_*", "source": "a" }, { "name": "__EX_BOT_*", "source": "b" }]',
+      "signatures.siteConnectorCookies[1].name",
+      /given twice, first at signatures\.siteConnectorCookies\[0\]/,
+    ],
+    [
+      "a connector cookie without source",
+      '"name": "__Ex_Bot_*", "source": "https://example.com/connector"',
+      '"name": "__Ex_Bot_*"',
+      "signatures.siteConnectorCookies[0].source",
+      /required/,
     ],
     [
       "a server value given twice in another case",
@@ -835,6 +872,7 @@ describe("loadProviders", () => {
           "country": "US",
           "signatures": {
             "cookies": [{ "name": "__Ex", "source": "observed" }],
+            "siteConnectorCookies": [{ "name": "__Ex_Bot", "source": "observed" }],
             "challengeHosts": [{ "host": "*.challenge.example.net", "source": "observed" }],
             "challengePaths": [{ "prefix": "/ex/", "source": "observed" }],
             "challengeHeaders": [{ "name": "x-ex-mitigated", "value": "challenge", "source": "observed" }],
@@ -856,6 +894,7 @@ describe("loadProviders", () => {
             ranges: ["192.0.2.0/24", "2001:db8::/32"],
             headers: [],
             cookies: ["__ex"],
+            siteConnectorCookies: ["__ex_bot"],
             server: [],
             cname: [],
             challengeHosts: ["*.challenge.example.net"],
