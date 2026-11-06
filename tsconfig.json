@@ -16,7 +16,7 @@
     "noUnusedParameters": true,
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
-    // Firefox 142, the minimum version, supports all of ES2022. Holding lib to
+    // Firefox 153, the minimum version, supports all of ES2022. Holding lib to
     // the same level keeps later APIs out of the code.
     "target": "es2022",
     "lib": ["es2022", "dom"],
@@ -27,7 +27,7 @@
     "module": "nodenext",
     "moduleResolution": "nodenext",
     // Pinned to the newest type release that does not exceed the minimum
-    // Firefox version (120 for 142), so an API newer than the minimum version
+    // Firefox version (143 for 153), so an API newer than the minimum version
     // fails to compile.
     "types": ["firefox-webext-browser"],
     "newLine": "lf",

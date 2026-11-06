@@ -159,6 +159,73 @@ describe("addRequest", () => {
     assert.deepEqual(kept(fold([antiBot, antiBotSession])), antiBot);
   });
 
+  it("lets a session replace a possible session of the same colour and level, never the reverse", () => {
+    for (const proven of [true, false]) {
+      const sure = request(
+        { level: 4, case: "session", possible: false, challenge: false },
+        proven,
+      );
+      const possible = request(
+        { level: 4, case: "session", possible: true, challenge: false },
+        proven,
+      );
+      assert.deepEqual(kept(fold([possible, sure])), sure);
+      assert.deepEqual(kept(fold([sure, possible])), sure);
+      assert.deepEqual(kept(fold([possible, possible, sure, possible])), sure);
+    }
+  });
+
+  it("keeps the colour first: a possible session proven read stays before a session not proven", () => {
+    const sureUnproven = request(
+      { level: 4, case: "session", possible: false, challenge: false },
+      false,
+    );
+    const possibleProven = request(
+      { level: 4, case: "session", possible: true, challenge: false },
+      true,
+    );
+    assert.deepEqual(
+      kept(fold([possibleProven, sureUnproven])),
+      possibleProven,
+    );
+    assert.deepEqual(
+      kept(fold([sureUnproven, possibleProven])),
+      possibleProven,
+    );
+  });
+
+  it("lets a session replace a possible session among anti-bot requests too, while a request of the site still replaces an anti-bot one first", () => {
+    const antiBotSure = request(
+      { level: 4, case: "session", possible: false, challenge: true },
+      true,
+    );
+    const antiBotPossible = request(
+      { level: 4, case: "session", possible: true, challenge: true },
+      true,
+    );
+    const sitePossible = request(
+      { level: 4, case: "session", possible: true, challenge: false },
+      true,
+    );
+    assert.deepEqual(kept(fold([antiBotPossible, antiBotSure])), antiBotSure);
+    assert.deepEqual(kept(fold([antiBotSure, antiBotPossible])), antiBotSure);
+    assert.deepEqual(kept(fold([antiBotSure, sitePossible])), sitePossible);
+    assert.deepEqual(kept(fold([sitePossible, antiBotSure])), sitePossible);
+  });
+
+  it("does not order a session against data sent: the first of the two stays", () => {
+    const sure = request(
+      { level: 4, case: "session", possible: false, challenge: false },
+      true,
+    );
+    const sent = request(
+      { level: 4, case: "data-sent", challenge: false },
+      true,
+    );
+    assert.deepEqual(kept(fold([sure, sent])), sure);
+    assert.deepEqual(kept(fold([sent, sure])), sent);
+  });
+
   it("does not change the state it is given", () => {
     const state = fold([BLUE_2]);
     addRequest(state, RED_4);

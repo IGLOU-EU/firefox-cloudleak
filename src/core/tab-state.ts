@@ -107,7 +107,9 @@ function compareGrades(
 
 // At the same colour and level, a request of the site replaces one of the
 // anti-bot machinery: the mark would otherwise suggest that the leak comes
-// from the protection alone, while the site leaks as much.
+// from the protection alone, while the site leaks as much. Then a session
+// replaces a possible session, so that a tab where a session was seen for
+// sure does not say it is only possible.
 function isMoreSerious(request: Classification, kept: Classification): boolean {
   const order = compareGrades(
     { level: request.leak.level, proven: request.proven },
@@ -116,11 +118,24 @@ function isMoreSerious(request: Classification, kept: Classification): boolean {
   if (order !== 0) {
     return order > 0;
   }
-  return isAntiBot(kept) && !isAntiBot(request);
+  if (isAntiBot(kept) !== isAntiBot(request)) {
+    return isAntiBot(kept);
+  }
+  return isPossibleSession(kept) && isSureSession(request);
 }
 
 function isAntiBot(request: Classification): boolean {
   return request.leak.level === 4 && request.leak.challenge;
+}
+
+function isSureSession(request: Classification): boolean {
+  const leak = request.leak;
+  return leak.level === 4 && leak.case === "session" && !leak.possible;
+}
+
+function isPossibleSession(request: Classification): boolean {
+  const leak = request.leak;
+  return leak.level === 4 && leak.case === "session" && leak.possible;
 }
 
 // The extension lacks the access to all sites. What it saw stays true, and a

@@ -19,6 +19,7 @@ Firefox hands the extension the values of the `Cookie` and `Authorization` reque
 - Cookie and `Authorization` values are never kept: never written to any storage or log, and never passed beyond the function that reads the names.
 - The public listing of the extension states both points.
 - The request URL comes with its query. The classification reads only the names of the query parameters, never their values, and keeps nothing of the URL.
+- The `webNavigation` events give the URL of every document a tab shows, whatever the access to its site. The extension never reads it: a document is known by its `documentId`, a random id that says nothing of its URL.
 
 ## One fact, one place
 
@@ -60,7 +61,7 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 
 - `src/core/`: the pure core, with no browser API. It runs and is tested in Node, without Firefox.
 - `src/background.ts`: the background entry point of the extension, which only adds the listeners.
-- The other files of `src/`: the thin adapters between Firefox and the core (requests, tabs, toolbar icon, DNS, permissions). They hold no classification logic.
+- The other files of `src/`: the thin adapters between Firefox and the core (requests, tabs and their documents, toolbar icon, DNS, permissions). They hold no classification logic.
 - `data/providers/`: one folder per provider (see "Provider data").
 - `data/consent-cookies.json`: the cookies of known consent and audience-measurement tools (see "Provider data").
 - `scripts/`: the build and the maintenance scripts, which run in Node on the development machine only.
@@ -78,7 +79,7 @@ Every source file starts with the licence and copyright header:
 
 ## Minimum Firefox version
 
-The extension requires Firefox 142 or later, set by `strict_min_version` in `manifest.json`, and is offered on desktop only, since the manifest has no `gecko_android` key. addons.mozilla.org requires the `data_collection_permissions` key, which exists from Firefox 140 on desktop and 142 on Android, and `web-ext lint` checks Android support against `strict_min_version` even for a desktop-only extension. 142 loses no Firefox version Mozilla still maintained on 2026-11-05 (159 and ESR 153).
+The extension requires Firefox 153 or later, set by `strict_min_version` in `manifest.json`, and is offered on desktop only, since the manifest has no `gecko_android` key. Firefox 153 is the first version whose `webNavigation` events give the `documentId` of a document (browser-compat-data, `webextensions.api.webNavigation.onCommitted.documentId`), which lets a page that Back or Forward brings back from the back-forward cache, without any request, show its own state again. addons.mozilla.org requires the `data_collection_permissions` key, which exists from Firefox 140 on desktop and 142 on Android, and `web-ext lint` checks Android support against `strict_min_version` even for a desktop-only extension, both below 153. 153 loses no Firefox version Mozilla still maintained on 2026-11-06 (159 and ESR 153).
 
 ## Provider data
 

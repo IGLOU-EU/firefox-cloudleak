@@ -5,7 +5,13 @@
 // so listeners must be added synchronously at the top level of this module.
 
 import { onErrorOccurred, onResponse, onSendHeaders } from "./requests.js";
-import { forget, onAccessChange, onStatus } from "./tabs.js";
+import {
+  forget,
+  onAccessChange,
+  onCommitted,
+  onCompleted,
+  onStatus,
+} from "./tabs.js";
 import { report, setBadgeColours } from "./toolbar.js";
 
 // No listener asks for "blocking" and each returns at once, so Firefox never
@@ -31,6 +37,16 @@ browser.webRequest.onResponseStarted.addListener(
 browser.webRequest.onErrorOccurred.addListener(
   (details) => report(onErrorOccurred(details)),
   FILTER,
+);
+
+// Without a filter, since Firefox throws on an empty one (browser-compat-data,
+// webextensions.api.webNavigation.onCommitted). Frames other than the top
+// one are left at once.
+browser.webNavigation.onCommitted.addListener((details) =>
+  report(onCommitted(details)),
+);
+browser.webNavigation.onCompleted.addListener((details) =>
+  report(onCompleted(details)),
 );
 
 browser.tabs.onUpdated.addListener(
