@@ -506,9 +506,10 @@ export function formatRangesFile(file: {
   ].join("\n");
 }
 
-// A published list is a text list, one range per line, or a JSON list in the
-// shape AWS publishes, which mixes every service: the source line then names
-// the service kept, so that it says by itself how the ranges were chosen.
+// A published list is a text list, one range per line, a JSON list of all its
+// ranges in the shape Fastly publishes, or a JSON list in the shape AWS
+// publishes, which mixes every service: the source line then names the
+// service kept, so that it says by itself how the ranges were chosen.
 export interface PublishedList {
   url: string;
   service: string | null;
@@ -542,23 +543,39 @@ function checkedRange(text: unknown, place: string): string {
   return text.trim();
 }
 
-function serviceRanges(body: string, service: string): string[] {
-  let root: unknown;
+function parseJson(body: string): unknown {
   try {
-    root = JSON.parse(body);
+    return JSON.parse(body);
   } catch (error) {
     throw new Error(`not valid JSON, ${(error as Error).message}`);
   }
+}
+
+function arrayField(root: unknown, key: string): unknown[] {
+  const entries = isObject(root) ? root[key] : undefined;
+  if (!Array.isArray(entries)) {
+    throw new Error(`${key} must be an array`);
+  }
+  return entries;
+}
+
+function allRanges(body: string): string[] {
+  const root = parseJson(body);
+  return ["addresses", "ipv6_addresses"].flatMap((key) =>
+    arrayField(root, key).map((entry, index) =>
+      checkedRange(entry, `${key}[${index}]`),
+    ),
+  );
+}
+
+function serviceRanges(body: string, service: string): string[] {
+  const root = parseJson(body);
   const ranges: string[] = [];
   for (const [key, field] of [
     ["prefixes", "ip_prefix"],
     ["ipv6_prefixes", "ipv6_prefix"],
   ] as const) {
-    const entries = isObject(root) ? root[key] : undefined;
-    if (!Array.isArray(entries)) {
-      throw new Error(`${key} must be an array`);
-    }
-    for (const [index, entry] of entries.entries()) {
+    for (const [index, entry] of arrayField(root, key).entries()) {
       if (isObject(entry) && entry["service"] === service) {
         ranges.push(checkedRange(entry[field], `${key}[${index}].${field}`));
       }
@@ -567,14 +584,22 @@ function serviceRanges(body: string, service: string): string[] {
   return ranges;
 }
 
+// A text list never starts with "{", so a body that does is read as JSON.
+function textOrJsonRanges(body: string): string[] {
+  if (body.trimStart().startsWith("{")) {
+    return allRanges(body);
+  }
+  return body
+    .split("\n")
+    .map((line, index) => ({ line: line.trim(), index }))
+    .filter(({ line }) => line !== "")
+    .map(({ line, index }) => checkedRange(line, `line ${index + 1}`));
+}
+
 export function readPublishedList(list: PublishedList, body: string): string[] {
   const ranges =
     list.service === null
-      ? body
-          .split("\n")
-          .map((line, index) => ({ line: line.trim(), index }))
-          .filter(({ line }) => line !== "")
-          .map(({ line, index }) => checkedRange(line, `line ${index + 1}`))
+      ? textOrJsonRanges(body)
       : serviceRanges(body, list.service);
   if (ranges.length === 0) {
     throw new Error("the list is empty");

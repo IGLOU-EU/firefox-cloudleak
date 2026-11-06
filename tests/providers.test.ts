@@ -656,6 +656,55 @@ describe("readPublishedList", () => {
     );
   });
 
+  it("reads a JSON list of all its ranges, in the shape Fastly publishes", () => {
+    assert.deepEqual(
+      readPublishedList(
+        TEXT,
+        '{ "addresses": ["192.0.2.0/24", "198.51.100.0/24"], "ipv6_addresses": ["2001:db8::/32"] }',
+      ),
+      ["192.0.2.0/24", "198.51.100.0/24", "2001:db8::/32"],
+    );
+  });
+
+  it("names the entry of a malformed range in a JSON list of all its ranges", () => {
+    assert.throws(
+      () =>
+        readPublishedList(
+          TEXT,
+          '{ "addresses": ["192.0.2.0/24", "198.51.100.1/24"], "ipv6_addresses": [] }',
+        ),
+      /^Error: addresses\[1\]: .*host bits/,
+    );
+    assert.throws(
+      () =>
+        readPublishedList(
+          TEXT,
+          '{ "addresses": [], "ipv6_addresses": [{ "prefix": "2001:db8::/32" }] }',
+        ),
+      /^Error: ipv6_addresses\[0\]: must be a CIDR range/,
+    );
+  });
+
+  it("refuses a JSON list of all its ranges it cannot read", () => {
+    assert.throws(
+      () => readPublishedList(TEXT, '{ "addresses": ["192.0.2.0/24"'),
+      /not valid JSON/,
+    );
+    assert.throws(
+      () => readPublishedList(TEXT, '{ "addresses": ["192.0.2.0/24"] }'),
+      /ipv6_addresses must be an array/,
+    );
+    assert.throws(
+      () => readPublishedList(TEXT, '{ "ipv6_addresses": [] }'),
+      /^Error: addresses must be an array/,
+    );
+    assert.throws(
+      () =>
+        readPublishedList(TEXT, '{ "addresses": [], "ipv6_addresses": [] }'),
+      /the list is empty/,
+    );
+  });
+
   it("keeps from a JSON list the IPv4 and IPv6 ranges of its service only", () => {
     assert.deepEqual(readPublishedList(JSON_LIST, AWS_LIKE), [
       "192.0.2.0/24",
