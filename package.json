@@ -9,7 +9,7 @@
   "scripts": {
     "clean": "node -e \"for (const d of ['build', 'dist', 'web-ext-artifacts']) fs.rmSync(d, { recursive: true, force: true })\"",
     "build": "npm run clean && tsc -p tsconfig.tools.json && tsc -p tsconfig.json && node build/scripts/build.js && web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --filename firefox-cloudleak-{version}.xpi",
-    "test": "node -e \"fs.rmSync('build', { recursive: true, force: true })\" && tsc -p tsconfig.tools.json && node --test build/tests/*.test.js",
+    "test": "node -e \"fs.rmSync('build', { recursive: true, force: true })\" && tsc -p tsconfig.tools.json && tsc -p tsconfig.json --outDir build/extension && node --test build/tests/*.test.js",
     "lint": "biome ci --error-on-warnings && npm run build && web-ext lint --source-dir dist --warnings-as-errors",
     "format": "biome check --write",
     "check": "npm test && npm run lint && npm audit --audit-level=moderate",

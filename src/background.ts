@@ -4,7 +4,12 @@
 // Firefox runs this file as an event page and runs it again at every wake-up,
 // so listeners must be added synchronously at the top level of this module.
 
-import { onErrorOccurred, onResponse, onSendHeaders } from "./requests.js";
+import {
+  onBeforeRedirect,
+  onErrorOccurred,
+  onResponseStarted,
+  onSendHeaders,
+} from "./requests.js";
 import {
   forget,
   onAccessChange,
@@ -25,12 +30,12 @@ browser.webRequest.onSendHeaders.addListener(
   ["requestHeaders"],
 );
 browser.webRequest.onBeforeRedirect.addListener(
-  (details) => report(onResponse(details)),
+  (details) => report(onBeforeRedirect(details)),
   FILTER,
   ["responseHeaders"],
 );
 browser.webRequest.onResponseStarted.addListener(
-  (details) => report(onResponse(details)),
+  (details) => report(onResponseStarted(details)),
   FILTER,
   ["responseHeaders"],
 );
@@ -53,7 +58,7 @@ browser.tabs.onUpdated.addListener(
   (tabId, _change, tab) => report(onStatus(tabId, tab)),
   { properties: ["status"] },
 );
-browser.tabs.onRemoved.addListener(forget);
+browser.tabs.onRemoved.addListener((tabId) => report(forget(tabId)));
 
 // Both fire for a grant or a withdrawal the user makes in the add-ons
 // manager or the extensions panel (ext-permissions.js and

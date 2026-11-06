@@ -12,6 +12,7 @@ import {
 } from "../src/core/display.js";
 import {
   addRequest,
+  markMissed,
   markPartial,
   NEUTRAL,
   NOT_OBSERVED,
@@ -82,6 +83,17 @@ describe("displayOf", () => {
       badge: "",
       title: [[line("titleNeutral"), line("titlePartial")]],
     });
+  });
+
+  it("keeps the neutral icon where nothing was seen and requests were missed, and says why the view is partial", () => {
+    assert.deepEqual(show(markMissed(NEUTRAL)), {
+      icon: "neutral",
+      badge: "",
+      title: [[line("titleNeutral"), line("titleMissed")]],
+    });
+    assert.deepEqual(show(markPartial(markMissed(NEUTRAL))).title, [
+      [line("titleNeutral"), line("titlePartial"), line("titleMissed")],
+    ]);
   });
 
   it("gives the colour of the most serious request to the icon and its level to the badge", () => {
@@ -182,6 +194,24 @@ describe("displayOf", () => {
     });
   });
 
+  it("says when requests were missed, after the partial view, each with its own reason", () => {
+    assert.deepEqual(show(markMissed(seen(CHALLENGE, true))).title[1], [
+      line("titleLevel4DataSentProven", "Cloudflare"),
+      line("titleAntiBot", "Cloudflare"),
+      line("titleMissed"),
+    ]);
+    assert.deepEqual(
+      show(markMissed(markPartial(seen({ level: 3 }, true)))).title[1],
+      [
+        line("titleLevel3Proven", "Cloudflare"),
+        line("titlePartial"),
+        line("titleMissed"),
+      ],
+    );
+    assert.equal(show(markMissed(seen({ level: 3 }, false))).icon, "orange");
+    assert.equal(show(markMissed(seen({ level: 3 }, false))).badge, "3");
+  });
+
   it("falls back on the identifier of a provider missing from the table", () => {
     assert.deepEqual(show(seen({ level: 3 }, true, "unknown")).title[1], [
       line("titleLevel3Proven", "unknown"),
@@ -228,7 +258,12 @@ describe("the tooltip messages", () => {
     "titleLevel4SessionPossibleProven",
     "titleAntiBot",
   ];
-  const plain = ["titleNeutral", "titleNotObserved", "titlePartial"];
+  const plain = [
+    "titleNeutral",
+    "titleNotObserved",
+    "titlePartial",
+    "titleMissed",
+  ];
   const used = [...plain, ...withProvider, ...counts];
 
   it("exist in every locale, and the same in each", () => {
@@ -347,6 +382,24 @@ describe("the tooltip text", () => {
       text(markPartial(NEUTRAL), en),
       "No request seen in this tab goes through a known intermediary.\n" +
         "Partial view: the extension does not have access to every site, so it shows only what it saw.",
+    );
+  });
+
+  it("reads, for a page whose requests the extension partly missed", () => {
+    const state = markMissed(fold([request({ level: 2 }, true)]));
+    assert.equal(
+      text(state, fr),
+      "Niveau 2, usage\u00a0: 1 requête\n" +
+        "\n" +
+        "Usage\u00a0: Cloudflare voit quelles ressources publiques ce site vous fait charger, et quand.\n" +
+        "Vue partielle\u00a0: l'extension n'a pas vu toutes les requêtes de cette page, par exemple celles que sert un service worker, elle ne montre que ce qu'elle a vu.",
+    );
+    assert.equal(
+      text(state, en),
+      "Level 2, usage: 1 request\n" +
+        "\n" +
+        "Usage: Cloudflare sees which public resources this site makes you load, and when.\n" +
+        "Partial view: the extension did not see every request of this page, such as those a service worker serves, so it shows only what it saw.",
     );
   });
 

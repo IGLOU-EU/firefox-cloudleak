@@ -5,9 +5,11 @@ import { hasAllSites, readAccess } from "./access.js";
 import type { Classification } from "./core/classify.js";
 import { displayOf } from "./core/display.js";
 import {
+  displayedDocument,
   EMPTY_RECORD,
   foldRequest,
   markHiddenSite,
+  markMissedRequest,
   markPartialView,
   showCompletedDocument,
   showDocument,
@@ -15,7 +17,7 @@ import {
   type TabRecord,
 } from "./core/tab-record.js";
 import table from "./providers.js";
-import { render, report } from "./toolbar.js";
+import { forgetSent, render, report } from "./toolbar.js";
 
 // Firefox suspends the event page after 30 s without an event and its memory
 // goes with it, so the tabs live in storage.session, which stays in memory
@@ -33,6 +35,13 @@ const WRITE_DELAY_MS = 500;
 const SHOW_DELAY_MS = 100;
 
 const records = new Map<number, TabRecord>();
+
+// Firefox sends the closing of a tab at once and the request events in
+// batches, up to 250 ms late, so events of a closed tab still arrive after
+// it. It never gives a closed tab's id to another tab (ConduitsParent.sys.mjs
+// and ext-browser.js, Firefox 159.0.1), so a closed tab stays closed for the
+// life of the page.
+const closed = new Set<number>();
 
 // Every change waits for this, so that the tabs read at the wake-up are not
 // overwritten by the first event that woke the page.
@@ -77,6 +86,9 @@ type DocumentDetails = {
   readonly frameId: number;
   readonly timeStamp: number;
   readonly documentId?: string;
+  // "forward_back" for Back and Forward (ext-webNavigation.js, Firefox
+  // 159.0.1). onCompleted gives none.
+  readonly transitionQualifiers?: readonly string[];
 };
 
 // The icon speaks of the page the tab shows, not of its frames. The
@@ -87,9 +99,11 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
     return;
   }
   const { tabId, documentId, timeStamp } = details;
+  const backOrForward =
+    details.transitionQualifiers?.includes("forward_back") === true;
   await ready;
   update(tabId, (record) =>
-    showDocument(record, documentId, timeStamp, !hasAllSites()),
+    showDocument(record, documentId, timeStamp, !hasAllSites(), backOrForward),
   );
 }
 
@@ -116,8 +130,13 @@ export function fold(
   update(tabId, (record) => foldRequest(record, navigation, request));
 }
 
-function show(tabId: number): void {
-  render(tabId, displayOf(recordOf(tabId).state, table.providers));
+export function missRequest(tabId: number, navigation: string): void {
+  update(tabId, (record) => markMissedRequest(record, navigation));
+}
+
+function show(tabId: number, everything: boolean): void {
+  const { state } = displayedDocument(recordOf(tabId));
+  render(tabId, displayOf(state, table.providers), everything);
 }
 
 // Firefox gives the URL of a tab only for a site the extension has access
@@ -134,7 +153,7 @@ export async function onStatus(
   if (tab.url === undefined && !hasAllSites()) {
     update(tabId, markHiddenSite);
   }
-  show(tabId);
+  show(tabId, true);
 }
 
 // A withdrawal of the access to all sites makes every open tab partial at
@@ -154,8 +173,13 @@ export async function onAccessChange(): Promise<void> {
   }
 }
 
-export function forget(tabId: number): void {
+// After the read of the wake-up, which may still hold the tab when its
+// closing is what woke the page.
+export async function forget(tabId: number): Promise<void> {
+  await ready;
+  closed.add(tabId);
   records.delete(tabId);
+  forgetSent(tabId);
   report(browser.storage.session.remove(`${PREFIX}${tabId}`));
 }
 
@@ -180,7 +204,7 @@ function batch(
 
 const scheduleShow = batch(SHOW_DELAY_MS, (tabIds) => {
   for (const tabId of tabIds) {
-    show(tabId);
+    show(tabId, false);
   }
 });
 
@@ -192,14 +216,19 @@ const scheduleWrite = batch(WRITE_DELAY_MS, (tabIds) => {
   report(browser.storage.session.set(items));
 });
 
+// The display follows the document the tab shows, which changes when a
+// pending navigation commits even if no count does.
 function update(tabId: number, change: (record: TabRecord) => TabRecord): void {
+  if (closed.has(tabId)) {
+    return;
+  }
   const record = recordOf(tabId);
   const next = change(record);
   if (next === record) {
     return;
   }
   records.set(tabId, next);
-  if (next.state !== record.state) {
+  if (displayedDocument(next).state !== displayedDocument(record).state) {
     scheduleShow(tabId);
   }
   scheduleWrite(tabId);

@@ -4,6 +4,7 @@
 import type { Classification } from "./classify.js";
 import {
   addRequest,
+  markMissed,
   markPartial,
   NEUTRAL,
   NOT_OBSERVED,
@@ -41,12 +42,13 @@ export interface TabRecord extends DocumentRecord {
 export const PREVIOUS_DOCUMENTS = 8;
 
 // A tab the extension has not seen navigate yet, such as one opened before
-// it was installed: it shows a document whose id the extension never got.
+// it was installed, updated or reloaded: it shows a document whose id the
+// extension never got, and whose first requests it missed.
 export const EMPTY_RECORD: TabRecord = {
   document: "",
   shownAt: 0,
   navigation: "",
-  state: NEUTRAL,
+  state: markMissed(NEUTRAL),
   previous: [],
 };
 
@@ -111,12 +113,16 @@ export function startNavigation(
 // with a partial view if the extension lost the access to all sites since.
 // The pending navigation takes the document it opened. Any other document
 // was opened by no request the extension saw, such as a local file or an
-// about: page, and starts over.
+// about: page, and starts over. Back and Forward can also bring back a
+// document the tab does not know, loaded before the extension started or
+// shown before the documents the tab keeps: the extension missed its
+// requests.
 export function showDocument(
   record: TabRecord,
   document: string,
   shownAt: number,
   partial: boolean,
+  backOrForward = false,
 ): TabRecord {
   if (record.document === document) {
     return record;
@@ -134,11 +140,12 @@ export function showDocument(
   if (record.document === null) {
     return { ...record, document, shownAt };
   }
+  const state = startState(partial);
   return {
     document,
     shownAt,
     navigation: document,
-    state: startState(partial),
+    state: backOrForward ? markMissed(state) : state,
     previous: remember(record),
   };
 }
@@ -158,12 +165,29 @@ export function showCompletedDocument(
   return known ? record : showDocument(record, document, completedAt, partial);
 }
 
+// What the tab shows. A navigation that has not committed shows nothing yet,
+// and may never commit: a download, a 204 response or a stop end without one
+// (DocumentLoadListener.cpp and nsURILoader.cpp, Firefox 159.0.1), and the
+// tab keeps the page it had. The wait for a site out of reach is shown at
+// once, since the tab already reports that site as its page.
+export function displayedDocument(record: TabRecord): DocumentRecord {
+  if (record.document !== null || record.navigation === HIDDEN_SITE) {
+    return record;
+  }
+  return record.previous[0] ?? record;
+}
+
 // A request belongs to the document the tab showed when it was sent: one sent
 // before the tab showed its document comes from the page it left, even when
-// Firefox delivers it after the commit. A pending navigation takes every
-// request until it commits.
+// Firefox delivers it after the commit, and one sent while a navigation is
+// pending comes from the page still shown. The wait for a site out of reach
+// takes every request, as the tab shows it.
 export function navigationAt(record: TabRecord, sentAt: number): string {
-  if (record.document === null || sentAt >= record.shownAt) {
+  const committed = record.document !== null;
+  if (
+    (committed && sentAt >= record.shownAt) ||
+    (!committed && record.navigation === HIDDEN_SITE)
+  ) {
     return record.navigation;
   }
   const shownThen = record.previous.find((entry) => entry.shownAt <= sentAt);
@@ -178,6 +202,27 @@ export function foldRequest(
   navigation: string,
   request: Classification | null,
 ): TabRecord {
+  return changeState(record, navigation, (state) => addRequest(state, request));
+}
+
+// Firefox gave the response of a request whose sending the extension never
+// saw: a service worker answered it, or it went out before the event page
+// last started, which forgets the requests it waited on. The document it was
+// sent for missed it.
+export function markMissedRequest(
+  record: TabRecord,
+  navigation: string,
+): TabRecord {
+  return changeState(record, navigation, markMissed);
+}
+
+// Changes the state of the document a navigation opened, the one shown or one
+// shown before. A navigation the tab no longer keeps changes nothing.
+function changeState(
+  record: TabRecord,
+  navigation: string,
+  change: (state: TabState) => TabState,
+): TabRecord {
   const entry =
     record.navigation === navigation
       ? record
@@ -185,7 +230,7 @@ export function foldRequest(
   if (entry === undefined) {
     return record;
   }
-  const state = addRequest(entry.state, request);
+  const state = change(entry.state);
   return state === entry.state
     ? record
     : replace(record, entry, { ...entry, state });
@@ -221,9 +266,16 @@ export function markHiddenSite(record: TabRecord): TabRecord {
 // The access to all sites was withdrawn while the tab was open: the requests
 // of the sites now out of reach go unseen from then on, and a later grant
 // does not bring back those it missed.
+// The page still shown during a pending navigation receives the requests of
+// that time, so it becomes partial too.
 export function markPartialView(record: TabRecord): TabRecord {
-  const state = markPartial(record.state);
-  return state === record.state ? record : { ...record, state };
+  const shown = displayedDocument(record);
+  const marked =
+    shown === record
+      ? record
+      : changeState(record, shown.navigation, markPartial);
+  const state = markPartial(marked.state);
+  return state === marked.state ? marked : { ...marked, state };
 }
 
 // Puts a changed document in the place of the one it changes, the one shown

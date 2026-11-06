@@ -150,6 +150,7 @@ A list enters `ranges.txt` only if it covers the edge addresses browsers connect
 - Tests drive the code: the test is written first, and the code follows.
 - A test checks a contract, so it covers failure as much as success: error cases, invalid input and limits.
 - Every fix comes with the test that fails without it, in the core as well as in the adapters around it.
+- The adapters are tested on the compiled extension: `npm test` also compiles `src/` into `build/extension/`, and `tests/adapters.test.ts` drives it with a stand-in for Firefox's `browser` object and mocked timers.
 - A passing suite on a mock does not prove the real thing. The owner tries the extension in Firefox at each milestone.
 - A test is never disabled, and a lint rule never turned off, without saying so.
 
