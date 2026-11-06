@@ -88,6 +88,8 @@ describe("the committed data", () => {
     );
     assert.deepEqual(leakOf({ queryNames: ["__cf_chl_rt_tk"] }), CHALLENGE);
     assert.deepEqual(leakOf({ queryNames: ["__cf_future_tk"] }), CHALLENGE);
+    assert.deepEqual(leakOf({ queryNames: ["__cf_bm"] }), { level: 2 });
+    assert.deepEqual(leakOf({ queryNames: ["__cf_something"] }), { level: 2 });
     assert.deepEqual(leakOf({ queryNames: ["cf_chl_tk"] }), { level: 2 });
     assert.deepEqual(leakOf({ queryNames: ["__cfx"] }), { level: 2 });
   });

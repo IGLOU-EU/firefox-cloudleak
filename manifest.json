@@ -13,10 +13,14 @@
       }
     }
   },
-  "permissions": ["webRequest", "storage"],
+  "permissions": ["webRequest", "storage", "dns"],
   "host_permissions": ["*://*/*"],
   "background": {
     "scripts": ["background.js"],
     "type": "module"
+  },
+  "action": {
+    "default_icon": "icons/neutral.svg",
+    "default_title": "__MSG_extensionName__"
   }
 }

@@ -1,10 +1,12 @@
-# firefox-cloudleak
+# Cloud Leak
+
+`firefox-cloudleak` is the code name of the repository.
 
 When you browse, part of what you send and read goes through intermediaries such as Cloudflare, Akamai or Imperva, which decrypt the traffic, and nothing in the browser tells you. This Firefox extension shows it while you browse: when your data goes through one of them, what it can learn from it, and, on a map, which providers and which countries the sites you use depend on.
 
 ## Promises
 
-1. **Everything stays on your computer.** The extension makes no request of its own, downloads no list and sends nothing to anyone. The provider lists ship inside the extension and change only with a new version.
+1. **Everything stays on your computer.** The extension sends nothing to anyone and downloads no list. The provider lists ship inside the extension and change only with a new version. Its only network activity is to ask Firefox's own DNS resolver, once more, for a name the page has just looked up, because Firefox does not let it read the page's cached answer ([bug 2051290](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290)).
 2. **No address is kept.** Only aggregated counts are stored: site, method, request type, provider and level.
 3. **It never claims more than it observes.** When it cannot know, it says so, and a doubt is never settled on the reassuring side.
 4. **It never slows your browsing.** It watches requests without ever holding them.
@@ -13,7 +15,7 @@ These promises are the design rules of the project, whose binding wording is in 
 
 ## Status
 
-Under construction, nothing usable yet. The extension builds, but it does not observe any request yet. Its provider data covers Cloudflare, Akamai, Imperva and Radware, with IP ranges for Cloudflare and Imperva only, since Akamai and Radware publish no list of their edge addresses.
+Under construction. The toolbar icon shows, for each tab, whether its requests go through a known provider, at which leak level and whether the decryption is proven: the cloud takes the colour of the most serious request, the badge gives its level, and the tooltip names the provider, the level, the case, the anti-bot mark and a partial view. Nothing is counted or kept beyond the open tabs yet, and there is no map. The provider data covers Cloudflare, Akamai, Imperva and Radware, with IP ranges for Cloudflare and Imperva only, since Akamai and Radware publish no list of their edge addresses.
 
 ## Build, test and run
 

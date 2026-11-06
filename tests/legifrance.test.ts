@@ -18,7 +18,23 @@ import {
   type Leak,
   type RequestFacts,
 } from "../src/core/classify.js";
-import { addRequest, NEUTRAL, type TabState } from "../src/core/tab-state.js";
+import {
+  addRequest,
+  colourOfRequest,
+  NEUTRAL,
+  type TabState,
+} from "../src/core/tab-state.js";
+
+// The colour and level the icon shows for a state.
+function shown(state: TabState | undefined) {
+  return state?.kind === "seen"
+    ? {
+        colour: colourOfRequest(state.request),
+        level: state.request.leak.level,
+        partial: state.partial,
+      }
+    : state;
+}
 
 // The committed data, so that the visit is classified as the extension
 // classifies it.
@@ -195,22 +211,28 @@ describe("Légifrance capture", () => {
       },
       [] as TabState[],
     );
-    const red: TabState = {
-      kind: "seen",
-      colour: "red",
-      level: 4,
-      partial: false,
-    };
-    assert.deepEqual(states[0], red);
-    assert.deepEqual(states.at(-1), red);
+    const red = { colour: "red", level: 4, partial: false };
+    assert.deepEqual(shown(states[0]), red);
+    assert.deepEqual(shown(states.at(-1)), red);
+  });
+
+  it("ends on the possible session of the site rather than on the anti-bot requests before it", () => {
+    const state = FIXTURE.map((item) => classifyRequest(item, TABLE)).reduce(
+      addRequest,
+      NEUTRAL,
+    );
+    assert.deepEqual(state.kind === "seen" ? state.request : state, {
+      provider: "cloudflare",
+      proven: true,
+      leak: { level: 4, case: "session", possible: true, challenge: false },
+    });
   });
 
   it("keeps the tab blue at level 2 over the home page and its resources alone", () => {
     const state = FIXTURE.filter((item) => item.entry >= 15 && item.entry <= 70)
       .map((item) => classifyRequest(item, TABLE))
       .reduce(addRequest, NEUTRAL);
-    assert.deepEqual(state, {
-      kind: "seen",
+    assert.deepEqual(shown(state), {
       colour: "blue",
       level: 2,
       partial: false,

@@ -6,7 +6,7 @@ This file is the reference for how work is done on this repository: the design r
 
 These four rules settle every design choice. They are not negotiable, and only the owner can change one.
 
-1. **Everything local.** The extension makes no request on its own initiative, downloads no list and sends nothing to anyone. Accepted consequence: the provider lists are embedded and change only with a new version of the extension.
+1. **Everything local.** The extension makes no request to anyone on its own initiative, downloads no list and sends nothing to anyone. Accepted consequence: the provider lists are embedded and change only with a new version of the extension. One exception, which Firefox imposes: to read the canonical name of a host that neither its IP nor its HTTP signals tie to a provider, the extension asks Firefox's own resolver, through `dns.resolve`, for a name the page has just resolved. Firefox keeps the page's answer in its DNS cache under the site's partition key and the extension's request under an empty one, so the request misses the cache and the resolver sees the same name once more, about once a minute ([bug 2051290](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290)). The resolver learns nothing it did not already know, so the step stays.
 2. **No URL kept.** Only aggregated counts are kept: site, method, request type, provider, level.
 3. **Never claim more than what is observed.** When the extension cannot know, the display says so, and a doubt is never resolved on the reassuring side.
 4. **Never slow down browsing.** No blocking listener: the extension receives the event, returns at once and does its work afterwards.
@@ -59,12 +59,13 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 ## Layout
 
 - `src/core/`: the pure core, with no browser API. It runs and is tested in Node, without Firefox.
-- `src/background.ts`: the background entry point of the extension.
+- `src/background.ts`: the background entry point of the extension, which only adds the listeners.
+- The other files of `src/`: the thin adapters between Firefox and the core (requests, tabs, toolbar icon, DNS, permissions). They hold no classification logic.
 - `data/providers/`: one folder per provider (see "Provider data").
 - `data/consent-cookies.json`: the cookies of known consent and audience-measurement tools (see "Provider data").
 - `scripts/`: the build and the maintenance scripts, which run in Node on the development machine only.
 - `tests/`: the tests, run by the Node test runner.
-- `manifest.json`, `_locales/`: copied into the extension as they are.
+- `manifest.json`, `_locales/`, `icons/`: copied into the extension as they are. The icons are the toolbar states of the validated mock-up, drawn as SVG.
 
 The build compiles `src/` with the WebExtension types only, and `scripts/` and `tests/` with the Node types only. The core compiles in both, so a Node API or a browser API in the core fails the build.
 
