@@ -32,19 +32,25 @@ const ORANGE_4 = request(
 const RED_3 = request({ level: 3 }, true);
 const RED_4 = request({ level: 4, case: "data-sent", challenge: true }, true);
 
+const PARTIAL_NEUTRAL = { kind: "neutral", partial: true };
+
 function fold(requests: (Classification | null)[], start = NEUTRAL): TabState {
   return requests.reduce(addRequest, start);
 }
 
 type View =
-  | { kind: "neutral" | "not-observed" }
+  | { kind: "neutral"; partial: boolean }
+  | { kind: "not-observed" }
   | { kind: "seen"; colour: Colour; level: LeakLevel; partial: boolean };
 
 // What the icon shows of a state: its colour, its level and whether the view
 // is partial, all read from the request the state keeps.
 function view(state: TabState): View {
-  if (state.kind !== "seen") {
-    return { kind: state.kind };
+  if (state.kind === "neutral") {
+    return { kind: "neutral", partial: state.partial };
+  }
+  if (state.kind === "not-observed") {
+    return { kind: "not-observed" };
   }
   const level = state.request.leak.level;
   return {
@@ -57,6 +63,11 @@ function view(state: TabState): View {
 
 function seen(colour: Colour, level: LeakLevel, partial = false): View {
   return { kind: "seen", colour, level, partial };
+}
+
+// The request the icon and the tooltip speak of.
+function kept(state: TabState): Classification | null {
+  return state.kind === "seen" ? state.request : null;
 }
 
 describe("addRequest", () => {
@@ -104,6 +115,12 @@ describe("addRequest", () => {
     );
   });
 
+  it("keeps the view partial on a neutral tab that starts to see requests", () => {
+    const partial = markPartial(NEUTRAL);
+    assert.deepEqual(view(fold([ORANGE_3], partial)), seen("orange", 3, true));
+    assert.deepEqual(view(fold([null], partial)), PARTIAL_NEUTRAL);
+  });
+
   it("stays not observed while it sees no request through a known provider", () => {
     assert.deepEqual(view(fold([], NOT_OBSERVED)), NOT_OBSERVED);
     assert.deepEqual(view(fold([null, null], NOT_OBSERVED)), NOT_OBSERVED);
@@ -111,11 +128,7 @@ describe("addRequest", () => {
 
   it("keeps the most serious request itself, for its provider and its case", () => {
     const akamai: Classification = { ...ORANGE_4, provider: "akamai" };
-    assert.deepEqual(fold([BLUE_2, akamai, ORANGE_3]), {
-      kind: "seen",
-      request: akamai,
-      partial: false,
-    });
+    assert.deepEqual(kept(fold([BLUE_2, akamai, ORANGE_3])), akamai);
   });
 
   it("keeps the first of two requests of the same colour and level", () => {
@@ -127,16 +140,8 @@ describe("addRequest", () => {
       { level: 4, case: "data-sent", challenge: false },
       true,
     );
-    assert.deepEqual(fold([session, sent]), {
-      kind: "seen",
-      request: session,
-      partial: false,
-    });
-    assert.deepEqual(fold([sent, session]), {
-      kind: "seen",
-      request: sent,
-      partial: false,
-    });
+    assert.deepEqual(kept(fold([session, sent])), session);
+    assert.deepEqual(kept(fold([sent, session])), sent);
   });
 
   it("lets a request of the site replace an anti-bot request of the same colour and level, never the reverse", () => {
@@ -145,50 +150,108 @@ describe("addRequest", () => {
       { level: 4, case: "session", possible: true, challenge: false },
       true,
     );
-    assert.deepEqual(fold([antiBot, site]), {
-      kind: "seen",
-      request: site,
-      partial: false,
-    });
-    assert.deepEqual(fold([site, antiBot]), {
-      kind: "seen",
-      request: site,
-      partial: false,
-    });
+    assert.deepEqual(kept(fold([antiBot, site])), site);
+    assert.deepEqual(kept(fold([site, antiBot])), site);
     const antiBotSession = request(
       { level: 4, case: "session", possible: true, challenge: true },
       true,
     );
-    assert.deepEqual(fold([antiBot, antiBotSession]), {
-      kind: "seen",
-      request: antiBot,
-      partial: false,
-    });
+    assert.deepEqual(kept(fold([antiBot, antiBotSession])), antiBot);
   });
 
   it("does not change the state it is given", () => {
     const state = fold([BLUE_2]);
     addRequest(state, RED_4);
     assert.deepEqual(view(state), seen("blue", 2));
+    assert.deepEqual(state.kind === "seen" ? state.tallies : null, [
+      { level: 2, proven: null, count: 1 },
+    ]);
     addRequest(NEUTRAL, RED_4);
-    assert.deepEqual(NEUTRAL, { kind: "neutral" });
+    assert.deepEqual(NEUTRAL, { kind: "neutral", partial: false });
     addRequest(NOT_OBSERVED, RED_4);
     assert.deepEqual(NOT_OBSERVED, { kind: "not-observed" });
   });
 });
 
-describe("markPartial", () => {
-  it("makes a tab where nothing was seen not observed", () => {
-    assert.deepEqual(view(markPartial(NEUTRAL)), NOT_OBSERVED);
-    assert.deepEqual(view(markPartial(NOT_OBSERVED)), NOT_OBSERVED);
+describe("the counts of a tab", () => {
+  function tallies(state: TabState) {
+    return state.kind === "seen" ? state.tallies : [];
+  }
+
+  it("counts nothing while no request goes through a known provider", () => {
+    assert.deepEqual(tallies(fold([null, null])), []);
   });
 
-  it("keeps the most serious request seen and says the view is partial", () => {
+  it("counts every request by level, and by proof where the colour depends on it", () => {
+    assert.deepEqual(tallies(fold([BLUE_2, BLUE_2_UNPROVEN, BLUE_2])), [
+      { level: 2, proven: null, count: 3 },
+    ]);
+    assert.deepEqual(tallies(fold([RED_3, ORANGE_3, RED_3])), [
+      { level: 3, proven: true, count: 2 },
+      { level: 3, proven: false, count: 1 },
+    ]);
+  });
+
+  it("lists the counts from the most serious to the least, in the order of the icon", () => {
+    assert.deepEqual(
+      tallies(fold([BLUE_2, ORANGE_3, ORANGE_4, null, RED_3, RED_4, BLUE_2])),
+      [
+        { level: 4, proven: true, count: 1 },
+        { level: 3, proven: true, count: 1 },
+        { level: 4, proven: false, count: 1 },
+        { level: 3, proven: false, count: 1 },
+        { level: 2, proven: null, count: 2 },
+      ],
+    );
+  });
+
+  it("counts the requests that do not change the icon as well", () => {
+    const state = fold([RED_4, RED_4, BLUE_2, RED_4]);
+    assert.deepEqual(kept(state), RED_4);
+    assert.deepEqual(tallies(state), [
+      { level: 4, proven: true, count: 3 },
+      { level: 2, proven: null, count: 1 },
+    ]);
+  });
+
+  it("counts on a tab it does not fully observe", () => {
+    assert.deepEqual(tallies(fold([ORANGE_3, ORANGE_3], NOT_OBSERVED)), [
+      { level: 3, proven: false, count: 2 },
+    ]);
+    assert.deepEqual(tallies(fold([BLUE_2], markPartial(NEUTRAL))), [
+      { level: 2, proven: null, count: 1 },
+    ]);
+  });
+});
+
+describe("markPartial", () => {
+  it("keeps a tab where nothing was seen neutral, with a partial view, and never makes it not observed", () => {
+    assert.deepEqual(view(markPartial(NEUTRAL)), PARTIAL_NEUTRAL);
+    assert.deepEqual(view(markPartial(markPartial(NEUTRAL))), PARTIAL_NEUTRAL);
+  });
+
+  it("leaves a tab not observed as it is", () => {
+    assert.equal(markPartial(NOT_OBSERVED), NOT_OBSERVED);
+  });
+
+  it("keeps the most serious request seen and its counts, and says the view is partial", () => {
     assert.deepEqual(view(markPartial(fold([RED_3]))), seen("red", 3, true));
     assert.deepEqual(
       view(markPartial(markPartial(fold([BLUE_2])))),
       seen("blue", 2, true),
     );
+    const state = markPartial(fold([RED_3, BLUE_2]));
+    assert.deepEqual(state.kind === "seen" ? state.tallies : null, [
+      { level: 3, proven: true, count: 1 },
+      { level: 2, proven: null, count: 1 },
+    ]);
+  });
+
+  it("returns the state itself when the view is already partial", () => {
+    const partial = markPartial(fold([BLUE_2]));
+    assert.equal(markPartial(partial), partial);
+    const neutral = markPartial(NEUTRAL);
+    assert.equal(markPartial(neutral), neutral);
   });
 
   it("keeps the view partial whatever request comes next", () => {
@@ -205,6 +268,6 @@ describe("markPartial", () => {
     markPartial(state);
     assert.deepEqual(view(state), seen("blue", 2));
     markPartial(NEUTRAL);
-    assert.deepEqual(NEUTRAL, { kind: "neutral" });
+    assert.deepEqual(NEUTRAL, { kind: "neutral", partial: false });
   });
 });

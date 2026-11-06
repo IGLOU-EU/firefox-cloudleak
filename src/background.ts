@@ -4,9 +4,8 @@
 // Firefox runs this file as an event page and runs it again at every wake-up,
 // so listeners must be added synchronously at the top level of this module.
 
-import { forgetAccess } from "./access.js";
 import { onErrorOccurred, onResponse, onSendHeaders } from "./requests.js";
-import { forget, onStatus } from "./tabs.js";
+import { forget, onAccessChange, onStatus } from "./tabs.js";
 import { report, setBadgeColours } from "./toolbar.js";
 
 // No listener asks for "blocking" and each returns at once, so Firefox never
@@ -40,7 +39,10 @@ browser.tabs.onUpdated.addListener(
 );
 browser.tabs.onRemoved.addListener(forget);
 
-browser.permissions.onAdded.addListener(forgetAccess);
-browser.permissions.onRemoved.addListener(forgetAccess);
+// Both fire for a grant or a withdrawal the user makes in the add-ons
+// manager or the extensions panel (ext-permissions.js and
+// ExtensionPermissions.sys.mjs, Firefox 159.0.1).
+browser.permissions.onAdded.addListener(() => report(onAccessChange()));
+browser.permissions.onRemoved.addListener(() => report(onAccessChange()));
 
 setBadgeColours();

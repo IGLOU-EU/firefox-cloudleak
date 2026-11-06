@@ -27,14 +27,17 @@ export const EMPTY_RECORD: TabRecord = { navigation: "", state: NEUTRAL };
 // receives no request id for its document.
 export const HIDDEN_SITE = "hidden";
 
+// Partial when the extension lacks the access to all sites: a request of a
+// site it cannot see may go through a provider.
 export function startNavigation(
   record: TabRecord,
   navigation: string,
+  partial: boolean,
 ): TabRecord {
   if (record.navigation === navigation) {
     return record;
   }
-  return { navigation, state: NEUTRAL };
+  return { navigation, state: partial ? markPartial(NEUTRAL) : NEUTRAL };
 }
 
 // A request counts for the navigation during which it was sent: one that ends
@@ -59,4 +62,12 @@ export function markHiddenSite(record: TabRecord): TabRecord {
   }
   const state = markPartial(record.state);
   return state === record.state ? record : { navigation: HIDDEN_SITE, state };
+}
+
+// The access to all sites was withdrawn while the tab was open: the requests
+// of the sites now out of reach go unseen from then on, and a later grant
+// does not bring back those it missed.
+export function markPartialView(record: TabRecord): TabRecord {
+  const state = markPartial(record.state);
+  return state === record.state ? record : { ...record, state };
 }
