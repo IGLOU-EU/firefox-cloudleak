@@ -93,7 +93,7 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | Field | Required | Content |
 | --- | --- | --- |
 | `name` | Yes | The provider's name |
-| `country` | Yes | ISO 3166-1 alpha-2 code of the country of the contracting entity, in capitals |
+| `country` | Yes | ISO 3166-1 alpha-2 code, in capitals, of the country whose law the service is subject to, which is not only the law of the entity that signs the contract |
 | `parent` | No | Parent company, as `{ "name": ..., "country": ... }` |
 | `signatures.headers` | No | Response headers: `name`, optional `value`, `source` |
 | `signatures.cookies` | No | Cookies the provider sets or uses itself: `name`, `source` |
@@ -163,7 +163,7 @@ The build is reproducible: the same sources and lockfile give the same files ins
 ## Work rules
 
 - The owner decides, and tries the extension in Firefox at each milestone.
-- A commit happens only on the owner's explicit instruction, after a green `npm run check`.
+- A branch is committed and merged into `main` as soon as `npm run check` passes, without an instruction for each commit. A branch that changes a design rule, a decision of the owner, a permission of the extension or the minimum Firefox version is committed and merged only with the owner's explicit agreement.
 - The git hooks enforce the commit format.
 - A commit whose content is mostly produced with assistance carries the trailer `Assisted-by: LLM`, before `Signed-off-by` and in the same trailer block. A commit where assistance only asked questions or proofread carries none. Since the hook adds `Signed-off-by` itself, write it as `git commit -s -m "<subject>" -m "Assisted-by: LLM"`, which keeps both trailers in one block.
 - Dependencies: the standard tools of the ecosystem are approved by default. Any other dependency needs the owner's approval before it is added. Before adding one, check whether Node or the browser already does the job.
@@ -171,7 +171,7 @@ The build is reproducible: the same sources and lockfile give the same files ins
 
 ## Branches
 
-Work happens on branches, never directly on `main`. The commit hook refuses commits on `main` in a clone where `git config mogh.branch.protected 1` is set. A branch is merged into `main` with `--no-ff`, on the owner's decision.
+Work happens on branches, never directly on `main`. The commit hook refuses commits on `main` in a clone where `git config mogh.branch.protected 1` is set. A branch is merged into `main` with `--no-ff`, when the work rules allow it.
 
 The protection also refuses the merge commit on `main`, so the merge lifts it for that single command:
 
