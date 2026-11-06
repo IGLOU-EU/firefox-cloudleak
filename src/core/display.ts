@@ -15,7 +15,8 @@ export interface TitleLine {
 
 export interface Display {
   readonly icon: Icon;
-  // Empty when there is nothing to count.
+  // The number of requests at the colour and level of the icon, empty when
+  // there is nothing to count.
   readonly badge: string;
   // Paragraphs of lines: the counts of the tab, then what the most serious
   // request means.
@@ -51,7 +52,7 @@ export function displayOf(
   meaning.push(...partialLines(state));
   return {
     icon: colourOfRequest(request),
-    badge: String(request.leak.level),
+    badge: badgeOf(state.tallies),
     title: [state.tallies.map(countLine), meaning],
   };
 }
@@ -81,6 +82,15 @@ function partialLines(state: {
     ...(state.partial ? [line("titlePartial")] : []),
     ...(state.missed ? [line("titleMissed")] : []),
   ];
+}
+
+// The tallies go from the most serious, so the first is the one the icon
+// shows. Firefox cuts the badge past two characters (toolbarbutton.css,
+// Firefox 159.0.1), so a count above 99 is a plus rather than its first
+// digits, which would read as a smaller number.
+function badgeOf(tallies: readonly Tally[]): string {
+  const count = tallies[0]?.count ?? 0;
+  return count > 99 ? "+" : String(count);
 }
 
 function line(message: string, ...substitutions: string[]): TitleLine {

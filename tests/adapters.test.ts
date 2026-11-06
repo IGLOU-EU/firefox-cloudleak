@@ -31,7 +31,7 @@ interface Tabs {
 }
 
 interface Cname {
-  canonicalNameOf(host: string): Promise<string | null>;
+  canonicalNameOf(host: string, now: number): Promise<string | null>;
 }
 
 const EDGE: ProviderEntry = {
@@ -263,7 +263,7 @@ function iconOf(tabId: number) {
   return { icon, badge };
 }
 
-const RED = { icon: "/icons/red.svg", badge: "4" };
+const RED = { icon: "/icons/red.svg", badge: "1" };
 const NEUTRAL = { icon: "/icons/neutral.svg", badge: "" };
 
 describe("a navigation that never commits", () => {
@@ -304,7 +304,7 @@ describe("a navigation that never commits", () => {
       assert.deepEqual(iconOf(tab), RED);
       await exchange(tab, "xmlhttprequest", 3000, EDGE_IP, true);
       mock.timers.runAll();
-      assert.deepEqual(iconOf(tab), RED);
+      assert.deepEqual(iconOf(tab), { ...RED, badge: "2" });
       assert.match(shown(tab).title ?? "", /countLevel4ProvenMany 2/);
     });
   }
@@ -424,7 +424,7 @@ describe("the toolbar button", () => {
     mark = calls.length;
     await exchange(tab, "image", 1200, EDGE_IP);
     mock.timers.runAll();
-    assert.deepEqual(sentSince(tab, mark), ["title"]);
+    assert.deepEqual(sentSince(tab, mark), ["badge", "title"]);
     mark = calls.length;
     await exchange(tab, "script", 1300, EDGE_IP, true);
     mock.timers.runAll();
@@ -462,15 +462,39 @@ describe("a closed tab", () => {
   });
 });
 
+// A host that resolves to the edge, sent apart from the site so that its
+// canonical name is not known yet.
+async function exchangeWith(
+  host: string,
+  tabId: number,
+  timeStamp: number,
+): Promise<void> {
+  const requestId = nextId();
+  await requests.onSendHeaders({
+    tabId,
+    requestId,
+    type: "image",
+    timeStamp,
+    url: `https://${host}/logo.png`,
+    method: "GET",
+    requestHeaders: [],
+  });
+  await requests.onResponseStarted(
+    response(tabId, requestId, "image", timeStamp + 1, OTHER_IP),
+  );
+}
+
+const MINUTE = 60_000;
+
 describe("the canonical name of a host", () => {
-  it("is resolved once per wake-up", async () => {
+  it("is resolved once per wake-up, however long ago", async () => {
     resolve = () => Promise.resolve({ canonicalName: "a.edge.example.net" });
     assert.equal(
-      await cname.canonicalNameOf("ok.example"),
+      await cname.canonicalNameOf("ok.example", 1000),
       "a.edge.example.net",
     );
     assert.equal(
-      await cname.canonicalNameOf("ok.example"),
+      await cname.canonicalNameOf("ok.example", 1000 + 10 * MINUTE),
       "a.edge.example.net",
     );
     assert.deepEqual(
@@ -479,13 +503,16 @@ describe("the canonical name of a host", () => {
     );
   });
 
-  it("is not asked again in the same wake-up after a failure, which is logged once", async () => {
+  it("is not asked again within a minute of a failure, which is logged once", async () => {
     resolve = () => Promise.reject(new Error("NS_ERROR_UNKNOWN_PROXY_HOST"));
     const errors = mock.method(console, "error", () => {});
     try {
-      assert.equal(await cname.canonicalNameOf("socks.example"), null);
-      assert.equal(await cname.canonicalNameOf("socks.example"), null);
-      assert.equal(await cname.canonicalNameOf("socks.example"), null);
+      assert.equal(await cname.canonicalNameOf("socks.example", 1000), null);
+      assert.equal(await cname.canonicalNameOf("socks.example", 1000), null);
+      assert.equal(
+        await cname.canonicalNameOf("socks.example", 1000 + MINUTE - 1),
+        null,
+      );
       assert.deepEqual(
         resolved.filter((host) => host === "socks.example"),
         ["socks.example"],
@@ -496,9 +523,59 @@ describe("the canonical name of a host", () => {
     }
   });
 
+  it("is asked again a minute after a failure, and kept once it is known", async () => {
+    resolve = () => Promise.reject(new Error("NS_ERROR_UNKNOWN_HOST"));
+    const errors = mock.method(console, "error", () => {});
+    try {
+      assert.equal(await cname.canonicalNameOf("flaky.example", 1000), null);
+      assert.equal(
+        await cname.canonicalNameOf("flaky.example", 1000 + MINUTE),
+        null,
+      );
+      assert.equal(errors.mock.callCount(), 2);
+      resolve = () => Promise.resolve({ canonicalName: "b.edge.example.net" });
+      assert.equal(
+        await cname.canonicalNameOf("flaky.example", 1000 + 2 * MINUTE),
+        "b.edge.example.net",
+      );
+      assert.equal(
+        await cname.canonicalNameOf("flaky.example", 1000 + 10 * MINUTE),
+        "b.edge.example.net",
+      );
+      assert.deepEqual(
+        resolved.filter((host) => host === "flaky.example"),
+        ["flaky.example", "flaky.example", "flaky.example"],
+      );
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
+  it("is asked again by a request that comes a minute after the one whose resolution failed", async () => {
+    const tab = 600;
+    await commit(tab, "doc-600", 1000);
+    await status(tab);
+    resolve = () => Promise.reject(new Error("NS_ERROR_UNKNOWN_HOST"));
+    const errors = mock.method(console, "error", () => {});
+    try {
+      await exchangeWith("late.example", tab, 1100);
+      resolve = () => Promise.resolve({ canonicalName: "c.edge.example.net" });
+      await exchangeWith("late.example", tab, 1100 + MINUTE - 1);
+      assert.equal(tabs.recordOf(tab).state.kind, "neutral");
+      await exchangeWith("late.example", tab, 1100 + MINUTE);
+      assert.equal(tabs.recordOf(tab).state.kind, "seen");
+      assert.deepEqual(
+        resolved.filter((host) => host === "late.example"),
+        ["late.example", "late.example"],
+      );
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
   it("is never asked for an address", async () => {
-    assert.equal(await cname.canonicalNameOf("192.0.2.10"), null);
-    assert.equal(await cname.canonicalNameOf("[2001:db8::1]"), null);
+    assert.equal(await cname.canonicalNameOf("192.0.2.10", 1000), null);
+    assert.equal(await cname.canonicalNameOf("[2001:db8::1]", 1000), null);
     assert.deepEqual(
       resolved.filter((host) => host.includes("192.0.2") || host.includes(":")),
       [],
