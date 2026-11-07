@@ -4,6 +4,7 @@
 // Firefox runs this file as an event page and runs it again at every wake-up,
 // so listeners must be added synchronously at the top level of this module.
 
+import { answer } from "./answer.js";
 import {
   onBeforeRedirect,
   onErrorOccurred,
@@ -65,5 +66,12 @@ browser.tabs.onRemoved.addListener((tabId) => report(forget(tabId)));
 // ExtensionPermissions.sys.mjs, Firefox 159.0.1).
 browser.permissions.onAdded.addListener(() => report(onAccessChange()));
 browser.permissions.onRemoved.addListener(() => report(onAccessChange()));
+
+// The popup asks, the event page answers. Firefox wakes the page for a
+// message of the extension whatever its listeners (ext-runtime.js and
+// ExtensionParent.sys.mjs, Firefox 159.0.1), and takes the promise a listener
+// returns as the answer, or no answer when it returns nothing
+// (ExtensionChild.sys.mjs).
+browser.runtime.onMessage.addListener((message: unknown) => answer(message));
 
 setBadgeColours();

@@ -25,6 +25,9 @@ interface Pending {
   // The navigation of the document the request was sent for.
   readonly navigation: string;
   readonly request: RequestSide;
+  // Firefox flags the requests of a private window (WebRequest.sys.mjs,
+  // Firefox 159.0.1), whose counts are never kept.
+  readonly privateWindow: boolean;
 }
 
 const pending = new Map<string, Pending>();
@@ -54,6 +57,7 @@ export async function onSendHeaders(
   // batch that delivers the event (WebRequest.sys.mjs and
   // ConduitsParent.sys.mjs, Firefox 159.0.1).
   const { tabId, requestId, type, timeStamp } = details;
+  const privateWindow = details.incognito === true;
   await ready;
   if (type === "main_frame") {
     navigate(tabId, requestId, timeStamp);
@@ -65,6 +69,7 @@ export async function onSendHeaders(
         ? requestId
         : navigationAt(recordOf(tabId), timeStamp),
     request,
+    privateWindow,
   });
 }
 
@@ -122,7 +127,19 @@ async function settle(
     ...entry.request,
     ...responseSideOf(details),
   };
-  fold(entry.tabId, entry.navigation, await classify(facts, details.timeStamp));
+  const classification = await classify(facts, details.timeStamp);
+  fold(
+    entry.tabId,
+    entry.navigation,
+    classification === null
+      ? null
+      : {
+          classification,
+          method: entry.request.method,
+          type: entry.request.type,
+          privateWindow: entry.privateWindow,
+        },
+  );
 }
 
 export async function onErrorOccurred(

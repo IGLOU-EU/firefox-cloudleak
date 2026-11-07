@@ -7,7 +7,7 @@ When you browse, part of what you send and read goes through intermediaries such
 ## Promises
 
 1. **Everything stays on your computer.** The extension sends nothing to anyone and downloads no list. The provider lists ship inside the extension and change only with a new version. Its only network activity is to ask Firefox's own DNS resolver, once more, for a name the page has just looked up, because Firefox does not let it read the page's cached answer ([bug 2051290](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290)).
-2. **No address is kept.** Only aggregated counts are stored: site, method, request type, provider and level.
+2. **No address is kept.** Only aggregated counts are stored, by site, method, request type, provider and level, with the date the counts started. The site is the registrable domain of the page's address, such as `legifrance.gouv.fr`, and nothing else of an address is kept.
 3. **It never claims more than it observes.** When it cannot know, it says so, and a doubt is never settled on the reassuring side.
 4. **It never slows your browsing.** It watches requests without ever holding them.
 
