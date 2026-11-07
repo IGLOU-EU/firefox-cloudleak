@@ -118,7 +118,7 @@ function badgeOf(tallies: readonly Tally[]): string {
   return count > 99 ? "+" : String(count);
 }
 
-function line(message: string, ...substitutions: string[]): TitleLine {
+export function line(message: string, ...substitutions: string[]): TitleLine {
   return { message, substitutions };
 }
 

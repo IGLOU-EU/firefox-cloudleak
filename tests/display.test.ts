@@ -18,7 +18,7 @@ import {
   NOT_OBSERVED,
   type TabState,
 } from "../src/core/tab-state.js";
-import { getMessageOf, messagesOf } from "./messages.js";
+import { getMessageOf, messagesOf, POPUP_MESSAGES } from "./messages.js";
 
 const PROVIDERS = [
   { id: "cloudflare", name: "Cloudflare" },
@@ -363,7 +363,12 @@ describe("the tooltip messages", () => {
     );
     assert.deepEqual(
       Object.keys(en?.messages ?? {}).sort(),
-      ["extensionName", "extensionDescription", ...used].sort(),
+      [
+        "extensionName",
+        "extensionDescription",
+        ...used,
+        ...POPUP_MESSAGES,
+      ].sort(),
     );
     for (const { locale, messages } of locales) {
       for (const name of used) {

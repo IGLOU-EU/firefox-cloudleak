@@ -3,7 +3,7 @@
 
 import { type Display, type Icon, titleText } from "./core/display.js";
 
-const ICONS: Record<Icon, string> = {
+export const ICONS: Record<Icon, string> = {
   neutral: "/icons/neutral.svg",
   blue: "/icons/blue.svg",
   orange: "/icons/orange.svg",

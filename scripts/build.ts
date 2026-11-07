@@ -33,7 +33,7 @@ writeFileSync(
   ].join("\n"),
 );
 
-for (const path of ["manifest.json", "_locales", "icons", "LICENSE"]) {
+for (const path of ["manifest.json", "_locales", "icons", "popup", "LICENSE"]) {
   cpSync(`${root}${path}`, `${dist}${path}`, { recursive: true });
 }
 

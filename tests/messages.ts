@@ -11,6 +11,30 @@ export interface Message {
 
 const ROOT = fileURLToPath(new URL("../../_locales/", import.meta.url));
 
+// The messages of the popup page, apart from those of the tooltip, so that
+// the check of the locales knows every message in use.
+export const POPUP_MESSAGES: readonly string[] = [
+  "popupPage",
+  "popupUnit",
+  "popupSite",
+  "popupSitePrivate",
+  "popupBrowserPage",
+  "popupNothingBrowser",
+  "popupNothingSite",
+  "popupMap",
+  "popupClearAll",
+  "popupClear",
+  "popupCancel",
+  "popupClearQuestion",
+  "popupClearQuestionPrivate",
+  "level1",
+  "level2",
+  "level3",
+  "level4",
+  "decryptionProven",
+  "decryptionUnproven",
+];
+
 export function messagesOf(locale: string): Record<string, Message> {
   return JSON.parse(
     readFileSync(`${ROOT}${locale}/messages.json`, "utf8"),

@@ -7,6 +7,7 @@
       "tests/**",
       "data/**",
       "_locales/**",
+      "popup/**",
       "*.json"
     ]
   },

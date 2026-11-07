@@ -7,13 +7,9 @@
 // trial in Firefox does.
 
 import assert from "node:assert/strict";
-import { writeFileSync } from "node:fs";
 import { after, before, describe, it, mock } from "node:test";
-import type {
-  ProviderEntry,
-  ProviderTable,
-} from "../src/core/provider-table.js";
 import type { TabRecord } from "../src/core/tab-record.js";
+import { importModule, writeTable } from "./built-extension.js";
 
 interface Requests {
   onSendHeaders(details: object): Promise<void>;
@@ -36,23 +32,6 @@ interface Cname {
   canonicalNameOf(host: string, now: number): Promise<string | null>;
 }
 
-const EDGE: ProviderEntry = {
-  id: "edge",
-  name: "Edge",
-  country: "US",
-  parent: null,
-  ranges: ["192.0.2.0/24"],
-  headers: [{ name: "x-edge", value: null }],
-  cookies: [],
-  siteConnectorCookies: [],
-  server: [],
-  cname: ["edge.example.net"],
-  challengeHosts: [],
-  challengePaths: [],
-  challengeHeaders: [],
-  challengeQueryNames: [],
-};
-const TABLE: ProviderTable = { providers: [EDGE], consentCookies: [] };
 const EDGE_IP = "192.0.2.10";
 const OTHER_IP = "203.0.113.1";
 
@@ -141,16 +120,8 @@ function record(tabId: number, kind: Call["kind"], value: string): void {
   },
 };
 
-const extension = new URL("../extension/", import.meta.url);
-writeFileSync(
-  new URL("providers.js", extension),
-  `export default ${JSON.stringify(TABLE)};\n`,
-);
+writeTable();
 mock.timers.enable({ apis: ["setTimeout"] });
-
-async function importModule<T>(file: string): Promise<T> {
-  return (await import(new URL(file, extension).href)) as T;
-}
 
 const tabs = await importModule<Tabs>("tabs.js");
 const requests = await importModule<Requests>("requests.js");
