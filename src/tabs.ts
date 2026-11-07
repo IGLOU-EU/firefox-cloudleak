@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Adrien Kara
 
 import { hasAllSites, readAccess } from "./access.js";
-import type { Classification } from "./core/classify.js";
+import { batch, WRITE_DELAY_MS } from "./batch.js";
+import type { SeenRequest } from "./core/counts.js";
 import { displayOf } from "./core/display.js";
 import {
   displayedDocument,
@@ -16,19 +17,18 @@ import {
   showDocument,
   startNavigation,
   type TabRecord,
+  takeCountable,
 } from "./core/tab-record.js";
+import { count, ready as countsReady } from "./counts.js";
 import table from "./providers.js";
+import { siteOf } from "./site.js";
 import { forgetSent, render, report } from "./toolbar.js";
 
 // Firefox suspends the event page after 30 s without an event and its memory
 // goes with it, so the tabs live in storage.session, which stays in memory
-// and never reaches the disk. Private windows are kept the same way, and
-// nothing goes to storage.local.
+// and never reaches the disk. Private windows are kept the same way. Only
+// the kept counts, by site, go to storage.local (counts.ts).
 const PREFIX = "tab:";
-
-// Long enough to gather the requests of a page load into one write, far
-// shorter than the suspension delay so that no write is lost.
-const WRITE_DELAY_MS = 500;
 
 // Every request changes the counts of its tab, so the toolbar is updated
 // once per burst of requests rather than once per request, soon enough to
@@ -45,7 +45,8 @@ const records = new Map<number, TabRecord>();
 const closed = new Set<number>();
 
 // Every change waits for this, so that the tabs read at the wake-up are not
-// overwritten by the first event that woke the page.
+// overwritten by the first event that woke the page, and so that the counts
+// a change feeds are read too.
 export const ready: Promise<void> = Promise.all([
   browser.storage.session.get(null).then(
     (items) => {
@@ -61,6 +62,7 @@ export const ready: Promise<void> = Promise.all([
     },
   ),
   readAccess(),
+  countsReady,
 ]).then(() => undefined);
 
 export function recordOf(tabId: number): TabRecord {
@@ -90,14 +92,21 @@ type DocumentDetails = {
   // "forward_back" for Back and Forward (ext-webNavigation.js, Firefox
   // 159.0.1). onCompleted gives none.
   readonly transitionQualifiers?: readonly string[];
-  // Only its scheme, and the name of an about: page, are ever read, by
-  // pageOf.
+  // Only its scheme, the name of an about: page and the host of a website
+  // are ever read, by documentOf.
   readonly url: string;
 };
 
 // The schemes that "*" covers in a match pattern, the only ones a site whose
 // access the user grants or withdraws can have.
 const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
+
+// What a committed document is: a website, reader view or another page of
+// the browser, and for a website its site.
+interface Document {
+  readonly page: Page;
+  readonly site: string | null;
+}
 
 // Firefox gives the URL of the document, view-source: and about:reader
 // included (WebNavigation.sys.mjs, WebNavigationContent.cpp and
@@ -106,19 +115,34 @@ const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
 // whose images come from the web. Firefox finds an about: page by what comes
 // before "?" or "#", without regard to case (nsAboutProtocolUtils.h,
 // mozilla-central), and what follows holds the address of the article in
-// reader view, so it is never read. Nothing of the URL goes further than this
-// function, and nothing of it is kept. A URL without a scheme is taken for a
-// website, so that the doubt does not reassure.
-function pageOf(url: string): Page {
+// reader view, so it is never read. Of a website, the host is read too, and
+// reduced at once to its registrable domain, the site under which its
+// requests are counted: that domain is the only thing of the URL that goes
+// further than this function. A URL without a scheme is taken for a website,
+// so that the doubt does not reassure, and a website whose host cannot be
+// read has no site to count for.
+function documentOf(url: string): Document {
   const scheme = /^([a-z][a-z\d+.-]*):/i.exec(url)?.[1]?.toLowerCase();
   if (scheme === undefined || WEB_SCHEMES.has(scheme)) {
-    return "site";
+    return { page: "site", site: siteOfUrl(url) };
   }
   if (scheme !== "about") {
-    return "browser";
+    return { page: "browser", site: null };
   }
   const name = /^about:([^?#]*)/i.exec(url)?.[1]?.toLowerCase();
-  return name === "reader" ? "reader" : "browser";
+  return { page: name === "reader" ? "reader" : "browser", site: null };
+}
+
+// The host as the URL gives it, in punycode, with the brackets of an IPv6
+// address, which Firefox's registrable domain accepts.
+function siteOfUrl(url: string): string | null {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return null;
+  }
+  return hostname === "" ? null : siteOf(hostname);
 }
 
 // The icon speaks of the page the tab shows, not of its frames. The
@@ -131,7 +155,7 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
   const { tabId, documentId, timeStamp } = details;
   const backOrForward =
     details.transitionQualifiers?.includes("forward_back") === true;
-  const page = pageOf(details.url);
+  const { page, site } = documentOf(details.url);
   await ready;
   update(tabId, (record) =>
     showDocument(
@@ -141,6 +165,7 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
       !hasAllSites(),
       backOrForward,
       page,
+      site,
     ),
   );
 }
@@ -154,17 +179,24 @@ export async function onCompleted(details: DocumentDetails): Promise<void> {
     return;
   }
   const { tabId, documentId, timeStamp } = details;
-  const page = pageOf(details.url);
+  const { page, site } = documentOf(details.url);
   await ready;
   update(tabId, (record) =>
-    showCompletedDocument(record, documentId, timeStamp, !hasAllSites(), page),
+    showCompletedDocument(
+      record,
+      documentId,
+      timeStamp,
+      !hasAllSites(),
+      page,
+      site,
+    ),
   );
 }
 
 export function fold(
   tabId: number,
   navigation: string,
-  request: Classification | null,
+  request: SeenRequest | null,
 ): void {
   update(tabId, (record) => foldRequest(record, navigation, request));
 }
@@ -228,51 +260,45 @@ export async function forget(tabId: number): Promise<void> {
   report(browser.storage.session.remove(`${PREFIX}${tabId}`));
 }
 
-// Gathers the tabs that change during a burst and hands them over once,
-// after the delay. A tab closed meanwhile has no record and is left out.
-function batch(
-  delayMs: number,
-  flush: (tabIds: readonly number[]) => void,
-): (tabId: number) => void {
-  const pending = new Set<number>();
-  return (tabId) => {
-    if (pending.size === 0) {
-      setTimeout(() => {
-        const tabIds = [...pending].filter((id) => records.has(id));
-        pending.clear();
-        flush(tabIds);
-      }, delayMs);
-    }
-    pending.add(tabId);
-  };
-}
-
-const scheduleShow = batch(SHOW_DELAY_MS, (tabIds) => {
+// A tab closed during the burst has no record and is left out.
+const scheduleShow = batch<number>(SHOW_DELAY_MS, (tabIds) => {
   for (const tabId of tabIds) {
-    show(tabId, false);
+    if (records.has(tabId)) {
+      show(tabId, false);
+    }
   }
 });
 
-const scheduleWrite = batch(WRITE_DELAY_MS, (tabIds) => {
+const scheduleWrite = batch<number>(WRITE_DELAY_MS, (tabIds) => {
   const items: Record<string, TabRecord> = {};
   for (const tabId of tabIds) {
-    items[`${PREFIX}${tabId}`] = recordOf(tabId);
+    if (records.has(tabId)) {
+      items[`${PREFIX}${tabId}`] = recordOf(tabId);
+    }
   }
-  report(browser.storage.session.set(items));
+  if (Object.keys(items).length > 0) {
+    report(browser.storage.session.set(items));
+  }
 });
 
 // The display follows the document the tab shows, which changes when a
-// pending navigation commits even if no count does.
+// pending navigation commits even if no count does. The kept counts take
+// what a change lets them, at the same point where the tab counts it, so
+// that the badge and the kept counts agree.
 function update(tabId: number, change: (record: TabRecord) => TabRecord): void {
   if (closed.has(tabId)) {
     return;
   }
   const record = recordOf(tabId);
-  const next = change(record);
-  if (next === record) {
+  const changed = change(record);
+  if (changed === record) {
     return;
   }
+  const { record: next, countable } = takeCountable(changed);
   records.set(tabId, next);
+  for (const { site, request } of countable) {
+    count(site, request);
+  }
   if (displayedDocument(next).state !== displayedDocument(record).state) {
     scheduleShow(tabId);
   }

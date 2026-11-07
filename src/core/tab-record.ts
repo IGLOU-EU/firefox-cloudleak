@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import type { Classification } from "./classify.js";
+import type { SeenRequest } from "./counts.js";
 import {
   addRequest,
   clearPartial,
@@ -12,8 +12,8 @@ import {
   type TabState,
 } from "./tab-state.js";
 
-// One document of a tab and what its requests showed. Nothing of the URL: the
-// document is named by the id Firefox gives it, a random value.
+// One document of a tab and what its requests showed. Of the URL, only the
+// site: the document is named by the id Firefox gives it, a random value.
 export interface DocumentRecord {
   // Null while the navigation that opens it has not committed.
   readonly document: string | null;
@@ -28,6 +28,17 @@ export interface DocumentRecord {
   readonly state: TabState;
   // A website while the navigation has not committed.
   readonly page: Page;
+  // The registrable domain of the document, in punycode, under which its
+  // requests through providers are counted. Null while the navigation has
+  // not committed, and for a page of the browser, reader view included,
+  // which is no site.
+  readonly site: string | null;
+  // The requests through providers the kept counts have not taken yet. The
+  // site of a document is known at its commit only, while its top-level
+  // request, the most telling request of the page, is seen before: it waits
+  // here, with any other request of the navigation, until the commit gives
+  // the site. Empty once the document has committed.
+  readonly uncounted: readonly SeenRequest[];
 }
 
 // What a document is, as the scheme of its URL tells, and for reader view the
@@ -62,6 +73,8 @@ export const EMPTY_RECORD: TabRecord = {
   navigation: "",
   state: markMissed(NEUTRAL),
   page: "site",
+  site: null,
+  uncounted: [],
   previous: [],
 };
 
@@ -118,6 +131,8 @@ export function startNavigation(
     navigation,
     state: startState(partial),
     page: "site",
+    site: null,
+    uncounted: [],
     previous: remember(record),
   };
 }
@@ -138,6 +153,7 @@ export function showDocument(
   partial: boolean,
   backOrForward = false,
   page: Page = "site",
+  site: string | null = null,
 ): TabRecord {
   if (record.document === document) {
     return record;
@@ -160,6 +176,7 @@ export function showDocument(
       shownAt,
       state: openedState(record.state, page, lacking),
       page,
+      site,
     };
   }
   const state = startState(lacking);
@@ -169,6 +186,8 @@ export function showDocument(
     navigation: document,
     state: backOrForward ? markMissed(state) : state,
     page,
+    site,
+    uncounted: [],
     previous: remember(record),
   };
 }
@@ -196,13 +215,14 @@ export function showCompletedDocument(
   completedAt: number,
   partial: boolean,
   page: Page = "site",
+  site: string | null = null,
 ): TabRecord {
   const known =
     record.document === document ||
     record.previous.some((entry) => entry.document === document);
   return known
     ? record
-    : showDocument(record, document, completedAt, partial, false, page);
+    : showDocument(record, document, completedAt, partial, false, page, site);
 }
 
 // What the tab shows. A navigation that has not committed shows nothing yet,
@@ -235,14 +255,60 @@ export function navigationAt(record: TabRecord, sentAt: number): string {
 }
 
 // A request counts for the document it was sent for, the one shown or one
-// shown before. A request of a navigation the tab no longer keeps says
-// nothing of any document it keeps.
+// shown before: in its state, and in the kept counts once its site is known.
+// A request through no provider changes nothing, and a request of a
+// navigation the tab no longer keeps says nothing of any document it keeps.
 export function foldRequest(
   record: TabRecord,
   navigation: string,
-  request: Classification | null,
+  request: SeenRequest | null,
 ): TabRecord {
-  return changeState(record, navigation, (state) => addRequest(state, request));
+  if (request === null) {
+    return record;
+  }
+  return changeEntry(record, navigation, (entry) => ({
+    ...entry,
+    state: addRequest(entry.state, request.classification),
+    uncounted: [...entry.uncounted, request],
+  }));
+}
+
+// A request the kept counts can take, with the site it counts for.
+export interface Countable {
+  readonly site: string;
+  readonly request: SeenRequest;
+}
+
+// What the kept counts can take: the uncounted requests of every document
+// that committed with a site. Those of a document that committed without a
+// site are dropped, since a page of the browser has no site to count for, and
+// those of a navigation still pending wait for its commit. The record comes
+// back as it is when there is nothing to take nor drop.
+export function takeCountable(record: TabRecord): {
+  readonly record: TabRecord;
+  readonly countable: readonly Countable[];
+} {
+  const countable: Countable[] = [];
+  const settle = (entry: DocumentRecord): DocumentRecord => {
+    if (entry.document === null || entry.uncounted.length === 0) {
+      return entry;
+    }
+    if (entry.site !== null) {
+      for (const request of entry.uncounted) {
+        countable.push({ site: entry.site, request });
+      }
+    }
+    return { ...entry, uncounted: [] };
+  };
+  const { previous, ...shown } = record;
+  const settledShown = settle(shown);
+  const settledPrevious = previous.map(settle);
+  const changed =
+    settledShown !== shown ||
+    settledPrevious.some((entry, index) => entry !== previous[index]);
+  return changed
+    ? { record: { ...settledShown, previous: settledPrevious }, countable }
+    : { record, countable };
 }
 
 // Firefox gave the response of a request whose sending the extension never
@@ -263,6 +329,19 @@ function changeState(
   navigation: string,
   change: (state: TabState) => TabState,
 ): TabRecord {
+  return changeEntry(record, navigation, (entry) => {
+    const state = change(entry.state);
+    return state === entry.state ? entry : { ...entry, state };
+  });
+}
+
+// Changes the document a navigation opened, the one shown or one shown
+// before. A navigation the tab no longer keeps changes nothing.
+function changeEntry(
+  record: TabRecord,
+  navigation: string,
+  change: (entry: DocumentRecord) => DocumentRecord,
+): TabRecord {
   const entry =
     record.navigation === navigation
       ? record
@@ -270,10 +349,8 @@ function changeState(
   if (entry === undefined) {
     return record;
   }
-  const state = change(entry.state);
-  return state === entry.state
-    ? record
-    : replace(record, entry, { ...entry, state });
+  const changed = change(entry);
+  return changed === entry ? record : replace(record, entry, changed);
 }
 
 // What the tab shows is out of reach. A document no request opened is that
@@ -301,6 +378,8 @@ export function markHiddenSite(record: TabRecord): TabRecord {
       navigation: HIDDEN_SITE,
       state: NOT_OBSERVED,
       page: "site",
+      site: null,
+      uncounted: [],
       previous: remember(record),
     };
   }

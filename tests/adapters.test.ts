@@ -10,10 +10,19 @@ import assert from "node:assert/strict";
 import { writeFileSync } from "node:fs";
 import { after, before, describe, it, mock } from "node:test";
 import type {
+  ClearedData,
+  PopupData,
+  SiteCounts,
+} from "../src/core/popup-message.js";
+import type {
   ProviderEntry,
   ProviderTable,
 } from "../src/core/provider-table.js";
-import type { TabRecord } from "../src/core/tab-record.js";
+import { EMPTY_RECORD, type TabRecord } from "../src/core/tab-record.js";
+
+interface Answer {
+  answer(message: unknown): Promise<PopupData | ClearedData> | undefined;
+}
 
 interface Requests {
   onSendHeaders(details: object): Promise<void>;
@@ -64,8 +73,13 @@ const STORED: TabRecord = {
   navigation: "r900",
   state: { kind: "neutral", partial: false, missed: false },
   page: "site",
+  site: "site.example",
+  uncounted: [],
   previous: [],
 };
+
+// When the extension first runs, on the clock of the stand-in.
+const INSTALLED_AT = 1_700_000_000_000;
 
 interface Call {
   readonly tabId: number;
@@ -77,6 +91,9 @@ const calls: Call[] = [];
 const session = new Map<string, unknown>([
   [`tab:${CLOSED_AT_WAKE_UP}`, STORED],
 ]);
+const local = new Map<string, unknown>();
+// Each write to storage.local, as Firefox would get it.
+const localWrites: Record<string, unknown>[] = [];
 const resolved: string[] = [];
 let allSites = true;
 let resolve: (host: string) => Promise<{ canonicalName?: string }> = () =>
@@ -94,11 +111,52 @@ function record(tabId: number, kind: Call["kind"], value: string): void {
   calls.push({ tabId, kind, value });
 }
 
+function read(
+  store: Map<string, unknown>,
+  keys: null | string | string[],
+): Record<string, unknown> {
+  const wanted =
+    keys === null
+      ? [...store.keys()]
+      : typeof keys === "string"
+        ? [keys]
+        : keys;
+  return Object.fromEntries(
+    wanted.filter((key) => store.has(key)).map((key) => [key, store.get(key)]),
+  );
+}
+
+// Firefox's own public suffix list is not at hand: the stand-in keeps the last
+// two labels of a name, an address as it is when allowed, and refuses, as
+// Firefox does, an empty label.
+function getDomain(
+  hostname: string,
+  options: { allowIPAddress?: boolean } = {},
+): string | null {
+  if (hostname === "" || hostname.includes("..")) {
+    throw new Error(`Invalid hostname: ${hostname}`);
+  }
+  if (hostname.startsWith("[") || /^[\d.]+$/.test(hostname)) {
+    return options.allowIPAddress === true ? hostname : null;
+  }
+  return hostname.split(".").slice(-2).join(".");
+}
+
+// The listeners background.js adds, by event.
+const listeners = new Map<string, ((...args: unknown[]) => unknown)[]>();
+function event(name: string) {
+  return {
+    addListener: (listener: (...args: unknown[]) => unknown) => {
+      listeners.set(name, [...(listeners.get(name) ?? []), listener]);
+    },
+  };
+}
+
 (globalThis as Record<string, unknown>)["browser"] = {
   storage: {
     session: {
-      get: () => {
-        const items = Object.fromEntries(session);
+      get: (keys: null | string | string[]) => {
+        const items = read(session, keys);
         return wakeUp.then(() => items);
       },
       set: (items: Record<string, unknown>) => {
@@ -112,9 +170,32 @@ function record(tabId: number, kind: Call["kind"], value: string): void {
         return Promise.resolve();
       },
     },
+    local: {
+      get: (keys: null | string | string[]) =>
+        Promise.resolve(read(local, keys)),
+      set: (items: Record<string, unknown>) => {
+        localWrites.push(items);
+        for (const [key, value] of Object.entries(items)) {
+          local.set(key, value);
+        }
+        return Promise.resolve();
+      },
+      clear: () => {
+        local.clear();
+        return Promise.resolve();
+      },
+    },
   },
-  permissions: { contains: () => Promise.resolve(allSites) },
-  tabs: { query: () => Promise.resolve([]) },
+  permissions: {
+    contains: () => Promise.resolve(allSites),
+    onAdded: event("permissions.onAdded"),
+    onRemoved: event("permissions.onRemoved"),
+  },
+  tabs: {
+    query: () => Promise.resolve([]),
+    onUpdated: event("tabs.onUpdated"),
+    onRemoved: event("tabs.onRemoved"),
+  },
   action: {
     setIcon: (details: { tabId: number; path: string }) => {
       record(details.tabId, "icon", details.path);
@@ -128,6 +209,8 @@ function record(tabId: number, kind: Call["kind"], value: string): void {
       record(details.tabId, "title", details.title);
       return Promise.resolve();
     },
+    setBadgeBackgroundColor: () => Promise.resolve(),
+    setBadgeTextColor: () => Promise.resolve(),
   },
   i18n: {
     getMessage: (name: string, substitutions: string[]) =>
@@ -139,6 +222,18 @@ function record(tabId: number, kind: Call["kind"], value: string): void {
       return resolve(host);
     },
   },
+  publicSuffix: { getDomain },
+  webRequest: {
+    onSendHeaders: event("webRequest.onSendHeaders"),
+    onBeforeRedirect: event("webRequest.onBeforeRedirect"),
+    onResponseStarted: event("webRequest.onResponseStarted"),
+    onErrorOccurred: event("webRequest.onErrorOccurred"),
+  },
+  webNavigation: {
+    onCommitted: event("webNavigation.onCommitted"),
+    onCompleted: event("webNavigation.onCompleted"),
+  },
+  runtime: { onMessage: event("runtime.onMessage") },
 };
 
 const extension = new URL("../extension/", import.meta.url);
@@ -146,7 +241,7 @@ writeFileSync(
   new URL("providers.js", extension),
   `export default ${JSON.stringify(TABLE)};\n`,
 );
-mock.timers.enable({ apis: ["setTimeout"] });
+mock.timers.enable({ apis: ["setTimeout", "Date"], now: INSTALLED_AT });
 
 async function importModule<T>(file: string): Promise<T> {
   return (await import(new URL(file, extension).href)) as T;
@@ -155,6 +250,8 @@ async function importModule<T>(file: string): Promise<T> {
 const tabs = await importModule<Tabs>("tabs.js");
 const requests = await importModule<Requests>("requests.js");
 const cname = await importModule<Cname>("cname.js");
+const { answer } = await importModule<Answer>("answer.js");
+await importModule<object>("background.js");
 
 const closing = tabs.forget(CLOSED_AT_WAKE_UP);
 finishWakeUp();
@@ -754,6 +851,318 @@ describe("the canonical name of a host", () => {
     assert.deepEqual(
       resolved.filter((host) => host.includes("192.0.2") || host.includes(":")),
       [],
+    );
+  });
+});
+
+describe("the site of a document", () => {
+  const cases: [string, string | null][] = [
+    ["https://www.site.example/path?q=1#top", "site.example"],
+    ["http://deep.sub.site.example/", "site.example"],
+    ["https://192.0.2.7/", "192.0.2.7"],
+    ["https://[2001:db8::1]:8443/", "[2001:db8::1]"],
+    ["https://localhost/", "localhost"],
+    // Firefox refuses an empty label: the host is kept as it is.
+    ["https://a..b/", "a..b"],
+    ["about:newtab", null],
+    ["about:reader?url=https%3A%2F%2Fsite.example%2F", null],
+    ["view-source:https://site.example/", null],
+    ["file:///home/user/page.html", null],
+    ["moz-extension://5f0c7a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50/page.html", null],
+    ["", null],
+  ];
+
+  for (const [index, [url, site]] of cases.entries()) {
+    it(`is ${site ?? "none"} for ${url === "" ? "a URL Firefox did not give" : url}`, async () => {
+      const tab = 1000 + index;
+      await commit(tab, `doc-${tab}`, 1000, [], url);
+      assert.equal(tabs.recordOf(tab).site, site);
+    });
+  }
+
+  it("is the one of the page completed without a commit, such as the settings", async () => {
+    const tab = 1020;
+    await tabs.onCompleted({
+      tabId: tab,
+      frameId: 0,
+      documentId: "doc-1020",
+      timeStamp: 1000,
+      url: "about:preferences",
+    });
+    assert.equal(tabs.recordOf(tab).site, null);
+    await tabs.onCompleted({
+      tabId: tab,
+      frameId: 0,
+      documentId: "doc-1020-site",
+      timeStamp: 2000,
+      url: "https://www.site.example/",
+    });
+    assert.equal(tabs.recordOf(tab).site, "site.example");
+  });
+});
+
+describe("the kept counts", () => {
+  function siteCounts(site: string): SiteCounts | undefined {
+    return local.get(`site:${site}`) as SiteCounts | undefined;
+  }
+
+  async function popup(tab: number, privateWindow = false): Promise<PopupData> {
+    return (await answer({
+      kind: "popup",
+      tabId: tab,
+      privateWindow,
+    })) as PopupData;
+  }
+
+  it("start when the extension first runs, before anything is counted", async () => {
+    assert.equal(local.get("since"), INSTALLED_AT);
+    assert.equal((await popup(1100)).since, INSTALLED_AT);
+  });
+
+  for (const commitFirst of [false, true]) {
+    it(`count the top-level request of a page once its commit gives the site${commitFirst ? ", when the commit arrives first" : ""}`, async () => {
+      const tab = commitFirst ? 1111 : 1110;
+      const site = `t${tab}.example`;
+      if (commitFirst) {
+        await commit(tab, `doc-${tab}`, 2010, [], `https://www.${site}/`);
+      }
+      await exchange(tab, "main_frame", 2000, EDGE_IP);
+      mock.timers.runAll();
+      if (!commitFirst) {
+        assert.equal(siteCounts(site), undefined);
+        await commit(tab, `doc-${tab}`, 2010, [], `https://www.${site}/`);
+        mock.timers.runAll();
+      }
+      assert.deepEqual(siteCounts(site), {
+        edge: { red3: { "GET main_frame": 1 } },
+      });
+    });
+  }
+
+  it("count a request of the page shown at once, by provider, category and kind, and leave out a request through no provider", async () => {
+    const tab = 1120;
+    const site = "t1120.example";
+    await commit(tab, "doc-1120", 1000, [], `https://${site}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await exchange(tab, "image", 1200, OTHER_IP);
+    await exchange(tab, "image", 1300, EDGE_IP);
+    await exchange(tab, "xmlhttprequest", 1400, EDGE_IP, true);
+    mock.timers.runAll();
+    assert.deepEqual(siteCounts(site), {
+      edge: {
+        blue2: { "GET image": 2 },
+        red4: { "GET xmlhttprequest": 1 },
+      },
+    });
+    assert.deepEqual((await popup(tab)).totals, siteCounts(site));
+  });
+
+  it("agree with the badge: the popup sees what was counted before it is written", async () => {
+    const tab = 1125;
+    const site = "t1125.example";
+    await commit(tab, "doc-1125", 1000, [], `https://${site}/`);
+    await status(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    assert.equal(siteCounts(site), undefined);
+    assert.deepEqual((await popup(tab)).totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    mock.timers.runAll();
+    assert.equal(shown(tab).badge, "1");
+    assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
+  });
+
+  it("count a request of the page still shown while a navigation is pending, for that page", async () => {
+    const tab = 1127;
+    const site = "t1127.example";
+    await commit(tab, "doc-1127", 1000, [], `https://${site}/`);
+    await send(tab, nextId(), "main_frame", 2000);
+    await exchange(tab, "image", 2100, EDGE_IP);
+    mock.timers.runAll();
+    assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
+  });
+
+  it("count nothing for a page of the browser, reader view included, which has no site", async () => {
+    const tab = 1130;
+    await commit(
+      tab,
+      "doc-1130",
+      1000,
+      [],
+      "about:reader?url=https%3A%2F%2Fsite.example%2F",
+    );
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    const keys = [...local.keys()];
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    assert.equal(tabs.recordOf(tab).state.kind, "seen");
+    assert.equal(localWrites.length, writes);
+    assert.deepEqual([...local.keys()], keys);
+    assert.deepEqual((await popup(tab)).totals, {});
+  });
+
+  it("count nothing for a tab the extension has not seen navigate, whose site it does not know", async () => {
+    const tab = 1135;
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    assert.equal(tabs.recordOf(tab).state.kind, "seen");
+    assert.equal(localWrites.length, writes);
+  });
+
+  it("write the sites a burst touched once, after the burst", async () => {
+    const a = 1140;
+    const b = 1141;
+    await commit(a, "doc-1140", 1000, [], "https://t1140.example/");
+    await commit(b, "doc-1141", 1000, [], "https://t1141.example/");
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    for (const at of [1100, 1200, 1300]) {
+      await exchange(a, "image", at, EDGE_IP);
+    }
+    await exchange(b, "script", 1400, EDGE_IP);
+    assert.equal(localWrites.length, writes);
+    mock.timers.runAll();
+    assert.equal(localWrites.length, writes + 1);
+    assert.deepEqual(localWrites[writes], {
+      "site:t1140.example": { edge: { blue2: { "GET image": 3 } } },
+      "site:t1141.example": { edge: { blue2: { "GET script": 1 } } },
+    });
+  });
+
+  it("keep the counts of a private window for the session only, with no date, apart from the kept ones", async () => {
+    const tab = 1150;
+    const site = "t1150.example";
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    await requests.onSendHeaders({
+      tabId: tab,
+      requestId: "private-1",
+      type: "main_frame",
+      timeStamp: 1000,
+      url: "https://site.example/account",
+      method: "GET",
+      requestHeaders: [],
+      incognito: true,
+    });
+    await requests.onResponseStarted({
+      ...response(tab, "private-1", "main_frame", 1001, EDGE_IP),
+      incognito: true,
+    });
+    await commit(tab, "doc-1150", 1010, [], `https://${site}/`);
+    mock.timers.runAll();
+    assert.equal(siteCounts(site), undefined);
+    assert.equal(localWrites.length, writes);
+    assert.deepEqual(session.get("privateCounts"), {
+      [site]: { edge: { red3: { "GET main_frame": 1 } } },
+    });
+    const data = await popup(tab, true);
+    assert.equal(data.privateWindow, true);
+    assert.equal(data.since, 0);
+    assert.equal(data.site, site);
+    assert.deepEqual(data.totals, { edge: { red3: { "GET main_frame": 1 } } });
+    assert.deepEqual((await popup(tab)).totals, {});
+  });
+
+  it("clear everything counted, written or not, start a new period, and leave the private session alone", async () => {
+    const tab = 1160;
+    const site = "t1160.example";
+    await commit(tab, "doc-1160", 1000, [], `https://${site}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    assert.notEqual(siteCounts(site), undefined);
+    // Counted, and not yet written.
+    await exchange(tab, "image", 1200, EDGE_IP);
+    mock.timers.tick(1);
+    const privateBefore = JSON.stringify(session.get("privateCounts"));
+    const now = Date.now();
+    assert.ok(now > INSTALLED_AT);
+    const cleared = (await answer({ kind: "clear" })) as ClearedData;
+    assert.equal(cleared.since, now);
+    assert.deepEqual([...local.keys()], ["since"]);
+    assert.equal(local.get("since"), now);
+    mock.timers.runAll();
+    assert.deepEqual([...local.keys()], ["since"]);
+    assert.equal(JSON.stringify(session.get("privateCounts")), privateBefore);
+    const data = await popup(tab);
+    assert.equal(data.since, now);
+    assert.deepEqual(data.totals, {});
+    await exchange(tab, "image", 1300, EDGE_IP);
+    mock.timers.runAll();
+    assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
+  });
+});
+
+describe("the message handler", () => {
+  const popup = { kind: "popup", tabId: 1299, privateWindow: false };
+
+  it("answers the popup for the document the tab shows, with the totals of its site", async () => {
+    const tab = 1200;
+    const site = "t1200.example";
+    await exchange(tab, "main_frame", 1000, EDGE_IP, true);
+    await commit(tab, "doc-1200", 1010, [], `https://www.${site}/page`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    const data = (await answer({
+      kind: "popup",
+      tabId: tab,
+      privateWindow: false,
+    })) as PopupData;
+    assert.equal(data.site, site);
+    assert.equal(data.page, "site");
+    assert.equal(data.privateWindow, false);
+    assert.equal(data.state.kind, "seen");
+    assert.equal(data.since, local.get("since"));
+    assert.deepEqual(data.totals, {
+      edge: { red4: { "GET main_frame": 1 }, blue2: { "GET image": 1 } },
+    });
+  });
+
+  it("answers for the page still shown while a navigation is pending", async () => {
+    const tab = 1210;
+    await commit(tab, "doc-1210", 1000, [], "https://t1210.example/");
+    await send(tab, nextId(), "main_frame", 2000);
+    const data = (await answer({
+      kind: "popup",
+      tabId: tab,
+      privateWindow: false,
+    })) as PopupData;
+    assert.equal(data.site, "t1210.example");
+  });
+
+  it("answers for a tab it never saw with an empty record and no totals", async () => {
+    assert.deepEqual(await answer(popup), {
+      state: EMPTY_RECORD.state,
+      page: "site",
+      site: null,
+      privateWindow: false,
+      since: local.get("since"),
+      totals: {},
+    });
+  });
+
+  it("ignores a message of another shape", () => {
+    assert.equal(answer("popup"), undefined);
+    assert.equal(answer(null), undefined);
+    assert.equal(answer({ kind: "map" }), undefined);
+    assert.equal(answer({ kind: "popup", tabId: "1" }), undefined);
+    assert.equal(
+      answer({ kind: "popup", tabId: 1, privateWindow: "yes" }),
+      undefined,
+    );
+  });
+
+  it("is registered by the event page on runtime.onMessage, and answers with a promise", async () => {
+    const registered = listeners.get("runtime.onMessage") ?? [];
+    assert.equal(registered.length, 1);
+    const result = registered[0]?.(popup, {}, () => {});
+    assert.ok(result instanceof Promise);
+    assert.deepEqual(await result, await answer(popup));
+    assert.equal(
+      registered[0]?.({ kind: "map" }, {}, () => {}),
+      undefined,
     );
   });
 });

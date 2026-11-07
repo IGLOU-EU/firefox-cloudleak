@@ -4,6 +4,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { Classification } from "../src/core/classify.js";
+import type { SeenRequest } from "../src/core/counts.js";
 import {
   type DocumentRecord,
   displayedDocument,
@@ -19,6 +20,7 @@ import {
   showDocument,
   startNavigation,
   type TabRecord,
+  takeCountable,
 } from "../src/core/tab-record.js";
 import {
   markMissed,
@@ -38,6 +40,31 @@ const RED_4: Classification = {
   ...RED_3,
   leak: { level: 4, case: "session", possible: true, challenge: false },
 };
+
+const SITE = "site.example";
+
+// A request through a provider, as the kept counts take it.
+function sent(
+  classification: Classification,
+  method = "GET",
+  type = "script",
+): SeenRequest {
+  return { classification, method, type, privateWindow: false };
+}
+
+// Folds a request through a provider, or none, into the document a
+// navigation opened.
+function fold(
+  record: TabRecord,
+  navigation: string,
+  request: Classification | null,
+): TabRecord {
+  return foldRequest(
+    record,
+    navigation,
+    request === null ? null : sent(request),
+  );
+}
 
 function seen(
   request: Classification,
@@ -62,17 +89,27 @@ function seen(
 }
 
 // A page loaded by a top-level request the extension saw: the request is
-// sent, its response is classified, then Firefox commits the document.
+// sent, its response is classified, then Firefox commits the document, a
+// website whose site is known from then on.
 function load(
   record: TabRecord,
   navigation: string,
   document: string,
   at: number,
   request: Classification | null,
+  site: string | null = SITE,
 ): TabRecord {
   const started = startNavigation(record, navigation, false, at);
-  const folded = foldRequest(started, navigation, request);
-  return showDocument(folded, document, at + 10, false);
+  const folded = fold(started, navigation, request);
+  return showDocument(folded, document, at + 10, false, false, "site", site);
+}
+
+// What the kept counts take of a record, by site and by level.
+function taken(record: TabRecord): [string, number][] {
+  return takeCountable(record).countable.map(({ site, request }) => [
+    site,
+    request.classification.leak.level,
+  ]);
 }
 
 // A page of the browser, such as a new tab, committed while the extension
@@ -124,7 +161,7 @@ describe("startNavigation", () => {
   });
 
   it("keeps the tab across the redirects of the same navigation", () => {
-    const record = foldRequest(
+    const record = fold(
       startNavigation(EMPTY_RECORD, "1", false, 100),
       "1",
       RED_3,
@@ -165,7 +202,7 @@ describe("startNavigation", () => {
     assert.equal(late.navigation, "2");
     assert.equal(late.document, "doc-b");
     assert.deepEqual(late.state, NEUTRAL);
-    assert.deepEqual(shown(foldRequest(late, "2", BLUE_2)), {
+    assert.deepEqual(shown(fold(late, "2", BLUE_2)), {
       document: "doc-b",
       state: seen(BLUE_2),
     });
@@ -176,11 +213,7 @@ describe("startNavigation", () => {
     const searx = load(EMPTY_RECORD, "1", "doc-searx", 100, null);
     const deezer = showDocument(searx, "doc-deezer", 210, false);
     const back = showDocument(deezer, "doc-searx", 300, false);
-    const late = foldRequest(
-      startNavigation(back, "2", false, 200),
-      "2",
-      RED_4,
-    );
+    const late = fold(startNavigation(back, "2", false, 200), "2", RED_4);
     assert.deepEqual(shown(late), { document: "doc-searx", state: NEUTRAL });
     assert.equal(late.navigation, "1");
     assert.deepEqual(shown(showDocument(late, "doc-deezer", 400, false)), {
@@ -204,7 +237,7 @@ describe("startNavigation", () => {
 
 describe("showDocument", () => {
   it("gives the pending navigation the document it committed, with what it saw", () => {
-    const pending = foldRequest(
+    const pending = fold(
       startNavigation(EMPTY_RECORD, "1", false, 100),
       "1",
       RED_3,
@@ -251,11 +284,7 @@ describe("showDocument", () => {
 
   it("gives the pending navigation a document Back or Forward loads again, whose request the extension saw", () => {
     const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
-    const pending = foldRequest(
-      startNavigation(a, "2", false, 200),
-      "2",
-      RED_3,
-    );
+    const pending = fold(startNavigation(a, "2", false, 200), "2", RED_3);
     assert.deepEqual(
       showDocument(pending, "doc-b", 210, false, true).state,
       seen(RED_3),
@@ -270,7 +299,7 @@ describe("showDocument", () => {
       false,
     );
     const navigation = navigationAt(file, 310);
-    assert.deepEqual(shown(foldRequest(file, navigation, BLUE_2)), {
+    assert.deepEqual(shown(fold(file, navigation, BLUE_2)), {
       document: "doc-file",
       state: seen(BLUE_2),
     });
@@ -303,7 +332,7 @@ describe("showDocument", () => {
       300,
       false,
     );
-    const after = foldRequest(back, navigationAt(back, 310), BLUE_2);
+    const after = fold(back, navigationAt(back, 310), BLUE_2);
     assert.equal(after.document, "doc-searx");
     assert.deepEqual(after.state.kind === "seen" ? after.state.tallies : [], [
       { level: 2, proven: null, count: 2 },
@@ -340,7 +369,7 @@ describe("showDocument", () => {
     it(`gives a page of the browser opened by a request the extension saw, such as view-source:, what the request showed, with no partial view${commitFirst ? ", when the commit arrives before the request" : ""}`, () => {
       const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
       const source = commitFirst
-        ? foldRequest(
+        ? fold(
             startNavigation(
               showBrowserPage(a, "doc-source", 210),
               "2",
@@ -351,7 +380,7 @@ describe("showDocument", () => {
             RED_3,
           )
         : showBrowserPage(
-            foldRequest(startNavigation(a, "2", true, 200), "2", RED_3),
+            fold(startNavigation(a, "2", true, 200), "2", RED_3),
             "doc-source",
             210,
           );
@@ -367,7 +396,7 @@ describe("showDocument", () => {
     const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, null));
     const newTab = showBrowserPage(hidden, "doc-newtab", 300);
     assert.deepEqual(shown(newTab), { document: "doc-newtab", state: NEUTRAL });
-    const after = foldRequest(hidden, navigationAt(hidden, 250), BLUE_2);
+    const after = fold(hidden, navigationAt(hidden, 250), BLUE_2);
     assert.deepEqual(
       showBrowserPage(after, "doc-newtab", 300).state,
       seen(BLUE_2),
@@ -407,7 +436,7 @@ describe("showDocument", () => {
       document: "doc-reader",
       state: markPartial(NEUTRAL),
     });
-    const after = foldRequest(hidden, navigationAt(hidden, 250), BLUE_2);
+    const after = fold(hidden, navigationAt(hidden, 250), BLUE_2);
     assert.deepEqual(
       showReader(after, "doc-reader", 300).state,
       seen(BLUE_2, true),
@@ -512,6 +541,8 @@ describe("navigationAt", () => {
       navigation: "1",
       state: NEUTRAL,
       page: "site",
+      site: null,
+      uncounted: [],
       previous: [],
     };
     assert.equal(navigationAt(record, 50), "1");
@@ -538,6 +569,8 @@ describe("navigationAt", () => {
       navigation: "1",
       state: NEUTRAL,
       page: "site",
+      site: "site.example",
+      uncounted: [],
       previous: [],
     };
     assert.equal(navigationAt(record, 50), "1");
@@ -547,15 +580,15 @@ describe("navigationAt", () => {
 describe("foldRequest", () => {
   it("folds the requests of the current navigation", () => {
     const record = startNavigation(EMPTY_RECORD, "1", false, 100);
-    assert.deepEqual(foldRequest(record, "1", BLUE_2).state, seen(BLUE_2));
-    assert.equal(foldRequest(record, "1", null), record);
+    assert.deepEqual(fold(record, "1", BLUE_2).state, seen(BLUE_2));
+    assert.equal(fold(record, "1", null), record);
   });
 
   it("folds a request into the document it was sent for, even once the tab left it", () => {
     const searx = load(EMPTY_RECORD, "1", "doc-searx", 100, null);
     const deezer = load(searx, "2", "doc-deezer", 200, RED_4);
     const back = showDocument(deezer, "doc-searx", 300, false);
-    const late = foldRequest(back, navigationAt(back, 290), RED_4);
+    const late = fold(back, navigationAt(back, 290), RED_4);
     assert.deepEqual(late.state, NEUTRAL);
     const saved = late.previous.find(
       (entry) => entry.document === "doc-deezer",
@@ -573,14 +606,199 @@ describe("foldRequest", () => {
       false,
       210,
     );
-    assert.equal(foldRequest(record, "2", RED_3), record);
+    assert.equal(fold(record, "2", RED_3), record);
   });
 
   it("folds into a tab seen for the first time, such as one open before the extension, and says it missed its start", () => {
     assert.deepEqual(
-      foldRequest(EMPTY_RECORD, "", BLUE_2).state,
+      fold(EMPTY_RECORD, "", BLUE_2).state,
       seen(BLUE_2, false, true),
     );
+  });
+});
+
+describe("the site of a document", () => {
+  it("is known at the commit, and null before and for a page of the browser", () => {
+    const pending = startNavigation(EMPTY_RECORD, "1", false, 100);
+    assert.equal(pending.site, null);
+    assert.equal(EMPTY_RECORD.site, null);
+    const site = showDocument(
+      pending,
+      "doc-a",
+      110,
+      false,
+      false,
+      "site",
+      SITE,
+    );
+    assert.equal(site.site, SITE);
+    assert.equal(showBrowserPage(site, "doc-newtab", 200).site, null);
+    assert.equal(showReader(site, "doc-reader", 300).site, null);
+    assert.equal(showDocument(site, "doc-b", 400, false).site, null);
+    assert.equal(
+      showCompletedDocument(site, "doc-c", 500, false, "site", "c.example")
+        .site,
+      "c.example",
+    );
+  });
+
+  it("comes back with the document Back or Forward brings back", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null, "a.example");
+    const b = load(a, "2", "doc-b", 200, null, "b.example");
+    const back = showDocument(b, "doc-a", 300, false, false, "site", null);
+    assert.equal(back.site, "a.example");
+    assert.equal(back.previous[0]?.site, "b.example");
+  });
+
+  it("is kept by a late top-level request that opens the document already shown", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
+    const committed = showDocument(a, "doc-b", 220, false, false, "site", SITE);
+    assert.equal(startNavigation(committed, "2", false, 200).site, SITE);
+  });
+
+  it("is set aside with the document when the site shown is out of reach", () => {
+    const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, null));
+    assert.equal(hidden.site, null);
+    assert.equal(hidden.previous[0]?.site, SITE);
+  });
+});
+
+describe("takeCountable", () => {
+  it("keeps the requests of a navigation uncounted until its commit gives the site, then takes them once", () => {
+    const pending = fold(
+      fold(startNavigation(EMPTY_RECORD, "1", false, 100), "1", RED_3),
+      "1",
+      BLUE_2,
+    );
+    assert.equal(pending.uncounted.length, 2);
+    assert.equal(takeCountable(pending).record, pending);
+    assert.deepEqual(taken(pending), []);
+    const committed = showDocument(
+      pending,
+      "doc-a",
+      120,
+      false,
+      false,
+      "site",
+      SITE,
+    );
+    assert.deepEqual(taken(committed), [
+      [SITE, 3],
+      [SITE, 2],
+    ]);
+    const { record } = takeCountable(committed);
+    assert.deepEqual(record.uncounted, []);
+    assert.deepEqual(shown(record), shown(committed));
+    assert.equal(takeCountable(record).record, record);
+    assert.deepEqual(taken(record), []);
+  });
+
+  it("takes the request as the counts need it: classification, method and request type", () => {
+    const request = sent(RED_4, "POST", "xmlhttprequest");
+    const record = foldRequest(
+      load(EMPTY_RECORD, "1", "doc-a", 100, null),
+      "1",
+      request,
+    );
+    assert.deepEqual(takeCountable(record).countable, [
+      { site: SITE, request },
+    ]);
+  });
+
+  it("drops the requests of a navigation that commits a page of the browser, which has no site", () => {
+    const pending = fold(
+      startNavigation(EMPTY_RECORD, "1", true, 100),
+      "1",
+      RED_3,
+    );
+    const source = showBrowserPage(pending, "doc-source", 110);
+    const { record, countable } = takeCountable(source);
+    assert.deepEqual(countable, []);
+    assert.deepEqual(record.uncounted, []);
+    assert.deepEqual(shown(record), shown(source));
+    assert.notEqual(record, source);
+  });
+
+  it("drops the requests of reader view and of a website whose host could not be read", () => {
+    const reader = fold(
+      showReader(
+        load(EMPTY_RECORD, "1", "doc-a", 100, null),
+        "doc-reader",
+        200,
+      ),
+      "doc-reader",
+      BLUE_2,
+    );
+    assert.deepEqual(taken(reader), []);
+    assert.deepEqual(takeCountable(reader).record.uncounted, []);
+    const unknown = fold(
+      showDocument(
+        load(EMPTY_RECORD, "1", "doc-a", 100, null),
+        "doc-u",
+        200,
+        false,
+      ),
+      "doc-u",
+      BLUE_2,
+    );
+    assert.deepEqual(taken(unknown), []);
+  });
+
+  it("takes a request of a document shown before for the site of that document", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null, "a.example");
+    const b = load(a, "2", "doc-b", 200, null, "b.example");
+    const late = fold(b, navigationAt(b, 150), RED_4);
+    assert.deepEqual(taken(late), [["a.example", 4]]);
+    const { record } = takeCountable(late);
+    assert.deepEqual(record.previous[0]?.uncounted, []);
+    assert.equal(record.site, "b.example");
+  });
+
+  it("takes a request of the document shown at once, and leaves a pending navigation waiting", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
+    const pending = fold(startNavigation(a, "2", false, 200), "2", RED_3);
+    const polled = fold(pending, navigationAt(pending, 250), BLUE_2);
+    assert.deepEqual(taken(polled), [[SITE, 2]]);
+    const { record } = takeCountable(polled);
+    assert.deepEqual(
+      record.uncounted.map((entry) => entry.classification),
+      [RED_3],
+    );
+    assert.deepEqual(record.previous[0]?.uncounted, []);
+  });
+
+  it("drops the requests of a navigation that never committed, with the navigation", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
+    const pending = fold(startNavigation(a, "2", false, 200), "2", RED_3);
+    const next = startNavigation(pending, "3", false, 300);
+    assert.deepEqual(taken(next), []);
+    assert.equal(
+      next.previous.some((entry) => entry.uncounted.length > 0),
+      false,
+    );
+  });
+
+  it("drops the requests of a tab the extension has not seen navigate, whose site it does not know", () => {
+    const record = fold(EMPTY_RECORD, "", BLUE_2);
+    assert.equal(record.state.kind, "seen");
+    assert.deepEqual(taken(record), []);
+    assert.deepEqual(takeCountable(record).record.uncounted, []);
+  });
+
+  it("takes what the wait for a site out of reach saw once the site commits", () => {
+    const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, null));
+    const waited = fold(hidden, navigationAt(hidden, 150), BLUE_2);
+    assert.deepEqual(taken(waited), []);
+    const committed = showDocument(
+      waited,
+      "doc-h",
+      200,
+      true,
+      false,
+      "site",
+      "hidden.example",
+    );
+    assert.deepEqual(taken(committed), [["hidden.example", 2]]);
   });
 });
 
@@ -593,7 +811,7 @@ describe("displayedDocument", () => {
   it("stays the document still shown while a navigation has not committed, which a download, a 204 response or a stop never does", () => {
     const red = load(EMPTY_RECORD, "1", "doc-a", 100, RED_4);
     const pending = startNavigation(red, "2", false, 200);
-    const downloaded = foldRequest(pending, "2", null);
+    const downloaded = fold(pending, "2", null);
     assert.deepEqual(shown(displayedDocument(downloaded)), {
       document: "doc-a",
       state: seen(RED_4),
@@ -602,12 +820,8 @@ describe("displayedDocument", () => {
 
   it("counts the requests the page still shown sends during that wait, and shows them", () => {
     const red = load(EMPTY_RECORD, "1", "doc-a", 100, RED_4);
-    const pending = foldRequest(
-      startNavigation(red, "2", false, 200),
-      "2",
-      BLUE_2,
-    );
-    const polled = foldRequest(pending, navigationAt(pending, 300), RED_4);
+    const pending = fold(startNavigation(red, "2", false, 200), "2", BLUE_2);
+    const polled = fold(pending, navigationAt(pending, 300), RED_4);
     const state = displayedDocument(polled).state;
     assert.deepEqual(state.kind === "seen" ? state.tallies : [], [
       { level: 4, proven: true, count: 2 },
@@ -617,7 +831,7 @@ describe("displayedDocument", () => {
   it("keeps the page still shown, with what it saw, when the next click replaces the navigation that never committed", () => {
     const red = load(EMPTY_RECORD, "1", "doc-a", 100, RED_4);
     const pending = startNavigation(red, "2", false, 200);
-    const polled = foldRequest(pending, navigationAt(pending, 300), RED_4);
+    const polled = fold(pending, navigationAt(pending, 300), RED_4);
     const next = startNavigation(polled, "3", false, 400);
     assert.deepEqual(
       shown(displayedDocument(next)),
@@ -654,6 +868,8 @@ describe("displayedDocument", () => {
       navigation: "1",
       state: NEUTRAL,
       page: "site",
+      site: null,
+      uncounted: [],
       previous: [],
     };
     assert.equal(displayedDocument(record), record);
@@ -747,7 +963,7 @@ describe("markHiddenSite", () => {
   it("keeps what the tab saw on the hidden site, with a partial view", () => {
     const hidden = markHiddenSite(EMPTY_RECORD);
     assert.deepEqual(hidden.state, NOT_OBSERVED);
-    const after = foldRequest(hidden, navigationAt(hidden, 100), BLUE_2);
+    const after = fold(hidden, navigationAt(hidden, 100), BLUE_2);
     assert.deepEqual(after.state, seen(BLUE_2, true));
     assert.equal(markHiddenSite(after), after);
   });
@@ -878,13 +1094,13 @@ describe("Back and Forward between two pages", () => {
     if (commitFirst) {
       record = showDocument(record, "doc-deezer", 220, false);
       record = startNavigation(record, "2", false, 200);
-      record = foldRequest(record, "2", RED_4);
+      record = fold(record, "2", RED_4);
     } else {
       record = startNavigation(record, "2", false, 200);
       record = showDocument(record, "doc-deezer", 220, false);
-      record = foldRequest(record, "2", RED_4);
+      record = fold(record, "2", RED_4);
     }
-    return foldRequest(record, navigationAt(record, 230), RED_4);
+    return fold(record, navigationAt(record, 230), RED_4);
   }
 
   for (const commitFirst of [false, true]) {
@@ -905,7 +1121,7 @@ describe("Back and Forward between two pages", () => {
   it("counts a request the left page sent just before Back for that page, even when it arrives after", () => {
     const deezer = visit(false);
     const back = showDocument(deezer, "doc-searx", 300, false);
-    const late = foldRequest(back, navigationAt(back, 299), RED_4);
+    const late = fold(back, navigationAt(back, 299), RED_4);
     assert.deepEqual(shown(late), { document: "doc-searx", state: NEUTRAL });
     const forward = showDocument(late, "doc-deezer", 400, false);
     assert.deepEqual(
