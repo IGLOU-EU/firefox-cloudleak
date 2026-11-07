@@ -85,9 +85,9 @@
       }
     }
   },
-  "titleLevel2": {
-    "message": "Usage\u00a0: $PROVIDER$ voit quelles ressources publiques ce site vous fait charger, et quand.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: blue, level 2.",
+  "titleBlue": {
+    "message": "$PROVIDER$ sert des ressources publiques de cette page\u00a0: il sait que vous la visitez, et quand.",
+    "description": "Line of the tooltip that says what the provider of the most serious request of the tab sees: blue, levels 1 and 2.",
     "placeholders": {
       "provider": {
         "content": "$1",
@@ -95,9 +95,9 @@
       }
     }
   },
-  "titleLevel3Unproven": {
-    "message": "Lecture\u00a0: les pages que vous lisez passent par $PROVIDER$, peut-être en clair.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 3.",
+  "titleOrange": {
+    "message": "Cette page passe par $PROVIDER$, qui voit peut-être en clair tout ce qu'elle échange avec le site.",
+    "description": "Line of the tooltip that says what the provider of the most serious request of the tab sees: orange, levels 3 and 4, decryption not proven.",
     "placeholders": {
       "provider": {
         "content": "$1",
@@ -105,9 +105,9 @@
       }
     }
   },
-  "titleLevel3Proven": {
-    "message": "Lecture\u00a0: les pages que vous lisez passent en clair chez $PROVIDER$.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 3.",
+  "titleRed": {
+    "message": "$PROVIDER$ voit en clair tout ce que cette page échange avec le site\u00a0: adresses, pages, cookies et formulaires.",
+    "description": "Line of the tooltip that says what the provider of the most serious request of the tab sees: red, levels 3 and 4, decryption proven.",
     "placeholders": {
       "provider": {
         "content": "$1",
@@ -115,75 +115,21 @@
       }
     }
   },
-  "titleLevel4DataSentUnproven": {
-    "message": "Données envoyées\u00a0: ce que votre navigateur envoie passe par $PROVIDER$, peut-être en clair.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 4, case of a request that sends data.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Akamai"
-      }
-    }
+  "titleSessionProven": {
+    "message": "Des cookies ou un jeton de connexion en font partie, ils peuvent suffire à ouvrir votre compte.",
+    "description": "Line added to the tooltip when the tab saw a request through a provider that carries a cookie of the site or an Authorization header, and the decryption of one such request was proven."
   },
-  "titleLevel4DataSentProven": {
-    "message": "Données envoyées\u00a0: ce que votre navigateur envoie passe en clair chez $PROVIDER$.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 4, case of a request that sends data.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Cloudflare"
-      }
-    }
+  "titleSessionUnproven": {
+    "message": "Des cookies ou un jeton de connexion en feraient partie, ils pourraient suffire à ouvrir votre compte.",
+    "description": "Line added to the tooltip when the tab saw a request through a provider that carries a cookie of the site or an Authorization header, and the decryption of none was proven."
   },
-  "titleLevel4SessionUnproven": {
-    "message": "Session\u00a0: votre session sur ce site passe par $PROVIDER$, peut-être en clair.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 4, case of a request that carries an Authorization header.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Akamai"
-      }
-    }
+  "titleAntiBotProven": {
+    "message": "Une partie de ces échanges vient de sa protection anti-robot.",
+    "description": "Line added to the tooltip when the tab saw a request of the anti-bot machinery of a provider, and the decryption of one such request was proven. \"Its\" is the provider named in the line before."
   },
-  "titleLevel4SessionProven": {
-    "message": "Session\u00a0: votre session sur ce site passe en clair chez $PROVIDER$.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 4, case of a request that carries an Authorization header.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Cloudflare"
-      }
-    }
-  },
-  "titleLevel4SessionPossibleUnproven": {
-    "message": "Session possible\u00a0: les cookies que vous envoyez à ce site passent par $PROVIDER$, peut-être en clair, et l'un d'eux peut porter votre session.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: orange, level 4, case of a request that carries cookies of the site.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Akamai"
-      }
-    }
-  },
-  "titleLevel4SessionPossibleProven": {
-    "message": "Session possible\u00a0: les cookies que vous envoyez à ce site passent en clair chez $PROVIDER$, et l'un d'eux peut porter votre session.",
-    "description": "Line of the tooltip that says what the most serious request of the tab means: red, level 4, case of a request that carries cookies of the site.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Cloudflare"
-      }
-    }
-  },
-  "titleAntiBot": {
-    "message": "Anti-robot\u00a0: la requête la plus grave vient de la protection anti-robot de $PROVIDER$, pas du site visité.",
-    "description": "Line added to the tooltip when the most serious request belongs to the anti-bot machinery of the provider.",
-    "placeholders": {
-      "provider": {
-        "content": "$1",
-        "example": "Cloudflare"
-      }
-    }
+  "titleAntiBotUnproven": {
+    "message": "Une partie de ces échanges viendrait de sa protection anti-robot.",
+    "description": "Line added to the tooltip when the tab saw a request of the anti-bot machinery of a provider, and the decryption of none was proven. \"Its\" is the provider named in the line before."
   },
   "titlePartial": {
     "message": "Vue partielle\u00a0: l'extension n'a pas accès à tous les sites, elle ne montre que ce qu'elle a vu.",

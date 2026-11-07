@@ -48,7 +48,17 @@ function seen(
   const tallies = [
     { level, proven: level <= 2 ? null : request.proven, count: 1 },
   ];
-  return { kind: "seen", request, tallies, partial, missed };
+  const leak = request.leak;
+  const sighting = request.proven ? "proven" : "unproven";
+  return {
+    kind: "seen",
+    request,
+    tallies,
+    session: leak.level === 4 && leak.case === "session" ? sighting : "none",
+    antiBot: leak.level === 4 && leak.challenge ? sighting : "none",
+    partial,
+    missed,
+  };
 }
 
 // A page loaded by a top-level request the extension saw: the request is
@@ -73,7 +83,17 @@ function showBrowserPage(
   at: number,
   backOrForward = false,
 ): TabRecord {
-  return showDocument(record, document, at, true, backOrForward, true);
+  return showDocument(record, document, at, true, backOrForward, "browser");
+}
+
+// Reader view, committed while the extension lacks the access to all sites.
+function showReader(
+  record: TabRecord,
+  document: string,
+  at: number,
+  backOrForward = false,
+): TabRecord {
+  return showDocument(record, document, at, true, backOrForward, "reader");
 }
 
 // What the tab shows of a record: its document and its state.
@@ -303,14 +323,14 @@ describe("showDocument", () => {
     const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
     const newTab = showBrowserPage(a, "doc-newtab", 300);
     assert.deepEqual(shown(newTab), { document: "doc-newtab", state: NEUTRAL });
-    assert.equal(newTab.browserPage, true);
+    assert.equal(newTab.page, "browser");
     assert.deepEqual(newTab.previous[0]?.state, seen(RED_3));
-    assert.equal(showDocument(a, "doc-site", 300, true).browserPage, false);
+    assert.equal(showDocument(a, "doc-site", 300, true).page, "site");
   });
 
   it("brings back a page of the browser with no partial view while the extension lacks the access to all sites", () => {
     const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
-    const newTab = showDocument(a, "doc-newtab", 200, false, false, true);
+    const newTab = showDocument(a, "doc-newtab", 200, false, false, "browser");
     const b = load(newTab, "2", "doc-b", 300, RED_3);
     const back = showBrowserPage(b, "doc-newtab", 400, true);
     assert.deepEqual(shown(back), { document: "doc-newtab", state: NEUTRAL });
@@ -339,18 +359,58 @@ describe("showDocument", () => {
         document: "doc-source",
         state: seen(RED_3),
       });
-      assert.equal(source.browserPage, true);
+      assert.equal(source.page, "browser");
     });
   }
 
   it("shows neutral the page of the browser that the wait for a site out of reach commits, with what the wait saw and no partial view", () => {
     const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, null));
-    const reader = showBrowserPage(hidden, "doc-reader", 300);
-    assert.deepEqual(shown(reader), { document: "doc-reader", state: NEUTRAL });
+    const newTab = showBrowserPage(hidden, "doc-newtab", 300);
+    assert.deepEqual(shown(newTab), { document: "doc-newtab", state: NEUTRAL });
     const after = foldRequest(hidden, navigationAt(hidden, 250), BLUE_2);
     assert.deepEqual(
-      showBrowserPage(after, "doc-reader", 300).state,
+      showBrowserPage(after, "doc-newtab", 300).state,
       seen(BLUE_2),
+    );
+  });
+
+  it("starts reader view neutral, with a partial view without the access to all sites, since it loads the article's images from the web", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+    const reader = showReader(a, "doc-reader", 300);
+    assert.deepEqual(shown(reader), {
+      document: "doc-reader",
+      state: markPartial(NEUTRAL),
+    });
+    assert.equal(reader.page, "reader");
+    assert.deepEqual(reader.previous[0]?.state, seen(RED_3));
+    assert.deepEqual(
+      showDocument(a, "doc-reader", 300, false, false, "reader").state,
+      NEUTRAL,
+    );
+  });
+
+  it("brings back reader view with a partial view while the extension lacks the access to all sites", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, null);
+    const reader = showDocument(a, "doc-reader", 200, false, false, "reader");
+    const b = load(reader, "2", "doc-b", 300, RED_3);
+    const back = showReader(b, "doc-reader", 400, true);
+    assert.deepEqual(shown(back), {
+      document: "doc-reader",
+      state: markPartial(NEUTRAL),
+    });
+  });
+
+  it("shows reader view, which the wait for a site out of reach commits, neutral with a partial view and what the wait saw", () => {
+    const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, null));
+    const reader = showReader(hidden, "doc-reader", 300);
+    assert.deepEqual(shown(reader), {
+      document: "doc-reader",
+      state: markPartial(NEUTRAL),
+    });
+    const after = foldRequest(hidden, navigationAt(hidden, 250), BLUE_2);
+    assert.deepEqual(
+      showReader(after, "doc-reader", 300).state,
+      seen(BLUE_2, true),
     );
   });
 
@@ -386,12 +446,18 @@ describe("showDocument", () => {
 describe("showCompletedDocument", () => {
   it("starts neutral a document the tab completed without a commit, such as the browser's settings page, with no partial view", () => {
     const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
-    const settings = showCompletedDocument(a, "doc-settings", 300, true, true);
+    const settings = showCompletedDocument(
+      a,
+      "doc-settings",
+      300,
+      true,
+      "browser",
+    );
     assert.deepEqual(shown(settings), {
       document: "doc-settings",
       state: NEUTRAL,
     });
-    assert.equal(settings.browserPage, true);
+    assert.equal(settings.page, "browser");
     assert.deepEqual(settings.previous[0]?.state, seen(RED_3));
     assert.deepEqual(
       showCompletedDocument(a, "doc-site", 300, true).state,
@@ -402,7 +468,9 @@ describe("showCompletedDocument", () => {
   it("shows neutral the settings page that the wait for a site out of reach completes", () => {
     const hidden = markHiddenSite(load(EMPTY_RECORD, "1", "doc-a", 100, RED_3));
     assert.deepEqual(
-      shown(showCompletedDocument(hidden, "doc-settings", 300, true, true)),
+      shown(
+        showCompletedDocument(hidden, "doc-settings", 300, true, "browser"),
+      ),
       { document: "doc-settings", state: NEUTRAL },
     );
   });
@@ -443,7 +511,7 @@ describe("navigationAt", () => {
       shownAt: 0,
       navigation: "1",
       state: NEUTRAL,
-      browserPage: false,
+      page: "site",
       previous: [],
     };
     assert.equal(navigationAt(record, 50), "1");
@@ -469,7 +537,7 @@ describe("navigationAt", () => {
       shownAt: 100,
       navigation: "1",
       state: NEUTRAL,
-      browserPage: false,
+      page: "site",
       previous: [],
     };
     assert.equal(navigationAt(record, 50), "1");
@@ -585,7 +653,7 @@ describe("displayedDocument", () => {
       shownAt: 0,
       navigation: "1",
       state: NEUTRAL,
-      browserPage: false,
+      page: "site",
       previous: [],
     };
     assert.equal(displayedDocument(record), record);
@@ -712,6 +780,12 @@ describe("markHiddenSite", () => {
     );
     assert.equal(markHiddenSite(source), source);
   });
+
+  it("leaves reader view as it is, whose URL Firefox withholds too", () => {
+    const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+    const reader = showReader(a, "doc-reader", 300);
+    assert.equal(markHiddenSite(reader), reader);
+  });
 });
 
 describe("markPartialView", () => {
@@ -767,9 +841,23 @@ describe("markPartialView", () => {
       100,
       false,
       false,
-      true,
+      "browser",
     );
     assert.equal(markPartialView(newTab), newTab);
+  });
+
+  it("makes reader view partial, since the images it loads from the web go unseen from then on", () => {
+    const reader = showDocument(
+      EMPTY_RECORD,
+      "doc-reader",
+      100,
+      false,
+      false,
+      "reader",
+    );
+    assert.deepEqual(markPartialView(reader).state, markPartial(NEUTRAL));
+    const pending = markPartialView(startNavigation(reader, "2", false, 200));
+    assert.deepEqual(displayedDocument(pending).state, markPartial(NEUTRAL));
   });
 
   it("makes partial a navigation pending from a page of the browser, not the page still shown", () => {

@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import type { Classification } from "./classify.js";
-import { colourOfRequest, type TabState, type Tally } from "./tab-state.js";
+import type { Colour } from "./classify.js";
+import {
+  colourOfRequest,
+  type Sighting,
+  type TabState,
+  type Tally,
+} from "./tab-state.js";
 
 export type Icon = "neutral" | "blue" | "orange" | "red" | "not-observed";
 
@@ -18,8 +23,8 @@ export interface Display {
   // The number of requests at the colour and level of the icon, empty when
   // there is nothing to count.
   readonly badge: string;
-  // Paragraphs of lines: the counts of the tab, then what the most serious
-  // request means.
+  // Paragraphs of lines: the counts of the tab, then what the provider of the
+  // most serious request sees and what the tab saw among it.
   readonly title: readonly (readonly TitleLine[])[];
 }
 
@@ -45,20 +50,40 @@ export function displayOf(
   const provider =
     providers.find((entry) => entry.id === request.provider)?.name ??
     request.provider;
-  const meaning = [line(messageOf(request), provider)];
-  if (request.leak.level === 4 && request.leak.challenge) {
-    meaning.push(line("titleAntiBot", provider));
-  }
-  meaning.push(...partialLines(state));
+  const colour = colourOfRequest(request);
   return {
-    icon: colourOfRequest(request),
+    icon: colour,
     badge: badgeOf(state.tallies),
-    title: [state.tallies.map(countLine), meaning],
+    title: [
+      state.tallies.map(countLine),
+      [
+        line(MEANING[colour], provider),
+        ...sightingLines("titleSession", state.session),
+        ...sightingLines("titleAntiBot", state.antiBot),
+        ...partialLines(state),
+      ],
+    ],
   };
 }
 
-// A blank line sets the counts apart from what the most serious request
-// means, so that each reads at a glance.
+// The extension sees one load of the page, not what a cookie holds nor what
+// a request is for, so the message says what the provider is placed to see,
+// from the colour alone. Levels 1 and 2 are blue whatever the proof.
+const MEANING: Record<Colour, string> = {
+  blue: "titleBlue",
+  orange: "titleOrange",
+  red: "titleRed",
+};
+
+function sightingLines(name: string, sighting: Sighting): TitleLine[] {
+  if (sighting === "none") {
+    return [];
+  }
+  return [line(`${name}${sighting === "proven" ? "Proven" : "Unproven"}`)];
+}
+
+// A blank line sets the counts apart from what they mean, so that each reads
+// at a glance.
 export function titleText(
   title: Display["title"],
   message: (name: string, substitutions: readonly string[]) => string,
@@ -106,20 +131,4 @@ function countLine(tally: Tally): TitleLine {
   return tally.count === 1
     ? line(`${name}One`)
     : line(`${name}Many`, String(tally.count));
-}
-
-// Levels 1 and 2 are blue whatever the proof, so their sentence does not
-// speak of it.
-function messageOf(request: Classification): string {
-  const proof = request.proven ? "Proven" : "Unproven";
-  const leak = request.leak;
-  if (leak.level !== 4) {
-    return leak.level === 2 ? "titleLevel2" : `titleLevel3${proof}`;
-  }
-  if (leak.case === "data-sent") {
-    return `titleLevel4DataSent${proof}`;
-  }
-  return leak.possible
-    ? `titleLevel4SessionPossible${proof}`
-    : `titleLevel4Session${proof}`;
 }

@@ -17,6 +17,11 @@ export interface Tally {
   readonly count: number;
 }
 
+// Whether the tab saw a kind of request, and whether the decryption of one of
+// them was proven: the tooltip states what such a request shows only then,
+// and speaks of it in the conditional otherwise.
+export type Sighting = "none" | "unproven" | "proven";
+
 export type TabState =
   | {
       readonly kind: "neutral";
@@ -32,10 +37,15 @@ export type TabState =
   | {
       readonly kind: "seen";
       // The most serious request of the tab, which gives the icon its colour
-      // and level and the tooltip its provider and case.
+      // and level and the tooltip its provider.
       readonly request: Classification;
       // From the most serious to the least.
       readonly tallies: readonly Tally[];
+      // A request through a provider carried a cookie of the site or an
+      // Authorization header, which may be enough to open the user's account.
+      readonly session: Sighting;
+      // A request belonged to the anti-bot machinery of a provider.
+      readonly antiBot: Sighting;
       // The extension had no access to at least one site of the tab, so
       // what it shows is what it saw, not the whole of the tab.
       readonly partial: boolean;
@@ -70,17 +80,32 @@ export function addRequest(
   if (request === null) {
     return state;
   }
+  const seen = state.kind === "seen" ? state : null;
   const kept =
-    state.kind === "seen" && !isMoreSerious(request, state.request)
-      ? state.request
+    seen !== null && !isMoreSerious(request, seen.request)
+      ? seen.request
       : request;
   return {
     kind: "seen",
     request: kept,
-    tallies: count(state.kind === "seen" ? state.tallies : [], request),
+    tallies: count(seen?.tallies ?? [], request),
+    session: sight(seen?.session ?? "none", request, isSession(request)),
+    antiBot: sight(seen?.antiBot ?? "none", request, isAntiBot(request)),
     partial: isPartial(state),
     missed: state.kind !== "not-observed" && state.missed,
   };
+}
+
+// A proof, once seen, stays: one request read in clear is enough.
+function sight(
+  sighting: Sighting,
+  request: Classification,
+  matches: boolean,
+): Sighting {
+  if (!matches || sighting === "proven") {
+    return sighting;
+  }
+  return request.proven ? "proven" : "unproven";
 }
 
 export function colourOfRequest(request: Classification): Colour {
@@ -117,10 +142,10 @@ function compareGrades(
 }
 
 // At the same colour and level, a request of the site replaces one of the
-// anti-bot machinery: the mark would otherwise suggest that the leak comes
-// from the protection alone, while the site leaks as much. Then a session
-// replaces a possible session, so that a tab where a session was seen for
-// sure does not say it is only possible.
+// anti-bot machinery, so that the provider the tooltip names is the one the
+// site's own exchanges go through, not one whose protection alone leaks as
+// much. Then a session replaces a possible session, so that it names the
+// provider that carried the surer sign of an account.
 function isMoreSerious(request: Classification, kept: Classification): boolean {
   const order = compareGrades(
     { level: request.leak.level, proven: request.proven },
@@ -137,6 +162,10 @@ function isMoreSerious(request: Classification, kept: Classification): boolean {
 
 function isAntiBot(request: Classification): boolean {
   return request.leak.level === 4 && request.leak.challenge;
+}
+
+function isSession(request: Classification): boolean {
+  return request.leak.level === 4 && request.leak.case === "session";
 }
 
 function isSureSession(request: Classification): boolean {

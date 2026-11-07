@@ -11,6 +11,7 @@ import {
   markHiddenSite,
   markMissedRequest,
   markPartialView,
+  type Page,
   showCompletedDocument,
   showDocument,
   startNavigation,
@@ -89,7 +90,8 @@ type DocumentDetails = {
   // "forward_back" for Back and Forward (ext-webNavigation.js, Firefox
   // 159.0.1). onCompleted gives none.
   readonly transitionQualifiers?: readonly string[];
-  // Only its scheme is ever read, by isBrowserPage.
+  // Only its scheme, and the name of an about: page, are ever read, by
+  // pageOf.
   readonly url: string;
 };
 
@@ -99,13 +101,24 @@ const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
 
 // Firefox gives the URL of the document, view-source: and about:reader
 // included (WebNavigation.sys.mjs, WebNavigationContent.cpp and
-// nsViewSourceChannel.cpp, Firefox 159.0.1). Its scheme alone tells a page of
-// the browser from a website, and goes no further than this function: the
-// rest of the URL is never read, and nothing of it is kept. A URL without a
-// scheme is taken for a website, so that the doubt does not reassure.
-function isBrowserPage(url: string): boolean {
-  const scheme = /^([a-z][a-z\d+.-]*):/i.exec(url)?.[1];
-  return scheme !== undefined && !WEB_SCHEMES.has(scheme.toLowerCase());
+// nsViewSourceChannel.cpp, Firefox 159.0.1). Its scheme tells a page of the
+// browser from a website, and the name of an about: page tells reader view,
+// whose images come from the web. Firefox finds an about: page by what comes
+// before "?" or "#", without regard to case (nsAboutProtocolUtils.h,
+// mozilla-central), and what follows holds the address of the article in
+// reader view, so it is never read. Nothing of the URL goes further than this
+// function, and nothing of it is kept. A URL without a scheme is taken for a
+// website, so that the doubt does not reassure.
+function pageOf(url: string): Page {
+  const scheme = /^([a-z][a-z\d+.-]*):/i.exec(url)?.[1]?.toLowerCase();
+  if (scheme === undefined || WEB_SCHEMES.has(scheme)) {
+    return "site";
+  }
+  if (scheme !== "about") {
+    return "browser";
+  }
+  const name = /^about:([^?#]*)/i.exec(url)?.[1]?.toLowerCase();
+  return name === "reader" ? "reader" : "browser";
 }
 
 // The icon speaks of the page the tab shows, not of its frames. The
@@ -118,7 +131,7 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
   const { tabId, documentId, timeStamp } = details;
   const backOrForward =
     details.transitionQualifiers?.includes("forward_back") === true;
-  const browserPage = isBrowserPage(details.url);
+  const page = pageOf(details.url);
   await ready;
   update(tabId, (record) =>
     showDocument(
@@ -127,7 +140,7 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
       timeStamp,
       !hasAllSites(),
       backOrForward,
-      browserPage,
+      page,
     ),
   );
 }
@@ -141,16 +154,10 @@ export async function onCompleted(details: DocumentDetails): Promise<void> {
     return;
   }
   const { tabId, documentId, timeStamp } = details;
-  const browserPage = isBrowserPage(details.url);
+  const page = pageOf(details.url);
   await ready;
   update(tabId, (record) =>
-    showCompletedDocument(
-      record,
-      documentId,
-      timeStamp,
-      !hasAllSites(),
-      browserPage,
-    ),
+    showCompletedDocument(record, documentId, timeStamp, !hasAllSites(), page),
   );
 }
 

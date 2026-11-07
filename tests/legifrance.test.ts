@@ -241,7 +241,7 @@ describe("Légifrance capture", () => {
     });
   });
 
-  it("counts the requests of the visit in the tooltip, then names the possible session of the site", () => {
+  it("counts the requests of the visit in the tooltip, then says what Cloudflare sees, with the cookies of the site and its anti-bot protection", () => {
     const state = FIXTURE.map((item) => classifyRequest(item, TABLE)).reduce(
       addRequest,
       NEUTRAL,
@@ -252,14 +252,18 @@ describe("Légifrance capture", () => {
       "Niveau 4, données personnelles\u00a0: 22 requêtes, déchiffrement prouvé\n" +
         "Niveau 2, usage\u00a0: 55 requêtes\n" +
         "\n" +
-        "Session possible\u00a0: les cookies que vous envoyez à ce site passent en clair chez Cloudflare, et l'un d'eux peut porter votre session.",
+        "Cloudflare voit en clair tout ce que cette page échange avec le site\u00a0: adresses, pages, cookies et formulaires.\n" +
+        "Des cookies ou un jeton de connexion en font partie, ils peuvent suffire à ouvrir votre compte.\n" +
+        "Une partie de ces échanges vient de sa protection anti-robot.",
     );
     assert.equal(
       titleText(title, getMessageOf("en")),
       "Level 4, personal data: 22 requests, decryption proven\n" +
         "Level 2, usage: 55 requests\n" +
         "\n" +
-        "Possible session: the cookies you send to this site go through Cloudflare in clear, and one of them may hold your session.",
+        "Cloudflare sees in clear everything this page exchanges with the site: web addresses, pages, cookies and forms.\n" +
+        "Cookies or a login token are part of it, and they can be enough to get into your account.\n" +
+        "Part of these exchanges comes from its anti-bot protection.",
     );
   });
 });
