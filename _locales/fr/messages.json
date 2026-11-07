@@ -138,5 +138,93 @@
   "titleMissed": {
     "message": "Vue partielle\u00a0: l'extension n'a pas vu toutes les requêtes de cette page, par exemple celles que sert un service worker, elle ne montre que ce qu'elle a vu.",
     "description": "Line added to the tooltip when the extension got the response of a request whose sending it never saw, or started after the page did."
+  },
+  "popupPage": {
+    "message": "Cette page",
+    "description": "Title of the popup section that shows the counts of the displayed page."
+  },
+  "popupUnit": {
+    "message": "requêtes",
+    "description": "Unit at the right of a popup section title whose rows count requests."
+  },
+  "popupSite": {
+    "message": "Ce site depuis le $DATE$",
+    "description": "Title of the popup section that shows the kept counts of the site, with the date they started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      }
+    }
+  },
+  "popupSitePrivate": {
+    "message": "Ce site, cette session privée",
+    "description": "Title of the popup section that shows the counts of the site in a private window, which live only for the private session."
+  },
+  "popupBrowserPage": {
+    "message": "Page du navigateur",
+    "description": "Shown in place of the site name in the popup when the tab shows a page of the browser."
+  },
+  "popupNothingBrowser": {
+    "message": "Aucun site n'est affiché, il n'y a rien à compter.",
+    "description": "Popup notice for a page of the browser, which has no site to count."
+  },
+  "popupNothingSite": {
+    "message": "Aucune requête vue sur ce site n'est passée par un intermédiaire connu.",
+    "description": "Popup notice under the site title when no request of the site went through a known provider."
+  },
+  "popupMap": {
+    "message": "Voir la carte",
+    "description": "Popup button for the map."
+  },
+  "popupClearAll": {
+    "message": "Tout effacer",
+    "description": "Popup button that asks to clear the kept counts of every site."
+  },
+  "popupClear": {
+    "message": "Effacer",
+    "description": "Popup button that confirms the clearing of the kept counts."
+  },
+  "popupCancel": {
+    "message": "Annuler",
+    "description": "Popup button that gives up the clearing of the kept counts."
+  },
+  "popupClearQuestion": {
+    "message": "Effacer les comptes de tous les sites gardés depuis le $DATE$\u00a0?",
+    "description": "Question the popup asks before it clears the kept counts of every site, with the date they started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      }
+    }
+  },
+  "popupClearQuestionPrivate": {
+    "message": "Effacer les comptes gardés de tous les sites, cette session privée mise à part\u00a0?",
+    "description": "Question the popup asks before it clears the kept counts of every site, in a private window, whose own counts are not kept."
+  },
+  "level1": {
+    "message": "Niveau 1, passage",
+    "description": "Name of leak level 1 in a row of the popup."
+  },
+  "level2": {
+    "message": "Niveau 2, usage",
+    "description": "Name of leak level 2 in a row of the popup."
+  },
+  "level3": {
+    "message": "Niveau 3, lecture",
+    "description": "Name of leak level 3 in a row of the popup."
+  },
+  "level4": {
+    "message": "Niveau 4, données personnelles",
+    "description": "Name of leak level 4 in a row of the popup."
+  },
+  "decryptionProven": {
+    "message": "déchiffrement prouvé",
+    "description": "Proof line under a red row of the popup."
+  },
+  "decryptionUnproven": {
+    "message": "déchiffrement non prouvé",
+    "description": "Proof line under an orange row of the popup."
   }
 }

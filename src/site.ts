@@ -42,3 +42,22 @@ export function siteOf(hostname: string): string {
     return hostname;
   }
 }
+
+// The site is kept in punycode, and Firefox writes it in Unicode where no
+// character could pass for one of another script (publicSuffix
+// DomainEncoding). The call throws on a name it cannot read, which is then
+// shown as it came.
+export function siteText(site: string): string {
+  try {
+    return (
+      browser.publicSuffix.getDomain(site, {
+        encoding: "display",
+        allowIPAddress: true,
+        allowPlainSuffix: true,
+        allowUnknownSuffix: true,
+      }) ?? site
+    );
+  } catch {
+    return site;
+  }
+}

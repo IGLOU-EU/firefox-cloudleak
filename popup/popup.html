@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Adrien Kara -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="popup.css">
+<script type="module" src="../popup.js"></script>
+</head>
+<body>
+<header class="header">
+  <img id="state" src="/icons/neutral.svg" alt="" width="32" height="32">
+  <span id="site" class="site"></span>
+  <span id="browser-page" class="site" data-message="popupBrowserPage" hidden></span>
+</header>
+<section id="page" hidden>
+  <div class="heading"><span data-message="popupPage"></span><span id="page-unit" class="unit" data-message="popupUnit"></span></div>
+  <div id="page-rows"></div>
+  <div id="page-lines" class="lines"></div>
+  <div id="page-partial" class="lines partial" hidden></div>
+</section>
+<p id="browser-notice" class="lines" data-message="popupNothingBrowser" hidden></p>
+<section id="totals" hidden>
+  <div class="heading"><span id="totals-title"></span><span id="totals-unit" class="unit" data-message="popupUnit"></span></div>
+  <p id="totals-empty" data-message="popupNothingSite" hidden></p>
+  <div id="totals-rows"></div>
+</section>
+<footer id="footer" class="footer">
+  <!-- "See the map" opens nothing: the extension has no map. -->
+  <button type="button" class="primary" data-message="popupMap"></button>
+  <button type="button" id="clear-all" data-message="popupClearAll"></button>
+</footer>
+<div id="confirmation" class="confirmation" hidden>
+  <p id="question" class="question"></p>
+  <div class="choices">
+    <button type="button" id="clear" class="primary" data-message="popupClear"></button>
+    <button type="button" id="cancel" data-message="popupCancel"></button>
+  </div>
+</div>
+</body>
+</html>

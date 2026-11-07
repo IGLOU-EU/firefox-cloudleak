@@ -138,5 +138,93 @@
   "titleMissed": {
     "message": "Partial view: the extension did not see every request of this page, such as those a service worker serves, so it shows only what it saw.",
     "description": "Line added to the tooltip when the extension got the response of a request whose sending it never saw, or started after the page did."
+  },
+  "popupPage": {
+    "message": "This page",
+    "description": "Title of the popup section that shows the counts of the displayed page."
+  },
+  "popupUnit": {
+    "message": "requests",
+    "description": "Unit at the right of a popup section title whose rows count requests."
+  },
+  "popupSite": {
+    "message": "This site since $DATE$",
+    "description": "Title of the popup section that shows the kept counts of the site, with the date they started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "November 7, 2026"
+      }
+    }
+  },
+  "popupSitePrivate": {
+    "message": "This site, this private session",
+    "description": "Title of the popup section that shows the counts of the site in a private window, which live only for the private session."
+  },
+  "popupBrowserPage": {
+    "message": "Browser page",
+    "description": "Shown in place of the site name in the popup when the tab shows a page of the browser."
+  },
+  "popupNothingBrowser": {
+    "message": "No site is shown, so there is nothing to count.",
+    "description": "Popup notice for a page of the browser, which has no site to count."
+  },
+  "popupNothingSite": {
+    "message": "No request seen on this site went through a known intermediary.",
+    "description": "Popup notice under the site title when no request of the site went through a known provider."
+  },
+  "popupMap": {
+    "message": "See the map",
+    "description": "Popup button for the map."
+  },
+  "popupClearAll": {
+    "message": "Clear all",
+    "description": "Popup button that asks to clear the kept counts of every site."
+  },
+  "popupClear": {
+    "message": "Clear",
+    "description": "Popup button that confirms the clearing of the kept counts."
+  },
+  "popupCancel": {
+    "message": "Cancel",
+    "description": "Popup button that gives up the clearing of the kept counts."
+  },
+  "popupClearQuestion": {
+    "message": "Clear the counts of every site kept since $DATE$?",
+    "description": "Question the popup asks before it clears the kept counts of every site, with the date they started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "November 7, 2026"
+      }
+    }
+  },
+  "popupClearQuestionPrivate": {
+    "message": "Clear the kept counts of every site, this private session apart?",
+    "description": "Question the popup asks before it clears the kept counts of every site, in a private window, whose own counts are not kept."
+  },
+  "level1": {
+    "message": "Level 1, passage",
+    "description": "Name of leak level 1 in a row of the popup."
+  },
+  "level2": {
+    "message": "Level 2, usage",
+    "description": "Name of leak level 2 in a row of the popup."
+  },
+  "level3": {
+    "message": "Level 3, reading",
+    "description": "Name of leak level 3 in a row of the popup."
+  },
+  "level4": {
+    "message": "Level 4, personal data",
+    "description": "Name of leak level 4 in a row of the popup."
+  },
+  "decryptionProven": {
+    "message": "decryption proven",
+    "description": "Proof line under a red row of the popup."
+  },
+  "decryptionUnproven": {
+    "message": "decryption not proven",
+    "description": "Proof line under an orange row of the popup."
   }
 }
