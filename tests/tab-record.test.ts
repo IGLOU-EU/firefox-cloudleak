@@ -11,10 +11,13 @@ import {
   EMPTY_RECORD,
   foldRequest,
   HIDDEN_SITE,
+  ignoredNavigation,
   learnUnseenDocument,
   markHiddenSite,
+  markIgnoredSite,
   markMissedRequest,
   markPartialView,
+  markWatchedSite,
   navigationAt,
   PREVIOUS_DOCUMENTS,
   showCompletedDocument,
@@ -25,6 +28,7 @@ import {
   takeCountable,
 } from "../src/core/tab-record.js";
 import {
+  IGNORED,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -1291,5 +1295,186 @@ describe("Back and Forward between two pages", () => {
       forward.state.kind === "seen" ? forward.state.tallies : [],
       [{ level: 4, proven: true, count: 3 }],
     );
+  });
+});
+
+describe("a document of an ignored site", () => {
+  const OTHER = "other.example";
+
+  // A page whose top-level request went through a provider, committed for a
+  // site the user ignores.
+  function loadIgnored(
+    record: TabRecord,
+    navigation: string,
+    document: string,
+    at: number,
+  ): TabRecord {
+    const started = startNavigation(record, navigation, false, at);
+    const folded = fold(started, navigation, RED_3);
+    return showDocument(
+      folded,
+      document,
+      at + 10,
+      false,
+      false,
+      "site",
+      SITE,
+      true,
+    );
+  }
+
+  it("is decided at its commit, which drops what its navigation saw before", () => {
+    const record = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+    assert.deepEqual(shown(record), { document: "doc-a", state: IGNORED });
+    assert.equal(record.site, SITE);
+    assert.deepEqual(record.uncounted, []);
+    assert.deepEqual(taken(record), []);
+    assert.equal(ignoredNavigation(record, "1"), true);
+  });
+
+  it("folds none of its requests, nor any it missed", () => {
+    const record = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+    assert.equal(fold(record, "1", RED_4), record);
+    assert.equal(markMissedRequest(record, "1"), record);
+    assert.equal(markPartialView(record), record);
+  });
+
+  it("takes the top-level request whose commit came first, so that the request is dropped before anything is made of it", () => {
+    const committed = showDocument(
+      load(EMPTY_RECORD, "1", "doc-a", 100, null),
+      "doc-b",
+      220,
+      false,
+      false,
+      "site",
+      SITE,
+      true,
+    );
+    const started = startNavigation(committed, "2", false, 200);
+    assert.equal(started.document, "doc-b");
+    assert.equal(ignoredNavigation(started, "2"), true);
+    assert.equal(ignoredNavigation(started, "1"), false);
+  });
+
+  it("is watched when its site is not ignored, as before", () => {
+    const record = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+    assert.deepEqual(shown(record), { document: "doc-a", state: seen(RED_3) });
+    assert.equal(ignoredNavigation(record, "1"), false);
+    assert.equal(ignoredNavigation(record, "unknown"), false);
+  });
+
+  it("comes back ignored with Back, even when the access to all sites was withdrawn since", () => {
+    const ignored = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+    const left = load(ignored, "2", "doc-b", 200, BLUE_2, OTHER);
+    const back = showDocument(left, "doc-a", 300, true, true);
+    assert.deepEqual(shown(back), { document: "doc-a", state: IGNORED });
+  });
+
+  it("is decided too for a page Firefox completes without a commit", () => {
+    const record = showCompletedDocument(
+      EMPTY_RECORD,
+      "doc-a",
+      100,
+      false,
+      "site",
+      SITE,
+      true,
+    );
+    assert.deepEqual(shown(record), { document: "doc-a", state: IGNORED });
+  });
+
+  it("is decided when Firefox gives the site of a tab the extension has not seen navigate, which drops the requests held for it", () => {
+    const held = fold(fold(EMPTY_RECORD, "", BLUE_2), "", RED_4);
+    const learned = learnUnseenDocument(held, false, "site", SITE, true);
+    assert.equal(learned.site, SITE);
+    assert.equal(learned.state, IGNORED);
+    assert.deepEqual(learned.uncounted, []);
+    assert.deepEqual(taken(learned), []);
+    assert.equal(siteToLearn(learned), false);
+    assert.equal(ignoredNavigation(learned, ""), true);
+  });
+
+  describe("markIgnoredSite", () => {
+    it("turns every document of the site ignored, shown or shown before, and drops what they had not counted", () => {
+      const a = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+      const b = load(a, "2", "doc-b", 200, BLUE_2, OTHER);
+      const c = load(b, "3", "doc-c", 300, RED_4);
+      const marked = markIgnoredSite(c, SITE);
+      assert.deepEqual(shown(marked), { document: "doc-c", state: IGNORED });
+      assert.deepEqual(marked.uncounted, []);
+      assert.deepEqual(
+        marked.previous.map((entry) => [entry.document, entry.state.kind]),
+        [
+          ["doc-b", "seen"],
+          ["doc-a", "ignored"],
+          ["", "neutral"],
+        ],
+      );
+      assert.deepEqual(taken(marked), [[OTHER, 2]]);
+    });
+
+    it("turns ignored the page still shown while a navigation is pending, and not the navigation, whose site comes at its commit", () => {
+      const pending = startNavigation(
+        load(EMPTY_RECORD, "1", "doc-a", 100, RED_3),
+        "2",
+        false,
+        200,
+      );
+      const marked = markIgnoredSite(pending, SITE);
+      assert.equal(displayedDocument(marked).state, IGNORED);
+      assert.deepEqual(marked.state, NEUTRAL);
+    });
+
+    it("returns the record itself when no document is of the site, or all already are ignored", () => {
+      const other = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3, OTHER);
+      assert.equal(markIgnoredSite(other, SITE), other);
+      const ignored = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+      assert.equal(markIgnoredSite(ignored, SITE), ignored);
+      assert.equal(markIgnoredSite(EMPTY_RECORD, SITE), EMPTY_RECORD);
+    });
+  });
+
+  describe("markWatchedSite", () => {
+    it("turns the documents of the site neutral, saying they missed requests, since none was watched", () => {
+      const a = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+      const b = load(a, "2", "doc-b", 200, BLUE_2, OTHER);
+      const c = loadIgnored(b, "3", "doc-c", 300);
+      const watched = markWatchedSite(c, SITE, false);
+      const missed = markMissed(NEUTRAL);
+      assert.deepEqual(shown(watched), { document: "doc-c", state: missed });
+      assert.deepEqual(
+        watched.previous.map((entry) => [entry.document, entry.state]),
+        [
+          ["doc-b", seen(BLUE_2)],
+          ["doc-a", missed],
+          ["", EMPTY_RECORD.state],
+        ],
+      );
+    });
+
+    it("says the view is partial too while the extension lacks the access to all sites", () => {
+      const ignored = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+      assert.deepEqual(
+        markWatchedSite(ignored, SITE, true).state,
+        markMissed(markPartial(NEUTRAL)),
+      );
+    });
+
+    it("counts again the requests that come after, for the site", () => {
+      const watched = markWatchedSite(
+        loadIgnored(EMPTY_RECORD, "1", "doc-a", 100),
+        SITE,
+        false,
+      );
+      assert.equal(ignoredNavigation(watched, "1"), false);
+      assert.deepEqual(taken(fold(watched, "1", RED_4)), [[SITE, 4]]);
+    });
+
+    it("returns the record itself when no document of the site is ignored", () => {
+      const watched = load(EMPTY_RECORD, "1", "doc-a", 100, RED_3);
+      assert.equal(markWatchedSite(watched, SITE, false), watched);
+      const other = loadIgnored(EMPTY_RECORD, "1", "doc-a", 100);
+      assert.equal(markWatchedSite(other, OTHER, false), other);
+    });
   });
 });

@@ -6,6 +6,7 @@ import {
   clearSite,
   countRequest,
   dayOf,
+  dropSite,
   emptyCounts,
   type KeptCounts,
   type SeenRequest,
@@ -15,16 +16,19 @@ import {
 import type { SiteCounts } from "./core/popup-message.js";
 import { report } from "./toolbar.js";
 
-// storage.local holds the kept counts and nothing else: when they started,
-// and the counts of each site under its own key, so that a burst of requests
-// writes the sites it touched rather than the whole history. A site cleared
-// since has its own start under a key of its own, rather than inside its
-// counts, so that the counts stored before any clear read as they are,
-// without a migration, and a site without that key starts with all the
-// counts.
+// storage.local holds the kept counts and the sites the user ignores, and
+// nothing else: when the counts started, and the counts of each site under
+// its own key, so that a burst of requests writes the sites it touched rather
+// than the whole history. A site cleared since has its own start under a key
+// of its own, rather than inside its counts, so that the counts stored before
+// any clear read as they are, without a migration, and a site without that
+// key starts with all the counts. The ignored sites are one sorted list,
+// written whole at each change the user makes. Never storage.sync, which
+// Firefox sends to Mozilla's servers.
 const SINCE_KEY = "since";
 const SITE_PREFIX = "site:";
 const SITE_SINCE_PREFIX = "since:";
+const IGNORED_KEY = "ignored";
 
 // The counts of private windows never reach the disk: they live in
 // storage.session, beside the tabs, and go with the private session, which
@@ -34,6 +38,10 @@ const PRIVATE_KEY = "privateCounts";
 
 let kept: KeptCounts = emptyCounts(0);
 let privateSession: KeptCounts = emptyCounts(0);
+
+// Read at each wake-up and kept in memory, so that a document is told ignored
+// with one lookup when its site becomes known.
+let ignored = new Set<string>();
 
 function sitesOf<T>(
   items: Record<string, unknown>,
@@ -53,6 +61,7 @@ function sitesOf<T>(
 async function readKept(): Promise<void> {
   try {
     const items = await browser.storage.local.get(null);
+    ignored = new Set((items[IGNORED_KEY] as string[] | undefined) ?? []);
     const since = items[SINCE_KEY];
     const siteSince = sitesOf<number>(items, SITE_SINCE_PREFIX);
     const sites = sitesOf<SiteCounts>(items, SITE_PREFIX);
@@ -181,6 +190,11 @@ export async function clear(
   site: string,
   privateWindow: boolean,
 ): Promise<number> {
+  // An ignored site has nothing to clear, and a start of its own would keep
+  // a day the user was there.
+  if (ignored.has(site)) {
+    return since(site, privateWindow);
+  }
   if (privateWindow) {
     privateSession = clearSite(privateSession, site, 0);
     schedulePrivateWrite(site);
@@ -193,4 +207,52 @@ export async function clear(
     [`${SITE_PREFIX}${site}`]: {},
   });
   return at;
+}
+
+export function isIgnored(site: string | null): boolean {
+  return site !== null && ignored.has(site);
+}
+
+// In punycode, as the sites are kept, so in alphabetical order.
+export function ignoredSites(): string[] {
+  return [...ignored].sort();
+}
+
+// Nothing of an ignored site is kept: its kept counts, its own start and its
+// counts of the private session go, written or not. The list and the emptied
+// counts go in one transaction, so that the counts never outlive an ignore
+// that reached the disk. The keys go in a second one, since a write cannot
+// remove a key, and a write still pending finds nothing of the site to write.
+// Asking again repeats it, so a failure can be made good.
+export async function ignore(site: string): Promise<void> {
+  ignored.add(site);
+  kept = dropSite(kept, site);
+  if (privateSession.sites[site] !== undefined) {
+    privateSession = dropSite(privateSession, site);
+    schedulePrivateWrite(site);
+  }
+  await browser.storage.local.set({
+    [IGNORED_KEY]: ignoredSites(),
+    [`${SITE_PREFIX}${site}`]: {},
+  });
+  await browser.storage.local.remove([
+    `${SITE_PREFIX}${site}`,
+    `${SITE_SINCE_PREFIX}${site}`,
+  ]);
+}
+
+// A site watched again counts from nothing, from that day: its start goes in
+// the same transaction as the list, since the common start would claim it was
+// watched all along. A site that was not ignored keeps its counts.
+export async function watch(site: string): Promise<void> {
+  if (!ignored.delete(site)) {
+    return;
+  }
+  const at = dayOf(Date.now());
+  kept = clearSite(kept, site, at);
+  await browser.storage.local.set({
+    [IGNORED_KEY]: ignoredSites(),
+    [`${SITE_SINCE_PREFIX}${site}`]: at,
+    [`${SITE_PREFIX}${site}`]: {},
+  });
 }

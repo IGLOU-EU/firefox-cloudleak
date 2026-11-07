@@ -85,12 +85,20 @@ export function clearSite(
   site: string,
   at: number,
 ): KeptCounts {
+  const dropped = dropSite(counts, site);
+  return { ...dropped, siteSince: { ...dropped.siteSince, [site]: at } };
+}
+
+// Nothing of one site is kept, neither its counts nor its own start, which
+// would tell a day the user was there, while every other site keeps its
+// counts and its start. The counts given are never changed.
+export function dropSite(counts: KeptCounts, site: string): KeptCounts {
+  const without = <T>(bySite: { readonly [site: string]: T }) =>
+    Object.fromEntries(Object.entries(bySite).filter(([key]) => key !== site));
   return {
     since: counts.since,
-    siteSince: { ...counts.siteSince, [site]: at },
-    sites: Object.fromEntries(
-      Object.entries(counts.sites).filter(([key]) => key !== site),
-    ),
+    siteSince: without(counts.siteSince),
+    sites: without(counts.sites),
   };
 }
 

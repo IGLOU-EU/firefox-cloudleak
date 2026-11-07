@@ -5,6 +5,7 @@ import type { SeenRequest } from "./counts.js";
 import {
   addRequest,
   clearPartial,
+  IGNORED,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -150,7 +151,10 @@ export function startNavigation(
 // or of a site out of reach, and starts over. Back and Forward can also bring
 // back a document the tab does not know, loaded before the extension started
 // or shown before the documents the tab keeps: the extension missed its
-// requests.
+// requests. The commit is when the site of a document becomes known, so it is
+// when the document is told ignored, once, if the user ignores its site: what
+// its navigation saw before, its top-level request included, goes, and its
+// requests are dropped from then on.
 export function showDocument(
   record: TabRecord,
   document: string,
@@ -159,6 +163,28 @@ export function showDocument(
   backOrForward = false,
   page: Page = "site",
   site: string | null = null,
+  ignored = false,
+): TabRecord {
+  const shown = showWatched(
+    record,
+    document,
+    shownAt,
+    partial,
+    backOrForward,
+    page,
+    site,
+  );
+  return ignored ? ignoreEntry(shown) : shown;
+}
+
+function showWatched(
+  record: TabRecord,
+  document: string,
+  shownAt: number,
+  partial: boolean,
+  backOrForward: boolean,
+  page: Page,
+  site: string | null,
 ): TabRecord {
   if (record.document === document) {
     return record;
@@ -221,13 +247,23 @@ export function showCompletedDocument(
   partial: boolean,
   page: Page = "site",
   site: string | null = null,
+  ignored = false,
 ): TabRecord {
   const known =
     record.document === document ||
     record.previous.some((entry) => entry.document === document);
   return known
     ? record
-    : showDocument(record, document, completedAt, partial, false, page, site);
+    : showDocument(
+        record,
+        document,
+        completedAt,
+        partial,
+        false,
+        page,
+        site,
+        ignored,
+      );
 }
 
 // Whether the tab shows the document the extension has not seen open, and
@@ -250,12 +286,15 @@ export function siteToLearn(record: TabRecord): boolean {
 // and reader view, which loads the images of the article from the web, keep
 // the requests they missed before the extension started. A page of the
 // browser sends no request of its own, so it had nothing to miss: it shows
-// as a committed page of the browser does, neither partial nor missed.
+// as a committed page of the browser does, neither partial nor missed. The
+// site becomes known here, as at a commit, so a document of a site the user
+// ignores is told ignored here, and the requests held for the answer go.
 export function learnUnseenDocument(
   record: TabRecord,
   partial: boolean,
   page: Page,
   site: string | null,
+  ignored = false,
 ): TabRecord {
   if (!siteToLearn(record)) {
     return record;
@@ -263,16 +302,19 @@ export function learnUnseenDocument(
   const shown = displayedDocument(record);
   const lacking = partial && page !== "browser";
   const opened = openedState(shown.state, page, lacking);
-  return replace(record, shown, {
+  const learned: DocumentRecord = {
     ...shown,
     page,
     site,
     state: page === "browser" ? clearMissed(opened) : markMissed(opened),
-  });
+  };
+  return replace(record, shown, ignored ? ignoreEntry(learned) : learned);
 }
 
 function clearMissed(state: TabState): TabState {
-  return state.kind === "not-observed" || !state.missed
+  return state.kind === "not-observed" ||
+    state.kind === "ignored" ||
+    !state.missed
     ? state
     : { ...state, missed: false };
 }
@@ -318,11 +360,26 @@ export function foldRequest(
   if (request === null) {
     return record;
   }
-  return changeEntry(record, navigation, (entry) => ({
-    ...entry,
-    state: addRequest(entry.state, request.classification),
-    uncounted: [...entry.uncounted, request],
-  }));
+  return changeEntry(record, navigation, (entry) =>
+    entry.state.kind === "ignored"
+      ? entry
+      : {
+          ...entry,
+          state: addRequest(entry.state, request.classification),
+          uncounted: [...entry.uncounted, request],
+        },
+  );
+}
+
+// Whether a request was sent for a document of a site the user ignores. Its
+// document says it once, at its commit, so a request reads one state rather
+// than the list of the ignored sites, and is dropped before its response is
+// classified, which may cost a DNS resolution.
+export function ignoredNavigation(
+  record: TabRecord,
+  navigation: string,
+): boolean {
+  return entryOf(record, navigation)?.state.kind === "ignored";
 }
 
 // A request the kept counts can take, with the site it counts for.
@@ -349,7 +406,7 @@ export function takeCountable(
   readonly countable: readonly Countable[];
 } {
   const countable: Countable[] = [];
-  const settle = (entry: DocumentRecord): DocumentRecord => {
+  const settled = changeEveryEntry(record, (entry) => {
     if (
       entry.document === null ||
       entry.uncounted.length === 0 ||
@@ -363,16 +420,8 @@ export function takeCountable(
       }
     }
     return { ...entry, uncounted: [] };
-  };
-  const { previous, ...shown } = record;
-  const settledShown = settle(shown);
-  const settledPrevious = previous.map(settle);
-  const changed =
-    settledShown !== shown ||
-    settledPrevious.some((entry, index) => entry !== previous[index]);
-  return changed
-    ? { record: { ...settledShown, previous: settledPrevious }, countable }
-    : { record, countable };
+  });
+  return { record: settled, countable };
 }
 
 // Firefox gave the response of a request whose sending the extension never
@@ -406,15 +455,71 @@ function changeEntry(
   navigation: string,
   change: (entry: DocumentRecord) => DocumentRecord,
 ): TabRecord {
-  const entry =
-    record.navigation === navigation
-      ? record
-      : record.previous.find((saved) => saved.navigation === navigation);
+  const entry = entryOf(record, navigation);
   if (entry === undefined) {
     return record;
   }
   const changed = change(entry);
   return changed === entry ? record : replace(record, entry, changed);
+}
+
+// The document a navigation opened, the one shown or one shown before, or
+// none when the tab no longer keeps it.
+function entryOf(
+  record: TabRecord,
+  navigation: string,
+): DocumentRecord | undefined {
+  return record.navigation === navigation
+    ? record
+    : record.previous.find((saved) => saved.navigation === navigation);
+}
+
+// Changes every document the tab keeps, the one shown and those shown before.
+// The record comes back as it is when no document changes.
+function changeEveryEntry(
+  record: TabRecord,
+  change: (entry: DocumentRecord) => DocumentRecord,
+): TabRecord {
+  const { previous, ...shown } = record;
+  const changedShown = change(shown);
+  const changedPrevious = previous.map(change);
+  const changed =
+    changedShown !== shown ||
+    changedPrevious.some((entry, index) => entry !== previous[index]);
+  return changed ? { ...changedShown, previous: changedPrevious } : record;
+}
+
+// Nothing of a document of an ignored site is kept: neither what it saw nor
+// the requests the kept counts had not taken yet.
+function ignoreEntry<T extends DocumentRecord>(entry: T): T {
+  return entry.state.kind === "ignored" && entry.uncounted.length === 0
+    ? entry
+    : { ...entry, state: IGNORED, uncounted: [] };
+}
+
+// The user ignores a site from now on: every document of it the tab keeps,
+// shown or shown before, is ignored at once, as if its commit had told it so.
+// A navigation that has not committed has no site yet, and its commit
+// decides.
+export function markIgnoredSite(record: TabRecord, site: string): TabRecord {
+  return changeEveryEntry(record, (entry) =>
+    entry.site === site ? ignoreEntry(entry) : entry,
+  );
+}
+
+// The user watches a site again. Its documents still open were not watched
+// meanwhile, so each says it missed requests, as a page loaded before the
+// extension started does, until the tab opens another.
+export function markWatchedSite(
+  record: TabRecord,
+  site: string,
+  partial: boolean,
+): TabRecord {
+  return changeEveryEntry(record, (entry) =>
+    entry.site === site && entry.state.kind === "ignored"
+      ? { ...entry, state: markMissed(startState(partial)) }
+      : entry,
+  );
 }
 
 // What the tab shows is out of reach. A document no request opened is that

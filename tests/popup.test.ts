@@ -163,6 +163,7 @@ const RED_SITE: PopupData = {
     },
     other: { orange3: { "GET xmlhttprequest": 4 } },
   },
+  ignored: false,
 };
 const PAGE_ROWS = [
   "/icons/red.svg level4 decryptionProven 3",
@@ -410,6 +411,7 @@ describe("the popup", () => {
         privateWindow: false,
         since: SINCE,
         totals: {},
+        ignored: false,
       },
     });
     assert.equal(

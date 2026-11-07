@@ -13,7 +13,7 @@ import {
   requestSideOf,
   responseSideOf,
 } from "./core/request-facts.js";
-import { navigationAt } from "./core/tab-record.js";
+import { ignoredNavigation, navigationAt } from "./core/tab-record.js";
 import table from "./providers.js";
 import { fold, missRequest, navigate, ready, recordOf } from "./tabs.js";
 
@@ -120,7 +120,14 @@ async function settle(
     return;
   }
   pending.delete(details.requestId);
-  if (!leftTheBrowser(details)) {
+  // Read at the response, the last moment before the classification, which
+  // may cost a DNS resolution: the site of the document may have become
+  // ignored since the request was sent, by the user or by the commit of the
+  // document the request opens.
+  if (
+    !leftTheBrowser(details) ||
+    ignoredNavigation(recordOf(entry.tabId), entry.navigation)
+  ) {
     return;
   }
   const facts: RequestFacts = {

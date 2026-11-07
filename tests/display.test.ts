@@ -12,6 +12,7 @@ import {
 } from "../src/core/display.js";
 import {
   addRequest,
+  IGNORED,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -66,6 +67,14 @@ const CHALLENGE: Leak = { level: 4, case: "data-sent", challenge: true };
 const CHALLENGE_SESSION: Leak = { ...SESSION_POSSIBLE, challenge: true };
 
 describe("displayOf", () => {
+  it("shows a document of an ignored site with the neutral cloud and no badge, and says the site is ignored", () => {
+    assert.deepEqual(show(IGNORED), {
+      icon: "neutral",
+      badge: "",
+      title: [[line("titleIgnored")]],
+    });
+  });
+
   it("shows the neutral and not observed states without a badge", () => {
     assert.deepEqual(show(NEUTRAL), {
       icon: "neutral",
@@ -346,6 +355,7 @@ describe("the tooltip messages", () => {
   const plain = [
     "titleNeutral",
     "titleNotObserved",
+    "titleIgnored",
     "titleSessionProven",
     "titleSessionUnproven",
     "titleAntiBotProven",
@@ -444,6 +454,11 @@ describe("the tooltip text", () => {
   const en = getMessageOf("en");
   const text = (state: TabState, message: typeof fr) =>
     titleText(show(state).title, message);
+
+  it("reads, for a document of an ignored site", () => {
+    assert.equal(text(IGNORED, fr), "Site ignoré");
+    assert.equal(text(IGNORED, en), "Ignored site");
+  });
 
   it("reads, for a tab at three levels", () => {
     const state = fold([
