@@ -290,6 +290,28 @@ async function exchange(
   return requestId;
 }
 
+// An image of a private window through the edge.
+async function privateExchange(
+  tabId: number,
+  requestId: string,
+  timeStamp: number,
+): Promise<void> {
+  await requests.onSendHeaders({
+    tabId,
+    requestId,
+    type: "image",
+    timeStamp,
+    url: "https://site.example/logo.png",
+    method: "GET",
+    requestHeaders: [],
+    incognito: true,
+  });
+  await requests.onResponseStarted({
+    ...response(tabId, requestId, "image", timeStamp + 1, EDGE_IP),
+    incognito: true,
+  });
+}
+
 async function commit(
   tabId: number,
   documentId: string,
@@ -1050,7 +1072,10 @@ describe("the kept counts", () => {
     const privateBefore = JSON.stringify(session.get("privateCounts"));
     const now = Date.now();
     assert.ok(now > INSTALLED_AT);
-    const cleared = (await answer({ kind: "clear" })) as ClearedData;
+    const cleared = (await answer({
+      kind: "clear",
+      privateWindow: false,
+    })) as ClearedData;
     assert.equal(cleared.since, now);
     assert.deepEqual([...local.keys()], ["since"]);
     assert.equal(local.get("since"), now);
@@ -1063,6 +1088,42 @@ describe("the kept counts", () => {
     await exchange(tab, "image", 1300, EDGE_IP);
     mock.timers.runAll();
     assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
+  });
+
+  it("clear in a private window the counts of the private session only, and nothing of the kept counts", async () => {
+    const kept = 1170;
+    const keptSite = "t1170.example";
+    await commit(kept, "doc-1170", 1000, [], `https://${keptSite}/`);
+    await exchange(kept, "image", 1100, EDGE_IP);
+    const tab = 1171;
+    const site = "t1171.example";
+    await commit(tab, "doc-1171", 1000, [], `https://${site}/`);
+    await privateExchange(tab, "private-1171", 1100);
+    mock.timers.runAll();
+    assert.notDeepEqual((await popup(tab, true)).totals, {});
+    const keptBefore = JSON.stringify([...local.entries()]);
+    const writes = localWrites.length;
+    const cleared = (await answer({
+      kind: "clear",
+      privateWindow: true,
+    })) as ClearedData;
+    assert.equal(cleared.since, 0);
+    assert.equal(session.has("privateCounts"), false);
+    const data = await popup(tab, true);
+    assert.equal(data.since, 0);
+    assert.deepEqual(data.totals, {});
+    mock.timers.runAll();
+    assert.equal(session.has("privateCounts"), false);
+    assert.equal(localWrites.length, writes);
+    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
+    assert.deepEqual((await popup(kept)).totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    await privateExchange(tab, "private-1171-b", 1200);
+    mock.timers.runAll();
+    assert.deepEqual((await popup(tab, true)).totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
   });
 });
 
@@ -1123,6 +1184,8 @@ describe("the message handler", () => {
       answer({ kind: "popup", tabId: 1, privateWindow: "yes" }),
       undefined,
     );
+    assert.equal(answer({ kind: "clear" }), undefined);
+    assert.equal(answer({ kind: "clear", privateWindow: 1 }), undefined);
   });
 
   it("is registered by the event page on runtime.onMessage, and answers with a promise", async () => {

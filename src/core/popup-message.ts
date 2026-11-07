@@ -35,9 +35,11 @@ export type PopupRequest =
       readonly tabId: number;
       readonly privateWindow: boolean;
     }
-  // Clear the kept counts of every site and start a new period. The counts
-  // of a private session are not kept, so they are left alone.
-  | { readonly kind: "clear" };
+  // Clear the counts the popup shows. Outside a private window, the kept
+  // counts of every site, and a new period starts. In a private window, the
+  // counts of the private session, those the popup shows there, and the kept
+  // counts are left alone.
+  | { readonly kind: "clear"; readonly privateWindow: boolean };
 
 export interface PopupData {
   // Of the document the tab shows.
@@ -57,6 +59,6 @@ export interface PopupData {
 
 // The answer to a "clear" request.
 export interface ClearedData {
-  // The start of the new period.
+  // The start of the new period, zero in a private window.
   readonly since: number;
 }

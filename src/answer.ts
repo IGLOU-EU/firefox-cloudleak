@@ -19,7 +19,9 @@ export function answer(
   if (request === null) {
     return undefined;
   }
-  return request.kind === "popup" ? popupData(request) : cleared();
+  return request.kind === "popup"
+    ? popupData(request)
+    : cleared(request.privateWindow);
 }
 
 function requestOf(message: unknown): PopupRequest | null {
@@ -27,8 +29,8 @@ function requestOf(message: unknown): PopupRequest | null {
     return null;
   }
   const { kind, tabId, privateWindow } = message as Record<string, unknown>;
-  if (kind === "clear") {
-    return { kind };
+  if (kind === "clear" && typeof privateWindow === "boolean") {
+    return { kind, privateWindow };
   }
   if (
     kind === "popup" &&
@@ -58,7 +60,7 @@ async function popupData({
   };
 }
 
-async function cleared(): Promise<ClearedData> {
+async function cleared(privateWindow: boolean): Promise<ClearedData> {
   await ready;
-  return { since: await clear() };
+  return { since: await clear(privateWindow) };
 }

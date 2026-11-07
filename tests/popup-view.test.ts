@@ -276,9 +276,9 @@ describe("cleared", () => {
     });
   });
 
-  it("leaves the data of a private window as it is, whose counts are the session's", () => {
+  it("empties the totals of a private window, which has no start", () => {
     const before = data({ privateWindow: true, since: 0, totals: TOTALS });
-    assert.equal(cleared(before, 5), before);
+    assert.deepEqual(cleared(before, 0), { ...before, totals: {} });
   });
 });
 

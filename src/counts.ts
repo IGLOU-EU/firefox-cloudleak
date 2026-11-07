@@ -116,12 +116,18 @@ export function since(privateWindow: boolean): number {
   return privateWindow ? 0 : kept.since;
 }
 
-// A new period starts now, and everything counted before goes, written or
-// not: a write still pending finds nothing to write. The counts of private
-// windows are not kept, so they are left alone. A site counted while the
-// storage was being cleared is written again, so that the clear takes
-// nothing counted after it.
-export async function clear(): Promise<number> {
+// The counts the popup of the window shows go, written or not. In a private
+// window, those of the private session, and nothing of the kept counts:
+// a write still pending writes what was counted since. Outside, a new period
+// starts now, and a write still pending finds nothing to write. A site
+// counted while the storage was being cleared is written again, so that the
+// clear takes nothing counted after it.
+export async function clear(privateWindow: boolean): Promise<number> {
+  if (privateWindow) {
+    privateSession = emptyCounts(0);
+    await browser.storage.session.remove(PRIVATE_KEY);
+    return since(true);
+  }
   kept = emptyCounts(Date.now());
   await browser.storage.local.clear();
   await browser.storage.local.set({ [SINCE_KEY]: kept.since });

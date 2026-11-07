@@ -103,10 +103,10 @@ export function viewOf(
   };
 }
 
-// The counts of a private session are not kept, so a clear leaves them alone
-// and the popup of a private window keeps showing them.
+// A clear takes the counts the popup shows, those of the private session in
+// a private window, whose start the event page gives as zero.
 export function cleared(data: PopupData, since: number): PopupData {
-  return data.privateWindow ? data : { ...data, totals: {}, since };
+  return { ...data, totals: {}, since };
 }
 
 const PARTIAL = new Set(["titlePartial", "titleMissed"]);

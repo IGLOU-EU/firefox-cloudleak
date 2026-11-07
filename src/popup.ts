@@ -146,10 +146,16 @@ function askToConfirm(asking: boolean): void {
   element("confirmation").hidden = !asking;
 }
 
+// What a clear takes depends on the window, which the answer of the event
+// page gives: without it, the popup cannot say which counts would go.
 async function clear(): Promise<void> {
-  const { since } = await ask<ClearedData>({ kind: "clear" });
-  if (data !== null) {
-    data = cleared(data, since);
+  const shown = data;
+  if (shown !== null) {
+    const { since } = await ask<ClearedData>({
+      kind: "clear",
+      privateWindow: shown.privateWindow,
+    });
+    data = cleared(shown, since);
   }
   show();
   askToConfirm(false);

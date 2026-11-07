@@ -223,7 +223,9 @@ async function open(options: Options): Promise<Opened> {
       sendMessage: (request: PopupRequest) => {
         sent.push(request);
         if (request.kind === "clear") {
-          return Promise.resolve({ since: CLEARED_AT });
+          return Promise.resolve({
+            since: request.privateWindow ? 0 : CLEARED_AT,
+          });
         }
         return answer instanceof Error
           ? Promise.reject(answer)
@@ -318,7 +320,7 @@ describe("the popup", () => {
     page.element("clear-all").click();
     page.element("clear").click();
     await settled();
-    assert.deepEqual(page.sent[1], { kind: "clear" });
+    assert.deepEqual(page.sent[1], { kind: "clear", privateWindow: false });
     assert.equal(page.element("confirmation").hidden, true);
     assert.equal(page.element("footer").hidden, false);
     assert.equal(
@@ -335,7 +337,7 @@ describe("the popup", () => {
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
   });
 
-  it("names the private session in a private window, and keeps its counts through a clear", async () => {
+  it("names the private session in a private window, and clears only its counts", async () => {
     const page = await open({
       tab: { id: 3, incognito: true },
       answer: { ...RED_SITE, privateWindow: true, since: 0 },
@@ -344,14 +346,36 @@ describe("the popup", () => {
       { kind: "popup", tabId: 3, privateWindow: true },
     ]);
     assert.equal(page.text("totals-title"), "popupSitePrivate");
+    assert.deepEqual(page.summary("totals-rows"), TOTALS_ROWS);
     assert.equal(page.text("question"), "popupClearQuestionPrivate");
     page.element("clear-all").click();
     page.element("clear").click();
     await settled();
-    assert.deepEqual(page.sent[1], { kind: "clear" });
+    assert.deepEqual(page.sent[1], { kind: "clear", privateWindow: true });
     assert.equal(page.element("confirmation").hidden, true);
     assert.equal(page.text("totals-title"), "popupSitePrivate");
-    assert.deepEqual(page.summary("totals-rows"), TOTALS_ROWS);
+    assert.equal(page.text("question"), "popupClearQuestionPrivate");
+    assert.equal(page.element("totals-empty").hidden, false);
+    assert.equal(page.element("totals-unit").hidden, true);
+    assert.deepEqual(page.summary("totals-rows"), []);
+    assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
+  });
+
+  it("sends no clear when the event page never answered, since it cannot say which counts", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      const page = await open({
+        answer: new Error("Receiving end does not exist"),
+      });
+      page.element("clear-all").click();
+      page.element("clear").click();
+      await settled();
+      assert.equal(page.sent.length, 1);
+      assert.equal(page.element("confirmation").hidden, true);
+      assert.equal(page.element("footer").hidden, false);
+    } finally {
+      errors.mock.restore();
+    }
   });
 
   it("says a page of the browser has no site, and keeps the buttons", async () => {

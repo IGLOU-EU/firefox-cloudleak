@@ -179,15 +179,15 @@
   },
   "popupClearAll": {
     "message": "Clear all",
-    "description": "Popup button that asks to clear the kept counts of every site."
+    "description": "Popup button that asks to clear the kept counts of every site, or in a private window the counts of the private session."
   },
   "popupClear": {
     "message": "Clear",
-    "description": "Popup button that confirms the clearing of the kept counts."
+    "description": "Popup button that confirms the clearing of the counts the popup shows."
   },
   "popupCancel": {
     "message": "Cancel",
-    "description": "Popup button that gives up the clearing of the kept counts."
+    "description": "Popup button that gives up the clearing of the counts the popup shows."
   },
   "popupClearQuestion": {
     "message": "Clear the counts of every site kept since $DATE$?",
@@ -200,8 +200,8 @@
     }
   },
   "popupClearQuestionPrivate": {
-    "message": "Clear the kept counts of every site, this private session apart?",
-    "description": "Question the popup asks before it clears the kept counts of every site, in a private window, whose own counts are not kept."
+    "message": "Clear the counts of this private session?",
+    "description": "Question the popup of a private window asks before it clears the counts of the private session, and nothing of the kept counts."
   },
   "level1": {
     "message": "Level 1, passage",
