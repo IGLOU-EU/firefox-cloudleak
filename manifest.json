@@ -29,5 +29,9 @@
     "default_icon": "icons/neutral.svg",
     "default_title": "__MSG_extensionName__",
     "default_popup": "popup/popup.html"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": false
   }
 }

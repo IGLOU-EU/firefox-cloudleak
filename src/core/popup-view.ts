@@ -73,9 +73,24 @@ export interface PopupView {
   // Whether the popup says there is nothing to count, which it says only
   // when it shows nothing else.
   readonly notice: boolean;
+  // Whether the popup says the site is ignored, in place of the page and of
+  // its totals, since nothing of it is looked at.
+  readonly ignored: boolean;
+  // Whether the popup says the site it has just stopped ignoring is watched
+  // again.
+  readonly watchedAgain: boolean;
+  // What ignoring the site asks before it ignores. Null without a site, for
+  // a site already ignored, and in a private window, so that no site visited
+  // in private enters the list of the ignored sites, which is kept on disk.
+  readonly ignoreQuestion: TitleLine | null;
+  // Whether the popup offers to watch the site again: for an ignored site
+  // only, private window included, since that writes no site visited in
+  // private.
+  readonly unignore: boolean;
   // What the clear of the site asks before it clears. Null without a site,
-  // which leaves nothing to clear.
-  readonly question: TitleLine | null;
+  // which leaves nothing to clear, and for an ignored site, which keeps
+  // nothing.
+  readonly clearQuestion: TitleLine | null;
 }
 
 export type Providers = readonly {
@@ -85,14 +100,19 @@ export type Providers = readonly {
 
 // The date is asked for only outside a private window, whose counts have no
 // start: they live with the private session. The site is asked for in the
-// form the header shows it, so that the question names the site the user
-// reads above.
+// form the header shows it, so that each question names the site the user
+// reads above. The site is watched again when the popup has just stopped
+// ignoring it.
 export function viewOf(
   data: PopupData,
   providers: Providers,
   formatDate: (sinceMs: number) => string,
   formatSite: (site: string) => string,
+  watchedAgain = false,
 ): PopupView {
+  if (data.ignored && data.site !== null) {
+    return ignoredView(data.site);
+  }
   const display = displayOf(data.state, providers);
   const date = data.privateWindow ? null : formatDate(data.since);
   const page = pageOf(data, display);
@@ -110,7 +130,32 @@ export function viewOf(
     page,
     totals,
     notice: page === null && totals === null,
-    question: questionOf(data.site, date, formatSite),
+    ignored: false,
+    watchedAgain: watchedAgain && data.site !== null,
+    ignoreQuestion:
+      data.site === null || data.privateWindow
+        ? null
+        : line("popupIgnoreSiteQuestion", formatSite(data.site)),
+    unignore: false,
+    clearQuestion: questionOf(data.site, date, formatSite),
+  };
+}
+
+// The event page says the site is ignored, whatever the state of the
+// document: the cloud then has nothing to warn of, and the popup counts
+// nothing.
+function ignoredView(site: string): PopupView {
+  return {
+    icon: "neutral",
+    header: { kind: "site", site },
+    page: null,
+    totals: null,
+    notice: false,
+    ignored: true,
+    watchedAgain: false,
+    ignoreQuestion: null,
+    unignore: true,
+    clearQuestion: null,
   };
 }
 

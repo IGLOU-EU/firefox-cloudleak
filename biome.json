@@ -8,6 +8,7 @@
       "data/**",
       "_locales/**",
       "popup/**",
+      "options/**",
       "*.json"
     ]
   },

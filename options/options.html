@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Adrien Kara -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="options.css">
+<script type="module" src="../options.js"></script>
+</head>
+<body>
+<!-- No title of its own: about:addons already names the extension and the tab. -->
+<!-- biome-ignore lint/a11y/useHeadingContent: the script writes the title from _locales. -->
+<h2 data-message="optionsIgnoredSites"></h2>
+<p class="intro" data-message="optionsIgnoredText"></p>
+<ul id="sites" class="sites" hidden></ul>
+<p id="empty" class="empty" data-message="optionsEmpty" hidden></p>
+<form id="add" class="add">
+  <!-- biome-ignore lint/a11y/noLabelWithoutControl: the script writes the label from _locales. -->
+  <label for="typed" data-message="optionsAddSite"></label>
+  <div class="field">
+    <input type="text" id="typed" autocomplete="off" spellcheck="false">
+    <button type="submit" data-message="optionsAdd"></button>
+  </div>
+  <p id="help" class="help" data-message="optionsHelp"></p>
+  <p id="preview" class="preview" hidden><span data-message="optionsPreview"></span> <b id="preview-site"></b></p>
+  <p id="error" class="error" role="alert" hidden></p>
+</form>
+</body>
+</html>
