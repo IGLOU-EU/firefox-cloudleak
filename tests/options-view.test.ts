@@ -137,7 +137,7 @@ describe("the messages of the preferences", () => {
     assert.equal(en("optionsAdd", []), "Add");
     assert.equal(
       fr("optionsHelp", []),
-      "Un domaine ou une adresse, réduit à son site (www.twitch.tv donne twitch.tv). Ses comptes sont effacés.",
+      "Un domaine ou une adresse, réduit à son site (www.twitch.tv donne twitch.tv). Ses statistiques sont purgées.",
     );
     assert.equal(fr("optionsPreview", []), "Sera ajouté\u00a0:");
     assert.equal(en("optionsPreview", []), "Will be added:");

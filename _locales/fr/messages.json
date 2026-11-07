@@ -194,7 +194,7 @@
     "description": "Popup button that watches the ignored site shown again, at once and without a question, since nothing is lost. Shown only for an ignored site, in a private window too."
   },
   "popupClearSite": {
-    "message": "Effacer",
+    "message": "Purger",
     "description": "Popup button that asks to clear the counts of the site shown and of no other site: its kept counts, or in a private window its counts of the private session. Hidden when the popup shows no site, and for an ignored site, which keeps no count."
   },
   "popupIgnore": {
@@ -202,7 +202,7 @@
     "description": "Popup button that confirms ignoring the site the popup shows, which erases its counts."
   },
   "popupClear": {
-    "message": "Effacer",
+    "message": "Purger",
     "description": "Popup button that confirms the clearing of the counts of the site the popup shows."
   },
   "popupCancel": {
@@ -210,7 +210,7 @@
     "description": "Popup button that gives up the clearing of the counts of the site the popup shows, or ignoring it."
   },
   "popupIgnoreSiteQuestion": {
-    "message": "Ignorer $SITE$ et effacer ses comptes\u00a0?",
+    "message": "Ignorer $SITE$ et purger ses statistiques\u00a0?",
     "description": "Question the popup asks before it ignores the site shown, with the site as the popup header shows it. Ignoring a site erases its counts.",
     "placeholders": {
       "site": {
@@ -220,7 +220,7 @@
     }
   },
   "popupClearSiteQuestion": {
-    "message": "Effacer les comptes de $SITE$ gardés depuis le $DATE$\u00a0?",
+    "message": "Purger les statistiques de $SITE$ gardées depuis le $DATE$\u00a0?",
     "description": "Question the popup asks before it clears the kept counts of the site shown, and of no other site, with the site as the popup header shows it and the date its counts started.",
     "placeholders": {
       "site": {
@@ -234,7 +234,7 @@
     }
   },
   "popupClearSiteQuestionPrivate": {
-    "message": "Effacer les comptes de $SITE$ dans cette session privée\u00a0?",
+    "message": "Purger les statistiques de $SITE$ dans cette session privée\u00a0?",
     "description": "Question the popup of a private window asks before it clears the counts of the site shown in the private session, and nothing of its kept counts nor of the other sites, with the site as the popup header shows it.",
     "placeholders": {
       "site": {
@@ -318,7 +318,7 @@
     "description": "Button of the preferences that ignores the site the field names, which erases its counts, without a question."
   },
   "optionsHelp": {
-    "message": "Un domaine ou une adresse, réduit à son site (www.twitch.tv donne twitch.tv). Ses comptes sont effacés.",
+    "message": "Un domaine ou une adresse, réduit à son site (www.twitch.tv donne twitch.tv). Ses statistiques sont purgées.",
     "description": "Help under the field of the preferences while nothing is typed: what to type, how it is reduced to its registrable domain, and that adding a site erases its counts."
   },
   "optionsPreview": {
