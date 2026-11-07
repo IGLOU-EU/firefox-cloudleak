@@ -26,12 +26,18 @@ export interface DocumentRecord {
   // request the extension saw opened it.
   readonly navigation: string;
   readonly state: TabState;
-  // A page of the browser rather than of a website, such as a new tab, the
-  // settings, a local file or a source view: no site whose access the user
-  // could withdraw, so it is never out of reach nor partial for want of that
-  // access. False while the navigation has not committed.
-  readonly browserPage: boolean;
+  // A website while the navigation has not committed.
+  readonly page: Page;
 }
+
+// What a document is, as the scheme of its URL tells, and for reader view the
+// name of its about: page. A page of the browser, such as a new tab, the
+// settings, a local file or a source view, is no site whose access the user
+// could withdraw, so it is never out of reach nor partial for want of that
+// access. Reader view is a page of the browser too, but it loads the images
+// of the article from the web, so the lack of the access to all sites makes
+// its view partial.
+export type Page = "site" | "browser" | "reader";
 
 // What the extension keeps of a tab between two wake-ups: the document it
 // shows, and the documents it showed before, which Back and Forward bring
@@ -55,7 +61,7 @@ export const EMPTY_RECORD: TabRecord = {
   shownAt: 0,
   navigation: "",
   state: markMissed(NEUTRAL),
-  browserPage: false,
+  page: "site",
   previous: [],
 };
 
@@ -111,7 +117,7 @@ export function startNavigation(
     shownAt: 0,
     navigation,
     state: startState(partial),
-    browserPage: false,
+    page: "site",
     previous: remember(record),
   };
 }
@@ -124,21 +130,19 @@ export function startNavigation(
 // or of a site out of reach, and starts over. Back and Forward can also bring
 // back a document the tab does not know, loaded before the extension started
 // or shown before the documents the tab keeps: the extension missed its
-// requests. A page of the browser is never partial for want of the access to
-// all sites, even when the navigation that opens it is, such as the wait for
-// a site out of reach, which was waiting for no site.
+// requests.
 export function showDocument(
   record: TabRecord,
   document: string,
   shownAt: number,
   partial: boolean,
   backOrForward = false,
-  browserPage = false,
+  page: Page = "site",
 ): TabRecord {
   if (record.document === document) {
     return record;
   }
-  const lacking = partial && !browserPage;
+  const lacking = partial && page !== "browser";
   const saved = record.previous.find((entry) => entry.document === document);
   if (saved !== undefined) {
     const others = record.previous.filter((entry) => entry !== saved);
@@ -154,8 +158,8 @@ export function showDocument(
       ...record,
       document,
       shownAt,
-      state: browserPage ? clearPartial(record.state) : record.state,
-      browserPage,
+      state: openedState(record.state, page, lacking),
+      page,
     };
   }
   const state = startState(lacking);
@@ -164,9 +168,23 @@ export function showDocument(
     shownAt,
     navigation: document,
     state: backOrForward ? markMissed(state) : state,
-    browserPage,
+    page,
     previous: remember(record),
   };
+}
+
+// A page of the browser that a pending navigation opens keeps what the
+// navigation saw, but the navigation may be the wait for a site out of reach,
+// which was waiting for no site. The page is then never out of reach, and only
+// reader view is partial for want of the access to all sites.
+function openedState(state: TabState, page: Page, lacking: boolean): TabState {
+  if (page === "site") {
+    return state;
+  }
+  if (page === "browser") {
+    return clearPartial(state);
+  }
+  return state.kind === "not-observed" ? startState(lacking) : state;
 }
 
 // Firefox signals no commit for a page it loads in its own process, such as
@@ -177,14 +195,14 @@ export function showCompletedDocument(
   document: string,
   completedAt: number,
   partial: boolean,
-  browserPage = false,
+  page: Page = "site",
 ): TabRecord {
   const known =
     record.document === document ||
     record.previous.some((entry) => entry.document === document);
   return known
     ? record
-    : showDocument(record, document, completedAt, partial, false, browserPage);
+    : showDocument(record, document, completedAt, partial, false, page);
 }
 
 // What the tab shows. A navigation that has not committed shows nothing yet,
@@ -265,10 +283,10 @@ function changeState(
 // commit has not arrived yet: it waits for it. A navigation the extension saw
 // and that has not committed is in reach too, so the page out of reach is
 // the one still shown, already marked. Firefox withholds the URL of a page of
-// the browser too, which is no site out of reach: it stays as it is, and a
-// site the tab opens next is marked once it commits.
+// the browser too, reader view included, which is no site out of reach: it
+// stays as it is, and a site the tab opens next is marked once it commits.
 export function markHiddenSite(record: TabRecord): TabRecord {
-  if (record.browserPage) {
+  if (record.page !== "site") {
     return record;
   }
   const openedByRequest =
@@ -282,7 +300,7 @@ export function markHiddenSite(record: TabRecord): TabRecord {
       shownAt: 0,
       navigation: HIDDEN_SITE,
       state: NOT_OBSERVED,
-      browserPage: false,
+      page: "site",
       previous: remember(record),
     };
   }
@@ -296,14 +314,15 @@ export function markHiddenSite(record: TabRecord): TabRecord {
 // does not bring back those it missed.
 // The page still shown during a pending navigation receives the requests of
 // that time, so it becomes partial too. A page of the browser is no site the
-// withdrawal concerns, and stays as it is.
+// withdrawal concerns, and stays as it is, but for reader view, whose images
+// come from the web.
 export function markPartialView(record: TabRecord): TabRecord {
   const shown = displayedDocument(record);
   const marked =
-    shown === record || shown.browserPage
+    shown === record || shown.page === "browser"
       ? record
       : changeState(record, shown.navigation, markPartial);
-  if (marked.browserPage) {
+  if (marked.page === "browser") {
     return marked;
   }
   const state = markPartial(marked.state);

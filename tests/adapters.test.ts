@@ -63,7 +63,7 @@ const STORED: TabRecord = {
   shownAt: 100,
   navigation: "r900",
   state: { kind: "neutral", partial: false, missed: false },
-  browserPage: false,
+  page: "site",
   previous: [],
 };
 
@@ -512,9 +512,12 @@ describe("a page of the browser, without the access to all sites", () => {
 
   const pages = [
     "about:newtab",
-    "about:reader?url=https%3A%2F%2Fsite.example%2F",
+    "about:readerish",
+    "about:blank#reader",
     "view-source:https://site.example/",
+    "view-source:about:reader?url=https%3A%2F%2Fsite.example%2F",
     "file:///home/user/page.html",
+    "file:///home/user/about:reader",
     "moz-extension://5f0c7a3e-1b2d-4c5e-8f9a-0b1c2d3e4f50/page.html",
   ];
 
@@ -530,6 +533,50 @@ describe("a page of the browser, without the access to all sites", () => {
       assert.equal(shown(tab).title, "titleNeutral");
     });
   }
+
+  // Firefox finds an about: page by its name, what comes before "?" or "#",
+  // without regard to case (nsAboutProtocolUtils.h, mozilla-central).
+  const readers = [
+    "about:reader?url=https%3A%2F%2Fsite.example%2F",
+    "about:reader#top",
+    "about:READER?url=https%3A%2F%2Fsite.example%2F",
+    "about:reader",
+  ];
+
+  for (const [index, url] of readers.entries()) {
+    it(`shows ${url} neutral with a partial view, since reader view loads the article's images from the web`, async () => {
+      const tab = 720 + index;
+      await redPage(tab, 1000);
+      await statusWithoutUrl(tab);
+      await commit(tab, `doc-${tab}-reader`, 2000, [], url);
+      await statusWithoutUrl(tab);
+      mock.timers.runAll();
+      assert.deepEqual(iconOf(tab), NEUTRAL);
+      assert.equal(shown(tab).title, "titleNeutral\ntitlePartial");
+    });
+  }
+
+  it("shows reader view neutral and complete while the extension has the access to all sites", async () => {
+    allSites = true;
+    await tabs.onAccessChange();
+    try {
+      const tab = 730;
+      await redPage(tab, 1000);
+      await commit(
+        tab,
+        "doc-730-reader",
+        2000,
+        [],
+        "about:reader?url=https%3A%2F%2Fsite.example%2F",
+      );
+      await status(tab);
+      mock.timers.runAll();
+      assert.equal(shown(tab).title, "titleNeutral");
+    } finally {
+      allSites = false;
+      await tabs.onAccessChange();
+    }
+  });
 
   it("shows the settings page neutral, which Firefox completes without a commit", async () => {
     const tab = 710;

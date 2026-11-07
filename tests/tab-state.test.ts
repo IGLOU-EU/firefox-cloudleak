@@ -246,6 +246,85 @@ describe("addRequest", () => {
   });
 });
 
+describe("what a tab saw beyond its most serious request", () => {
+  function sightings(state: TabState) {
+    return state.kind === "seen"
+      ? { session: state.session, antiBot: state.antiBot }
+      : null;
+  }
+
+  const SESSION_SURE = request(
+    { level: 4, case: "session", possible: false, challenge: false },
+    true,
+  );
+  const ANTI_BOT_UNPROVEN = request(
+    { level: 4, case: "data-sent", challenge: true },
+    false,
+  );
+  const DATA_SENT = request(
+    { level: 4, case: "data-sent", challenge: false },
+    true,
+  );
+
+  it("sees neither a session nor an anti-bot request in requests that carry neither", () => {
+    assert.deepEqual(sightings(fold([BLUE_2, ORANGE_3, RED_3, DATA_SENT])), {
+      session: "none",
+      antiBot: "none",
+    });
+  });
+
+  it("sees a session in a request that carries a cookie of the site or an Authorization header, with its proof", () => {
+    assert.deepEqual(sightings(fold([BLUE_2, ORANGE_4])), {
+      session: "unproven",
+      antiBot: "none",
+    });
+    assert.deepEqual(sightings(fold([SESSION_SURE])), {
+      session: "proven",
+      antiBot: "none",
+    });
+  });
+
+  it("sees an anti-bot request, with its proof, whatever its case", () => {
+    assert.deepEqual(sightings(fold([ANTI_BOT_UNPROVEN])), {
+      session: "none",
+      antiBot: "unproven",
+    });
+    const antiBotSession = request(
+      { level: 4, case: "session", possible: true, challenge: true },
+      true,
+    );
+    assert.deepEqual(sightings(fold([antiBotSession])), {
+      session: "proven",
+      antiBot: "proven",
+    });
+  });
+
+  it("keeps what it saw when the most serious request is of another kind", () => {
+    const state = fold([ORANGE_4, RED_4, RED_3, BLUE_2]);
+    assert.deepEqual(kept(state), RED_4);
+    assert.deepEqual(sightings(state), {
+      session: "unproven",
+      antiBot: "proven",
+    });
+  });
+
+  it("keeps a proof once seen, whatever request of the same kind comes next", () => {
+    assert.equal(sightings(fold([ORANGE_4, SESSION_SURE]))?.session, "proven");
+    assert.equal(sightings(fold([SESSION_SURE, ORANGE_4]))?.session, "proven");
+    assert.equal(
+      sightings(fold([RED_4, ANTI_BOT_UNPROVEN]))?.antiBot,
+      "proven",
+    );
+  });
+
+  it("sees on a tab it does not fully observe", () => {
+    assert.deepEqual(sightings(fold([ORANGE_4], NOT_OBSERVED)), {
+      session: "unproven",
+      antiBot: "none",
+    });
+  });
+});
+
 describe("the counts of a tab", () => {
   function tallies(state: TabState) {
     return state.kind === "seen" ? state.tallies : [];
