@@ -13,6 +13,7 @@ import type {
   PopupData,
   SiteCounts,
 } from "../src/core/popup-message.js";
+import { viewOf } from "../src/core/popup-view.js";
 import { EMPTY_RECORD, type TabRecord } from "../src/core/tab-record.js";
 import { importModule, writeTable } from "./built-extension.js";
 
@@ -737,7 +738,7 @@ describe("a page of the browser, without the access to all sites", () => {
       await new Promise((done) => setImmediate(done));
       mock.timers.runAll();
       assert.deepEqual(iconOf(tab), NEUTRAL);
-      assert.equal(shown(tab).title, "titleNeutral\ntitleMissed");
+      assert.equal(shown(tab).title, "titleNeutral");
     } finally {
       frameOf = NO_FRAME;
     }
@@ -1272,6 +1273,29 @@ describe("a tab the extension has not seen navigate", () => {
     const data = await popup(tab);
     assert.equal(data.page, "browser");
     assert.equal(data.site, null);
+    const state = data.state;
+    assert.equal(
+      state.kind === "seen" && !state.missed && !state.partial,
+      true,
+    );
+  });
+
+  it("shows a page of the browser opened before the extension as one it saw commit: neutral, with nothing to count", async () => {
+    const tab = 1406;
+    frames({ [tab]: { url: "about:debugging#/runtime/this-firefox" } });
+    const data = await popup(tab);
+    assert.equal(data.page, "browser");
+    assert.deepEqual(data.state, {
+      kind: "neutral",
+      partial: false,
+      missed: false,
+    });
+    const shown = viewOf(data, [], () => "");
+    assert.deepEqual(shown.header, { kind: "browser-page" });
+    assert.equal(shown.icon, "neutral");
+    assert.equal(shown.page, null);
+    assert.equal(shown.totals, null);
+    assert.equal(shown.notice, true);
   });
 
   it("stays unknown when Firefox gives no frame, as for a discarded tab, and its requests are dropped", async () => {

@@ -246,8 +246,11 @@ export function siteToLearn(record: TabRecord): boolean {
 // Firefox gave what the tab shows. It speaks of the document the extension
 // did not see open only while the tab still shows it: once another document
 // committed, the URL may be the new one's. That document then becomes what a
-// commit would have made it, and keeps what its requests showed and the
-// requests it missed.
+// commit would have made it, and keeps what its requests showed. A website
+// and reader view, which loads the images of the article from the web, keep
+// the requests they missed before the extension started. A page of the
+// browser sends no request of its own, so it had nothing to miss: it shows
+// as a committed page of the browser does, neither partial nor missed.
 export function learnUnseenDocument(
   record: TabRecord,
   partial: boolean,
@@ -259,12 +262,19 @@ export function learnUnseenDocument(
   }
   const shown = displayedDocument(record);
   const lacking = partial && page !== "browser";
+  const opened = openedState(shown.state, page, lacking);
   return replace(record, shown, {
     ...shown,
     page,
     site,
-    state: markMissed(openedState(shown.state, page, lacking)),
+    state: page === "browser" ? clearMissed(opened) : markMissed(opened),
   });
+}
+
+function clearMissed(state: TabState): TabState {
+  return state.kind === "not-observed" || !state.missed
+    ? state
+    : { ...state, missed: false };
 }
 
 // What the tab shows. A navigation that has not committed shows nothing yet,

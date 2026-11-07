@@ -914,7 +914,7 @@ describe("the document of a tab the extension has not seen navigate", () => {
     );
   });
 
-  it("becomes a page of the browser, never out of reach nor partial, and still missed requests", () => {
+  it("becomes a page of the browser, neutral as a committed one, neither out of reach, partial nor missed, since it sends no request of its own", () => {
     for (const record of [
       markHiddenSite(EMPTY_RECORD),
       markPartialView(EMPTY_RECORD),
@@ -923,7 +923,15 @@ describe("the document of a tab the extension has not seen navigate", () => {
       const learned = learnUnseenDocument(record, true, "browser", null);
       assert.equal(learned.page, "browser");
       assert.equal(learned.site, null);
-      assert.deepEqual(learned.state, markMissed(NEUTRAL));
+      assert.deepEqual(learned.state, NEUTRAL);
+      assert.deepEqual(
+        learned.state,
+        showBrowserPage(
+          load(EMPTY_RECORD, "1", "doc-a", 100, null),
+          "doc-b",
+          200,
+        ).state,
+      );
     }
     const seenThere = learnUnseenDocument(
       markPartialView(fold(EMPTY_RECORD, "", BLUE_2)),
@@ -931,7 +939,7 @@ describe("the document of a tab the extension has not seen navigate", () => {
       "browser",
       null,
     );
-    assert.deepEqual(seenThere.state, seen(BLUE_2, false, true));
+    assert.deepEqual(seenThere.state, seen(BLUE_2, false, false));
   });
 
   it("becomes reader view, partial without the access to all sites, since it loads the article's images from the web", () => {
