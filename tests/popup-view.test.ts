@@ -19,6 +19,7 @@ import {
 } from "../src/core/popup-view.js";
 import {
   addRequest,
+  IGNORED,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -307,31 +308,152 @@ describe("the site section of the popup", () => {
 describe("the question of the clear of the site", () => {
   it("names the site as the header shows it, and the date its counts started", () => {
     assert.deepEqual(
-      view().question,
+      view().clearQuestion,
       line("popupClearSiteQuestion", "shown site.example", `date ${SINCE}`),
     );
   });
 
   it("names the site and the private session in a private window, without asking for a date", () => {
     assert.deepEqual(
-      viewOf(data({ privateWindow: true }), PROVIDERS, noDate, siteOf).question,
+      viewOf(data({ privateWindow: true }), PROVIDERS, noDate, siteOf)
+        .clearQuestion,
       line("popupClearSiteQuestionPrivate", "shown site.example"),
     );
   });
 
   it("is left out without a site, since there is nothing to clear", () => {
-    assert.equal(view({ page: "browser", site: null }).question, null);
-    assert.equal(view({ page: "reader", site: null }).question, null);
-    assert.equal(view({ page: "site", site: null }).question, null);
+    assert.equal(view({ page: "browser", site: null }).clearQuestion, null);
+    assert.equal(view({ page: "reader", site: null }).clearQuestion, null);
+    assert.equal(view({ page: "site", site: null }).clearQuestion, null);
     assert.equal(
       viewOf(
         data({ privateWindow: true, site: null }),
         PROVIDERS,
         noDate,
         siteOf,
-      ).question,
+      ).clearQuestion,
       null,
     );
+  });
+
+  it("is left out for an ignored site, which keeps nothing to clear", () => {
+    assert.equal(view({ ignored: true, state: IGNORED }).clearQuestion, null);
+  });
+});
+
+describe("the question of ignoring the site", () => {
+  it("names the site as the header shows it, and says its counts go", () => {
+    assert.deepEqual(
+      view().ignoreQuestion,
+      line("popupIgnoreSiteQuestion", "shown site.example"),
+    );
+  });
+
+  it("is left out in a private window, so that no site visited in private enters the list kept on disk", () => {
+    assert.equal(
+      viewOf(data({ privateWindow: true }), PROVIDERS, noDate, siteOf)
+        .ignoreQuestion,
+      null,
+    );
+  });
+
+  it("is left out without a site, and for a site already ignored", () => {
+    assert.equal(view({ page: "browser", site: null }).ignoreQuestion, null);
+    assert.equal(view({ page: "reader", site: null }).ignoreQuestion, null);
+    assert.equal(view({ page: "site", site: null }).ignoreQuestion, null);
+    assert.equal(view({ ignored: true, state: IGNORED }).ignoreQuestion, null);
+  });
+});
+
+describe("the buttons of the footer", () => {
+  // Ignore, stop ignoring and clear, in the order of the footer.
+  const buttons = (shown: PopupView) => [
+    shown.ignoreQuestion !== null,
+    shown.unignore,
+    shown.clearQuestion !== null,
+  ];
+  const privately = (changes: Partial<PopupData>) =>
+    viewOf(
+      data({ privateWindow: true, ...changes }),
+      PROVIDERS,
+      noDate,
+      siteOf,
+    );
+
+  it("ignore and clear a site", () => {
+    assert.deepEqual(buttons(view({ state: PAGE })), [true, false, true]);
+  });
+
+  it("only clear a site in a private window", () => {
+    assert.deepEqual(buttons(privately({ state: PAGE })), [false, false, true]);
+  });
+
+  it("offer nothing without a site", () => {
+    for (const page of ["browser", "reader", "site"] as const) {
+      assert.deepEqual(buttons(view({ page, site: null })), [
+        false,
+        false,
+        false,
+      ]);
+      assert.deepEqual(buttons(privately({ page, site: null })), [
+        false,
+        false,
+        false,
+      ]);
+    }
+  });
+
+  it("only stop ignoring an ignored site, in a private window too, since that writes no site visited in private", () => {
+    const ignored = { ignored: true, state: IGNORED } as const;
+    assert.deepEqual(buttons(view(ignored)), [false, true, false]);
+    assert.deepEqual(buttons(privately(ignored)), [false, true, false]);
+  });
+
+  it("offer nothing to stop ignoring without a site to name", () => {
+    assert.deepEqual(buttons(view({ ignored: true, site: null })), [
+      false,
+      false,
+      false,
+    ]);
+  });
+});
+
+describe("the popup of an ignored site", () => {
+  it("keeps the neutral cloud and the site, says it is ignored, and shows neither the page nor its totals", () => {
+    for (const state of [IGNORED, PAGE]) {
+      const shown = view({ ignored: true, state, totals: TOTALS });
+      assert.equal(shown.icon, "neutral");
+      assert.deepEqual(shown.header, { kind: "site", site: "site.example" });
+      assert.equal(shown.ignored, true);
+      assert.equal(shown.page, null);
+      assert.equal(shown.totals, null);
+      assert.equal(shown.notice, false);
+      assert.equal(shown.watchedAgain, false);
+    }
+  });
+
+  it("is not ignored without the word of the event page", () => {
+    assert.equal(view({ state: IGNORED }).ignored, false);
+    assert.equal(view().ignored, false);
+  });
+});
+
+describe("the site watched again", () => {
+  const again = (changes: Partial<PopupData>) =>
+    viewOf(data(changes), PROVIDERS, dateOf, siteOf, true);
+
+  it("is said once the popup stopped ignoring the site, beside what the tab and the site show", () => {
+    const shown = again({ state: markMissed(NEUTRAL) });
+    assert.equal(shown.watchedAgain, true);
+    assert.equal(shown.ignored, false);
+    assert.notEqual(shown.page, null);
+    assert.notEqual(shown.totals, null);
+  });
+
+  it("is not said otherwise, nor while the event page still says the site is ignored, nor without a site", () => {
+    assert.equal(view().watchedAgain, false);
+    assert.equal(again({ ignored: true, state: IGNORED }).watchedAgain, false);
+    assert.equal(again({ page: "site", site: null }).watchedAgain, false);
   });
 });
 
@@ -356,7 +478,11 @@ describe("the popup messages", () => {
     messages: messagesOf(locale),
   }));
   const withDate = ["popupSite", "popupClearSiteQuestion"];
-  const withSite = ["popupClearSiteQuestion", "popupClearSiteQuestionPrivate"];
+  const withSite = [
+    "popupIgnoreSiteQuestion",
+    "popupClearSiteQuestion",
+    "popupClearSiteQuestionPrivate",
+  ];
 
   it("exist in every locale", () => {
     for (const { locale, messages } of locales) {
@@ -388,8 +514,10 @@ describe("the popup messages", () => {
       if (entry.totals !== null) {
         produced.add(entry.totals.title.message);
       }
-      if (entry.question !== null) {
-        produced.add(entry.question.message);
+      for (const question of [entry.clearQuestion, entry.ignoreQuestion]) {
+        if (question !== null) {
+          produced.add(question.message);
+        }
       }
     }
     assert.ok(produced.size >= 8);
@@ -449,8 +577,8 @@ describe("the popup messages", () => {
   it("ask to clear the site shown, kept or of the private session", () => {
     const fr = getMessageOf("fr");
     const en = getMessageOf("en");
-    assert.equal(fr("popupClearSite", []), "Effacer ce site");
-    assert.equal(en("popupClearSite", []), "Clear this site");
+    assert.equal(fr("popupClearSite", []), "Effacer");
+    assert.equal(en("popupClearSite", []), "Clear");
     assert.equal(
       fr("popupClearSiteQuestion", ["bücher.example", "7 novembre 2026"]),
       "Effacer les comptes de bücher.example gardés depuis le 7 novembre 2026\u00a0?",
@@ -471,6 +599,53 @@ describe("the popup messages", () => {
     assert.equal(fr("popupCancel", []), "Annuler");
   });
 
+  it("ask to ignore the site shown, and say its counts go", () => {
+    const fr = getMessageOf("fr");
+    const en = getMessageOf("en");
+    assert.equal(fr("popupIgnoreSite", []), "Ignorer");
+    assert.equal(en("popupIgnoreSite", []), "Ignore");
+    assert.equal(
+      fr("popupIgnoreSiteQuestion", ["bücher.example"]),
+      "Ignorer bücher.example et effacer ses comptes\u00a0?",
+    );
+    assert.equal(
+      en("popupIgnoreSiteQuestion", ["bücher.example"]),
+      "Ignore bücher.example and erase its counts?",
+    );
+    assert.equal(fr("popupIgnore", []), "Ignorer");
+    assert.equal(en("popupIgnore", []), "Ignore");
+  });
+
+  it("say a site is ignored, and that it is watched again", () => {
+    const fr = getMessageOf("fr");
+    const en = getMessageOf("en");
+    assert.equal(fr("popupUnignoreSite", []), "Ne plus ignorer");
+    assert.equal(en("popupUnignoreSite", []), "Stop ignoring");
+    assert.equal(fr("popupIgnored", []), "Site ignoré");
+    assert.equal(en("popupIgnored", []), "Ignored site");
+    assert.equal(
+      fr("popupIgnoredText", []),
+      "Cloud Leak ne regarde pas les requêtes de ce site et n'en compte aucune.",
+    );
+    assert.equal(
+      en("popupIgnoredText", []),
+      "Cloud Leak does not look at the requests of this site and counts none of them.",
+    );
+    assert.equal(
+      fr("popupWatchedAgain", []),
+      "Ce site est de nouveau regardé, à partir du prochain chargement de la page.",
+    );
+    assert.equal(
+      en("popupWatchedAgain", []),
+      "This site is watched again, from the next load of the page.",
+    );
+  });
+
+  it("name the preferences", () => {
+    assert.equal(getMessageOf("fr")("popupPreferences", []), "Préférences");
+    assert.equal(getMessageOf("en")("popupPreferences", []), "Preferences");
+  });
+
   it("hold no line break", () => {
     for (const { locale, messages } of locales) {
       for (const name of POPUP_MESSAGES) {
@@ -488,6 +663,13 @@ describe("the popup messages", () => {
     for (const name of POPUP_MESSAGES) {
       const text = fr[name]?.message ?? "";
       assert.doesNotMatch(text, /[^\u00a0][:?]/u, name);
+    }
+  });
+
+  it("hold neither an em dash nor a semicolon in French", () => {
+    const fr = messagesOf("fr");
+    for (const name of POPUP_MESSAGES) {
+      assert.doesNotMatch(fr[name]?.message ?? "", /[\u2014;]/u, name);
     }
   });
 });

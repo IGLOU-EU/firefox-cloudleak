@@ -19,7 +19,12 @@ import {
   NOT_OBSERVED,
   type TabState,
 } from "../src/core/tab-state.js";
-import { getMessageOf, messagesOf, POPUP_MESSAGES } from "./messages.js";
+import {
+  getMessageOf,
+  messagesOf,
+  OPTIONS_MESSAGES,
+  POPUP_MESSAGES,
+} from "./messages.js";
 
 const PROVIDERS = [
   { id: "cloudflare", name: "Cloudflare" },
@@ -378,6 +383,7 @@ describe("the tooltip messages", () => {
         "extensionDescription",
         ...used,
         ...POPUP_MESSAGES,
+        ...OPTIONS_MESSAGES,
       ].sort(),
     );
     for (const { locale, messages } of locales) {

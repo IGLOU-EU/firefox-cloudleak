@@ -3,110 +3,25 @@
 
 // The popup page, compiled with the extension into build/extension/, driven
 // by a stand-in for Firefox's browser object and for the DOM of popup.html.
-// The elements of the stand-in come from popup.html itself, so that the ids
-// and the messages the page looks up are the ones the file has.
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { describe, it, mock } from "node:test";
 import type { Classification } from "../src/core/classify.js";
 import type { PopupData, PopupRequest } from "../src/core/popup-message.js";
-import { addRequest, NEUTRAL, type TabState } from "../src/core/tab-state.js";
+import {
+  addRequest,
+  IGNORED,
+  markMissed,
+  NEUTRAL,
+  type TabState,
+} from "../src/core/tab-state.js";
 import { importModule, writeTable } from "./built-extension.js";
+import { type Element, find, htmlOf, installPage, settled } from "./dom.js";
 import { POPUP_MESSAGES } from "./messages.js";
 
 writeTable();
 
-const HTML = readFileSync(
-  new URL("../../popup/popup.html", import.meta.url),
-  "utf8",
-);
-
-class Element {
-  readonly tagName: string;
-  readonly children: Element[] = [];
-  readonly attributes = new Map<string, string>();
-  readonly dataset: Record<string, string> = {};
-  readonly listeners: (() => void)[] = [];
-  id = "";
-  className = "";
-  hidden = false;
-  lang = "";
-  ownText: string;
-
-  constructor(tagName: string, text = "") {
-    this.tagName = tagName;
-    this.ownText = text;
-  }
-
-  get textContent(): string {
-    return (
-      this.ownText + this.children.map((child) => child.textContent).join("")
-    );
-  }
-
-  set textContent(value: string) {
-    this.children.length = 0;
-    this.ownText = value;
-  }
-
-  append(...nodes: (Element | string)[]): void {
-    for (const node of nodes) {
-      this.children.push(
-        typeof node === "string" ? new Element("#text", node) : node,
-      );
-    }
-  }
-
-  replaceChildren(...nodes: (Element | string)[]): void {
-    this.children.length = 0;
-    this.ownText = "";
-    this.append(...nodes);
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attributes.set(name, value);
-  }
-
-  addEventListener(_type: string, listener: () => void): void {
-    this.listeners.push(listener);
-  }
-
-  click(): void {
-    for (const listener of this.listeners) {
-      listener();
-    }
-  }
-
-  *all(): Generator<Element> {
-    yield this;
-    for (const child of this.children) {
-      yield* child.all();
-    }
-  }
-}
-
-function attribute(attributes: string, name: string): string | undefined {
-  return new RegExp(`\\s${name}="([^"]*)"`).exec(attributes)?.[1];
-}
-
-// A flat list of the elements is enough: the page finds them by id and by
-// data-message, and only appends into them.
-function bodyOf(): Element {
-  const body = new Element("body");
-  for (const match of HTML.matchAll(/<(\w+)([^>]*)>/g)) {
-    const element = new Element(match[1] ?? "");
-    const attributes = match[2] ?? "";
-    element.id = attribute(attributes, "id") ?? "";
-    const message = attribute(attributes, "data-message");
-    if (message !== undefined) {
-      element.dataset["message"] = message;
-    }
-    element.hidden = /\shidden(?:\s|$)/.test(attributes);
-    body.children.push(element);
-  }
-  return body;
-}
+const HTML = htmlOf("popup/popup.html");
 
 // A row reads as its cloud, its label, its proof and its count.
 function summarise(node: Element): string {
@@ -122,14 +37,9 @@ function summarise(node: Element): string {
     .join(" ");
 }
 
-// The handlers of the page settle within the promise chain of the stand-in,
-// which one turn of the event loop lets finish.
-function settled(): Promise<void> {
-  return new Promise((done) => setTimeout(done, 0));
-}
-
 const SINCE = Date.UTC(2026, 10, 7, 12);
 const CLEARED_AT = Date.UTC(2026, 11, 1, 12);
+const WATCHED_AT = Date.UTC(2026, 11, 2, 12);
 const dates = new Intl.DateTimeFormat("fr", { dateStyle: "long" });
 const numbers = new Intl.NumberFormat("fr");
 
@@ -159,11 +69,25 @@ const RED_SITE: PopupData = {
   totals: {
     edge: {
       blue2: { "GET script": 1000, "GET image": 180 },
-      red4: { "GET main_frame": 2, "POST xmlhttprequest": 1 },
+      red4: { "POST xmlhttprequest": 1, "GET main_frame": 2 },
     },
     other: { orange3: { "GET xmlhttprequest": 4 } },
   },
   ignored: false,
+};
+// What the event page answers once the site is ignored, and once it is
+// watched again: its documents still open say they missed requests.
+const IGNORED_SITE: PopupData = {
+  ...RED_SITE,
+  state: IGNORED,
+  totals: {},
+  ignored: true,
+};
+const WATCHED_SITE: PopupData = {
+  ...RED_SITE,
+  state: markMissed(NEUTRAL),
+  since: WATCHED_AT,
+  totals: {},
 };
 const PAGE_ROWS = [
   "/icons/red.svg level4 decryptionProven 3",
@@ -176,17 +100,24 @@ const TOTALS_ROWS = [
   "other",
   "/icons/orange.svg level3 decryptionUnproven 4",
 ];
+const BUCHER = (host: string) =>
+  host === "xn--bcher-kva.example" ? "bücher.example" : null;
 
 interface Options {
   readonly tab?: { id?: number; incognito: boolean } | undefined;
-  readonly answer?: PopupData | Error;
+  // What the event page answers to each "popup" request, in turn, the last
+  // one again once they are all given.
+  readonly answers?: readonly (PopupData | Error)[];
   readonly getDomain?: (host: string) => string | null;
+  readonly openOptionsPage?: () => Promise<void>;
 }
 
 interface Opened {
   readonly sent: PopupRequest[];
   readonly queries: object[];
   readonly root: Element;
+  // How many times the page opened the preferences, and closed itself.
+  readonly preferences: { opened: number; closed: number };
   element(id: string): Element;
   text(id: string): string;
   summary(id: string): string[];
@@ -197,21 +128,15 @@ let opened = 0;
 async function open(options: Options): Promise<Opened> {
   const sent: PopupRequest[] = [];
   const queries: object[] = [];
-  const root = new Element("html");
-  root.children.push(bodyOf());
+  const preferences = { opened: 0, closed: 0 };
+  const root = installPage(HTML);
   const tab = "tab" in options ? options.tab : { id: 7, incognito: false };
-  const answer = options.answer ?? RED_SITE;
-  (globalThis as Record<string, unknown>)["document"] = {
-    documentElement: root,
-    getElementById: (id: string) =>
-      [...root.all()].find((entry) => entry.id === id) ?? null,
-    querySelectorAll: (selector: string) => {
-      assert.equal(selector, "[data-message]");
-      return [...root.all()].filter(
-        (entry) => entry.dataset["message"] !== undefined,
-      );
+  const answers = options.answers ?? [RED_SITE];
+  let asked = 0;
+  (globalThis as Record<string, unknown>)["window"] = {
+    close: () => {
+      preferences.closed += 1;
     },
-    createElement: (tagName: string) => new Element(tagName),
   };
   (globalThis as Record<string, unknown>)["browser"] = {
     tabs: {
@@ -223,14 +148,33 @@ async function open(options: Options): Promise<Opened> {
     runtime: {
       sendMessage: (request: PopupRequest) => {
         sent.push(request);
-        if (request.kind === "clearSite") {
-          return Promise.resolve({
-            since: request.privateWindow ? 0 : CLEARED_AT,
-          });
+        switch (request.kind) {
+          case "clearSite":
+            return Promise.resolve({
+              since: request.privateWindow ? 0 : CLEARED_AT,
+            });
+          case "ignoreSite":
+            return Promise.resolve({
+              sites: [request.host],
+              site: request.host,
+            });
+          case "unignoreSite":
+            return Promise.resolve({ sites: [], site: request.site });
+          case "popup": {
+            const answer =
+              answers[Math.min(asked, answers.length - 1)] ?? RED_SITE;
+            asked += 1;
+            return answer instanceof Error
+              ? Promise.reject(answer)
+              : Promise.resolve(answer);
+          }
+          default:
+            return Promise.reject(new Error(`unexpected ${request.kind}`));
         }
-        return answer instanceof Error
-          ? Promise.reject(answer)
-          : Promise.resolve(answer);
+      },
+      openOptionsPage: () => {
+        preferences.opened += 1;
+        return options.openOptionsPage?.() ?? Promise.resolve();
       },
     },
     i18n: {
@@ -244,27 +188,28 @@ async function open(options: Options): Promise<Opened> {
   // A module runs once per URL, so each page gets its own.
   await importModule(`popup.js?${opened}`);
   await settled();
-  const element = (id: string): Element => {
-    const found = [...root.all()].find((entry) => entry.id === id);
-    assert.ok(found, `popup.html has no element "${id}"`);
-    return found;
-  };
+  const element = (id: string): Element => find(root, id);
   return {
     sent,
     queries,
     root,
+    preferences,
     element,
     text: (id) => element(id).textContent,
     summary: (id) => element(id).children.map(summarise),
   };
 }
 
+// Ignore, stop ignoring and clear, in the order of the footer.
+function footer(page: Opened): boolean[] {
+  return ["ignore-site", "unignore-site", "clear-site"].map(
+    (id) => !page.element(id).hidden,
+  );
+}
+
 describe("the popup", () => {
   it("asks the event page about the active tab, and shows its answer", async () => {
-    const page = await open({
-      getDomain: (host) =>
-        host === "xn--bcher-kva.example" ? "bücher.example" : null,
-    });
+    const page = await open({ getDomain: BUCHER });
     assert.deepEqual(page.queries, [{ active: true, currentWindow: true }]);
     assert.deepEqual(page.sent, [
       { kind: "popup", tabId: 7, privateWindow: false },
@@ -276,6 +221,8 @@ describe("the popup", () => {
     assert.equal(page.element("browser-page").hidden, true);
     assert.equal(page.element("unknown-site").hidden, true);
     assert.equal(page.element("browser-notice").hidden, true);
+    assert.equal(page.element("ignored").hidden, true);
+    assert.equal(page.element("watched-again").hidden, true);
     assert.equal(page.element("page").hidden, false);
     assert.equal(page.element("page-unit").hidden, false);
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
@@ -290,8 +237,9 @@ describe("the popup", () => {
     assert.equal(page.element("totals-empty").hidden, true);
     assert.deepEqual(page.summary("totals-rows"), TOTALS_ROWS);
     assert.equal(page.element("footer").hidden, false);
-    assert.equal(page.element("clear-site").hidden, false);
-    assert.equal(page.element("confirmation").hidden, true);
+    assert.deepEqual(footer(page), [true, false, true]);
+    assert.equal(page.element("clear-confirmation").hidden, true);
+    assert.equal(page.element("ignore-confirmation").hidden, true);
   });
 
   it("writes every fixed label from its message, each known to the locales", async () => {
@@ -299,7 +247,7 @@ describe("the popup", () => {
     const labels = [...page.root.all()].filter(
       (entry) => entry.dataset["message"] !== undefined,
     );
-    assert.ok(labels.length >= 8);
+    assert.ok(labels.length >= 15);
     for (const label of labels) {
       const message = label.dataset["message"] ?? "";
       assert.ok(POPUP_MESSAGES.includes(message), message);
@@ -307,21 +255,54 @@ describe("the popup", () => {
     }
   });
 
+  it("names the gear for those who cannot see it, and in its tooltip", async () => {
+    const page = await open({});
+    const gear = page.element("preferences");
+    assert.equal(gear.attributes.get("aria-label"), "popupPreferences");
+    assert.equal(gear.attributes.get("title"), "popupPreferences");
+    assert.equal(gear.textContent, "");
+  });
+
+  it("opens the preferences from the gear, then closes, since Firefox leaves it open over them", async () => {
+    const page = await open({});
+    page.element("preferences").click();
+    await settled();
+    assert.deepEqual(page.preferences, { opened: 1, closed: 1 });
+    assert.equal(page.sent.length, 1);
+  });
+
+  it("stays open and reports it when the preferences do not open", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      const page = await open({
+        openOptionsPage: () => Promise.reject(new Error("No options page")),
+      });
+      page.element("preferences").click();
+      await settled();
+      assert.deepEqual(page.preferences, { opened: 1, closed: 0 });
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(
+        String(errors.mock.calls[0]?.arguments[0]),
+        /^Cloud Leak: .*No options page/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
   it("asks before it clears the site, clears it on the answer, and shows its new start", async () => {
-    const page = await open({
-      getDomain: (host) =>
-        host === "xn--bcher-kva.example" ? "bücher.example" : null,
-    });
+    const page = await open({ getDomain: BUCHER });
     page.element("clear-site").click();
     assert.equal(page.element("footer").hidden, true);
-    assert.equal(page.element("confirmation").hidden, false);
+    assert.equal(page.element("clear-confirmation").hidden, false);
+    assert.equal(page.element("ignore-confirmation").hidden, true);
     assert.equal(
-      page.text("question"),
+      page.text("clear-question"),
       `popupClearSiteQuestion bücher.example ${dates.format(SINCE)}`,
     );
-    page.element("cancel").click();
+    page.element("clear-cancel").click();
     assert.equal(page.element("footer").hidden, false);
-    assert.equal(page.element("confirmation").hidden, true);
+    assert.equal(page.element("clear-confirmation").hidden, true);
     assert.equal(page.sent.length, 1);
     page.element("clear-site").click();
     page.element("clear").click();
@@ -331,16 +312,17 @@ describe("the popup", () => {
       site: "xn--bcher-kva.example",
       privateWindow: false,
     });
-    assert.equal(page.element("confirmation").hidden, true);
+    assert.equal(page.sent.length, 2);
+    assert.equal(page.element("clear-confirmation").hidden, true);
     assert.equal(page.element("footer").hidden, false);
-    assert.equal(page.element("clear-site").hidden, false);
+    assert.deepEqual(footer(page), [true, false, true]);
     assert.equal(page.text("site"), "bücher.example");
     assert.equal(
       page.text("totals-title"),
       `popupSite ${dates.format(CLEARED_AT)}`,
     );
     assert.equal(
-      page.text("question"),
+      page.text("clear-question"),
       `popupClearSiteQuestion bücher.example ${dates.format(CLEARED_AT)}`,
     );
     assert.equal(page.element("totals-empty").hidden, false);
@@ -349,10 +331,148 @@ describe("the popup", () => {
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
   });
 
+  it("scrolls each question into view as it opens, since Firefox scrolls a popup taller than 600 pixels", async () => {
+    const page = await open({});
+    page.element("clear-site").click();
+    assert.deepEqual(page.element("clear-confirmation").scrolls, [
+      { block: "nearest" },
+    ]);
+    page.element("clear-cancel").click();
+    page.element("ignore-site").click();
+    assert.deepEqual(page.element("ignore-confirmation").scrolls, [
+      { block: "nearest" },
+    ]);
+    page.element("ignore-cancel").click();
+    assert.equal(page.element("clear-confirmation").scrolls.length, 1);
+    assert.equal(page.element("ignore-confirmation").scrolls.length, 1);
+  });
+
+  it("asks before it ignores the site, then shows what the event page says of the tab", async () => {
+    const page = await open({
+      getDomain: BUCHER,
+      answers: [RED_SITE, IGNORED_SITE],
+    });
+    page.element("ignore-site").click();
+    assert.equal(page.element("footer").hidden, true);
+    assert.equal(page.element("ignore-confirmation").hidden, false);
+    assert.equal(page.element("clear-confirmation").hidden, true);
+    assert.equal(
+      page.text("ignore-question"),
+      "popupIgnoreSiteQuestion bücher.example",
+    );
+    page.element("ignore-cancel").click();
+    assert.equal(page.element("footer").hidden, false);
+    assert.equal(page.element("ignore-confirmation").hidden, true);
+    assert.equal(page.sent.length, 1);
+    page.element("ignore-site").click();
+    page.element("ignore").click();
+    await settled();
+    assert.deepEqual(page.sent.slice(1), [
+      { kind: "ignoreSite", host: "xn--bcher-kva.example" },
+      { kind: "popup", tabId: 7, privateWindow: false },
+    ]);
+    assert.equal(page.element("ignore-confirmation").hidden, true);
+    assert.equal(page.element("footer").hidden, false);
+    assert.equal(
+      page.element("state").attributes.get("src"),
+      "/icons/neutral.svg",
+    );
+    assert.equal(page.text("site"), "bücher.example");
+    assert.equal(page.element("ignored").hidden, false);
+    assert.equal(page.element("page").hidden, true);
+    assert.equal(page.element("totals").hidden, true);
+    assert.equal(page.element("browser-notice").hidden, true);
+    assert.equal(page.element("watched-again").hidden, true);
+    assert.deepEqual(footer(page), [false, true, false]);
+  });
+
+  it("offers no ignore in a private window, and sends none, so that no site visited in private enters the list kept on disk", async () => {
+    const page = await open({
+      tab: { id: 3, incognito: true },
+      answers: [{ ...RED_SITE, privateWindow: true, since: 0 }],
+    });
+    assert.deepEqual(footer(page), [false, false, true]);
+    page.element("ignore-site").click();
+    page.element("ignore").click();
+    await settled();
+    assert.deepEqual(page.sent, [
+      { kind: "popup", tabId: 3, privateWindow: true },
+    ]);
+  });
+
+  it("says an ignored site is ignored, and watches it again without asking, then says so", async () => {
+    const page = await open({
+      getDomain: BUCHER,
+      answers: [IGNORED_SITE, WATCHED_SITE],
+    });
+    assert.equal(
+      page.element("state").attributes.get("src"),
+      "/icons/neutral.svg",
+    );
+    assert.equal(page.element("ignored").hidden, false);
+    assert.equal(page.element("page").hidden, true);
+    assert.equal(page.element("totals").hidden, true);
+    assert.deepEqual(footer(page), [false, true, false]);
+    page.element("unignore-site").click();
+    await settled();
+    assert.deepEqual(page.sent.slice(1), [
+      { kind: "unignoreSite", site: "xn--bcher-kva.example" },
+      { kind: "popup", tabId: 7, privateWindow: false },
+    ]);
+    assert.equal(page.element("ignored").hidden, true);
+    assert.equal(page.element("watched-again").hidden, false);
+    assert.equal(page.element("page").hidden, false);
+    assert.deepEqual(page.summary("page-lines"), ["titleNeutral"]);
+    assert.deepEqual(page.summary("page-partial"), ["titleMissed"]);
+    assert.equal(page.element("totals").hidden, false);
+    assert.equal(
+      page.text("totals-title"),
+      `popupSite ${dates.format(WATCHED_AT)}`,
+    );
+    assert.deepEqual(footer(page), [true, false, true]);
+    assert.equal(page.element("footer").hidden, false);
+  });
+
+  it("no longer says the site is watched again once it is ignored anew", async () => {
+    const page = await open({
+      answers: [IGNORED_SITE, WATCHED_SITE, IGNORED_SITE, WATCHED_SITE],
+    });
+    page.element("unignore-site").click();
+    await settled();
+    page.element("ignore-site").click();
+    page.element("ignore").click();
+    await settled();
+    assert.equal(page.element("ignored").hidden, false);
+    assert.equal(page.element("watched-again").hidden, true);
+    page.element("unignore-site").click();
+    await settled();
+    assert.equal(page.element("watched-again").hidden, false);
+  });
+
+  it("watches an ignored site again from a private window too, which writes no site visited in private", async () => {
+    const page = await open({
+      tab: { id: 3, incognito: true },
+      answers: [
+        { ...IGNORED_SITE, privateWindow: true, since: 0 },
+        { ...WATCHED_SITE, privateWindow: true, since: 0 },
+      ],
+    });
+    assert.deepEqual(footer(page), [false, true, false]);
+    page.element("unignore-site").click();
+    await settled();
+    assert.deepEqual(page.sent.slice(1), [
+      { kind: "unignoreSite", site: "xn--bcher-kva.example" },
+      { kind: "popup", tabId: 3, privateWindow: true },
+    ]);
+    assert.equal(page.element("watched-again").hidden, false);
+    assert.equal(page.text("totals-title"), "popupSitePrivate");
+    assert.deepEqual(footer(page), [false, false, true]);
+  });
+
   it("names the private session in a private window, and clears only the counts of the site there", async () => {
     const page = await open({
       tab: { id: 3, incognito: true },
-      answer: { ...RED_SITE, privateWindow: true, since: 0 },
+      answers: [{ ...RED_SITE, privateWindow: true, since: 0 }],
     });
     assert.deepEqual(page.sent, [
       { kind: "popup", tabId: 3, privateWindow: true },
@@ -360,7 +480,7 @@ describe("the popup", () => {
     assert.equal(page.text("totals-title"), "popupSitePrivate");
     assert.deepEqual(page.summary("totals-rows"), TOTALS_ROWS);
     assert.equal(
-      page.text("question"),
+      page.text("clear-question"),
       "popupClearSiteQuestionPrivate xn--bcher-kva.example",
     );
     page.element("clear-site").click();
@@ -371,11 +491,11 @@ describe("the popup", () => {
       site: "xn--bcher-kva.example",
       privateWindow: true,
     });
-    assert.equal(page.element("confirmation").hidden, true);
+    assert.equal(page.element("clear-confirmation").hidden, true);
     assert.equal(page.element("clear-site").hidden, false);
     assert.equal(page.text("totals-title"), "popupSitePrivate");
     assert.equal(
-      page.text("question"),
+      page.text("clear-question"),
       "popupClearSiteQuestionPrivate xn--bcher-kva.example",
     );
     assert.equal(page.element("totals-empty").hidden, false);
@@ -384,35 +504,44 @@ describe("the popup", () => {
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
   });
 
-  it("offers no clear when the event page never answered, and sends none, since it cannot say which site", async () => {
+  it("offers nothing on the site when the event page never answered, and sends nothing, since it cannot say which site", async () => {
     const errors = mock.method(console, "error", () => {});
     try {
       const page = await open({
-        answer: new Error("Receiving end does not exist"),
+        answers: [new Error("Receiving end does not exist")],
       });
-      assert.equal(page.element("clear-site").hidden, true);
-      page.element("clear-site").click();
-      page.element("clear").click();
+      assert.deepEqual(footer(page), [false, false, false]);
+      for (const [ask, confirm] of [
+        ["clear-site", "clear"],
+        ["ignore-site", "ignore"],
+      ] as const) {
+        page.element(ask).click();
+        page.element(confirm).click();
+      }
+      page.element("unignore-site").click();
       await settled();
       assert.equal(page.sent.length, 1);
-      assert.equal(page.element("confirmation").hidden, true);
+      assert.equal(page.element("clear-confirmation").hidden, true);
+      assert.equal(page.element("ignore-confirmation").hidden, true);
       assert.equal(page.element("footer").hidden, false);
     } finally {
       errors.mock.restore();
     }
   });
 
-  it("says a page of the browser has no site, and offers no clear, since there is nothing to clear", async () => {
+  it("says a page of the browser has no site, and offers nothing on it, since there is no site", async () => {
     const page = await open({
-      answer: {
-        state: NEUTRAL,
-        page: "browser",
-        site: null,
-        privateWindow: false,
-        since: SINCE,
-        totals: {},
-        ignored: false,
-      },
+      answers: [
+        {
+          state: NEUTRAL,
+          page: "browser",
+          site: null,
+          privateWindow: false,
+          since: SINCE,
+          totals: {},
+          ignored: false,
+        },
+      ],
     });
     assert.equal(
       page.element("state").attributes.get("src"),
@@ -422,28 +551,31 @@ describe("the popup", () => {
     assert.equal(page.element("browser-page").hidden, false);
     assert.equal(page.element("unknown-site").hidden, true);
     assert.equal(page.element("browser-notice").hidden, false);
+    assert.equal(page.element("ignored").hidden, true);
     assert.equal(page.element("page").hidden, true);
     assert.equal(page.element("totals").hidden, true);
     assert.equal(page.element("footer").hidden, false);
-    assert.equal(page.element("clear-site").hidden, true);
-    assert.equal(page.text("question"), "");
+    assert.deepEqual(footer(page), [false, false, false]);
+    assert.equal(page.text("clear-question"), "");
+    assert.equal(page.text("ignore-question"), "");
+    assert.equal(page.element("preferences").hidden, false);
   });
 
   it("shows what a page of the browser saw without the notice that there is nothing to count", async () => {
     const page = await open({
-      answer: { ...RED_SITE, page: "reader", site: null, totals: {} },
+      answers: [{ ...RED_SITE, page: "reader", site: null, totals: {} }],
     });
     assert.equal(page.element("browser-page").hidden, false);
     assert.equal(page.element("browser-notice").hidden, true);
     assert.equal(page.element("page").hidden, false);
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
     assert.equal(page.element("totals").hidden, true);
-    assert.equal(page.element("clear-site").hidden, true);
+    assert.deepEqual(footer(page), [false, false, false]);
   });
 
   it("says the site of a website is unknown, with what the tab saw and no totals", async () => {
     const page = await open({
-      answer: { ...RED_SITE, page: "site", site: null, totals: {} },
+      answers: [{ ...RED_SITE, page: "site", site: null, totals: {} }],
     });
     assert.equal(page.element("site").hidden, true);
     assert.equal(page.element("browser-page").hidden, true);
@@ -452,7 +584,7 @@ describe("the popup", () => {
     assert.equal(page.element("page").hidden, false);
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
     assert.equal(page.element("totals").hidden, true);
-    assert.equal(page.element("clear-site").hidden, true);
+    assert.deepEqual(footer(page), [false, false, false]);
   });
 
   it("shows the site as it came when Firefox gives no display form, or fails to", async () => {
@@ -470,7 +602,7 @@ describe("the popup", () => {
     const errors = mock.method(console, "error", () => {});
     try {
       const unanswered = await open({
-        answer: new Error("Receiving end does not exist"),
+        answers: [new Error("Receiving end does not exist")],
       });
       assert.equal(errors.mock.callCount(), 1);
       assert.match(
@@ -479,6 +611,7 @@ describe("the popup", () => {
       );
       assert.equal(unanswered.element("page").hidden, true);
       assert.equal(unanswered.element("totals").hidden, true);
+      assert.equal(unanswered.element("ignored").hidden, true);
       const noTab = await open({ tab: undefined });
       assert.equal(errors.mock.callCount(), 2);
       assert.deepEqual(noTab.sent, []);

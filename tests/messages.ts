@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 export interface Message {
   readonly message: string;
+  readonly description?: string;
   readonly placeholders?: Record<string, { readonly content: string }>;
 }
 
@@ -23,17 +24,40 @@ export const POPUP_MESSAGES: readonly string[] = [
   "popupNothingBrowser",
   "popupNothingSite",
   "popupMap",
+  "popupIgnoreSite",
+  "popupUnignoreSite",
   "popupClearSite",
+  "popupIgnore",
   "popupClear",
   "popupCancel",
+  "popupIgnoreSiteQuestion",
   "popupClearSiteQuestion",
   "popupClearSiteQuestionPrivate",
+  "popupIgnored",
+  "popupIgnoredText",
+  "popupWatchedAgain",
+  "popupPreferences",
   "level1",
   "level2",
   "level3",
   "level4",
   "decryptionProven",
   "decryptionUnproven",
+];
+
+// The messages of the preferences page.
+export const OPTIONS_MESSAGES: readonly string[] = [
+  "optionsIgnoredSites",
+  "optionsIgnoredText",
+  "optionsRemove",
+  "optionsRemoveSite",
+  "optionsEmpty",
+  "optionsAddSite",
+  "optionsAdd",
+  "optionsHelp",
+  "optionsPreview",
+  "optionsRefused",
+  "optionsAlready",
 ];
 
 export function messagesOf(locale: string): Record<string, Message> {

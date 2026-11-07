@@ -13,7 +13,14 @@
   <span id="site" class="site"></span>
   <span id="unknown-site" class="site" data-message="popupUnknownSite" hidden></span>
   <span id="browser-page" class="site" data-message="popupBrowserPage" hidden></span>
+  <!-- The script names it, for its tooltip and for those who cannot see it. -->
+  <button type="button" id="preferences" class="settings"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.45 2.932L6.95 0.826A7.25 7.25 0 0 1 9.05 0.826L9.55 2.932A5.3 5.3 0 0 1 10.488 3.32L12.33 2.185A7.25 7.25 0 0 1 13.815 3.67L12.68 5.512A5.3 5.3 0 0 1 13.068 6.45L15.174 6.95A7.25 7.25 0 0 1 15.174 9.05L13.068 9.55A5.3 5.3 0 0 1 12.68 10.488L13.815 12.33A7.25 7.25 0 0 1 12.33 13.815L10.488 12.68A5.3 5.3 0 0 1 9.55 13.068L9.05 15.174A7.25 7.25 0 0 1 6.95 15.174L6.45 13.068A5.3 5.3 0 0 1 5.512 12.68L3.67 13.815A7.25 7.25 0 0 1 2.185 12.33L3.32 10.488A5.3 5.3 0 0 1 2.932 9.55L0.826 9.05A7.25 7.25 0 0 1 0.826 6.95L2.932 6.45A5.3 5.3 0 0 1 3.32 5.512L2.185 3.67A7.25 7.25 0 0 1 3.67 2.185L5.512 3.32A5.3 5.3 0 0 1 6.45 2.932ZM10.3 8A2.3 2.3 0 1 0 5.7 8A2.3 2.3 0 1 0 10.3 8Z" fill="currentColor" fill-rule="evenodd"/></svg></button>
 </header>
+<section id="ignored" hidden>
+  <div class="heading"><span data-message="popupIgnored"></span></div>
+  <p data-message="popupIgnoredText"></p>
+</section>
+<p id="watched-again" class="lines" data-message="popupWatchedAgain" hidden></p>
 <section id="page" hidden>
   <div class="heading"><span data-message="popupPage"></span><span id="page-unit" class="unit" data-message="popupUnit"></span></div>
   <div id="page-rows"></div>
@@ -29,14 +36,23 @@
 <footer id="footer" class="footer">
   <!-- "See the map" opens nothing: the extension has no map. -->
   <button type="button" class="primary" data-message="popupMap"></button>
-  <!-- Hidden until the event page names the site, the only counts it clears. -->
-  <button type="button" id="clear-site" data-message="popupClearSite" hidden></button>
+  <!-- Hidden until the event page names the site, the only one they act on. -->
+  <button type="button" id="ignore-site" data-message="popupIgnoreSite" hidden></button>
+  <button type="button" id="unignore-site" data-message="popupUnignoreSite" hidden></button>
+  <button type="button" id="clear-site" class="danger" data-message="popupClearSite" hidden></button>
 </footer>
-<div id="confirmation" class="confirmation" hidden>
-  <p id="question" class="question"></p>
+<div id="ignore-confirmation" class="confirmation" hidden>
+  <p id="ignore-question" class="question"></p>
   <div class="choices">
-    <button type="button" id="clear" class="primary" data-message="popupClear"></button>
-    <button type="button" id="cancel" data-message="popupCancel"></button>
+    <button type="button" id="ignore" class="primary danger" data-message="popupIgnore"></button>
+    <button type="button" id="ignore-cancel" data-message="popupCancel"></button>
+  </div>
+</div>
+<div id="clear-confirmation" class="confirmation" hidden>
+  <p id="clear-question" class="question"></p>
+  <div class="choices">
+    <button type="button" id="clear" class="primary danger" data-message="popupClear"></button>
+    <button type="button" id="clear-cancel" data-message="popupCancel"></button>
   </div>
 </div>
 </body>

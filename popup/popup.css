@@ -4,7 +4,9 @@
 /* The clouds keep the tints of the icon on both themes, and the dark
    background is the dark toolbar of Firefox 159, so that the clouds keep the
    contrasts computed for the icon. The text, the muted grey, the buttons and
-   their borders are the only other tints. */
+   their borders are the only other tints, with the red of the buttons that
+   erase counts: the red of the clouds darkened just enough for white text to
+   keep 4.5:1 on it, so that it stays the same on both themes. */
 :root {
   --background: #ffffff;
   --text: #15141a;
@@ -12,6 +14,8 @@
   --rule: #e0e0e6;
   --button: #f0f0f4;
   --border: #8f8f9d;
+  --danger: #dc2c4c;
+  --danger-text: #ffffff;
   color-scheme: light dark;
 }
 
@@ -61,6 +65,33 @@ p {
   font-size: 15px;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+/* A setting, not a state: grey and without a frame until it is pointed at
+   or focused, so that it never reads as a second cloud. */
+.settings {
+  flex: none;
+  margin-inline-start: auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.settings:hover,
+.settings:focus-visible {
+  color: var(--text);
+  background: var(--button);
+  border-color: var(--border);
+}
+
+.settings svg {
+  width: 16px;
+  height: 16px;
 }
 
 .heading {
@@ -147,6 +178,19 @@ button {
 
 button.primary {
   font-weight: 600;
+}
+
+/* The map on its own, the actions on the site together at the other end. */
+.footer > :first-child {
+  margin-inline-end: auto;
+}
+
+/* The colour is never the only sign: the name of the button and its question
+   say what it erases. */
+button.danger {
+  color: var(--danger-text);
+  background: var(--danger);
+  border-color: var(--danger);
 }
 
 .confirmation {

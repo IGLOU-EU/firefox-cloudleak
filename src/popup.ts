@@ -8,8 +8,8 @@
 import type { TitleLine } from "./core/display.js";
 import type {
   ClearedData,
+  IgnoredData,
   PopupData,
-  PopupRequest,
 } from "./core/popup-message.js";
 import {
   cleared,
@@ -18,6 +18,7 @@ import {
   type Row,
   viewOf,
 } from "./core/popup-view.js";
+import { ask, element, text, writeLabels } from "./page.js";
 import table from "./providers.js";
 import { siteText } from "./site.js";
 import { ICONS, report } from "./toolbar.js";
@@ -26,19 +27,12 @@ const language = browser.i18n.getUILanguage();
 const dates = new Intl.DateTimeFormat(language, { dateStyle: "long" });
 const numbers = new Intl.NumberFormat(language);
 
+// The tab the popup opened on, asked about again once its site is ignored or
+// watched again.
+let tab: { readonly tabId: number; readonly privateWindow: boolean } | null =
+  null;
 let data: PopupData | null = null;
-
-function text(line: TitleLine): string {
-  return browser.i18n.getMessage(line.message, [...line.substitutions]);
-}
-
-function element(id: string): HTMLElement {
-  const found = document.getElementById(id);
-  if (found === null) {
-    throw new Error(`popup.html has no element "${id}"`);
-  }
-  return found;
-}
+let watchedAgain = false;
 
 // The cloud says what the text beside it says, so it reads as nothing more.
 function cloudOf(row: Row): HTMLElement {
@@ -92,6 +86,8 @@ function render(view: PopupView): void {
   element("unknown-site").hidden = header.kind !== "unknown-site";
   element("browser-page").hidden = header.kind !== "browser-page";
   element("browser-notice").hidden = !view.notice;
+  element("ignored").hidden = !view.ignored;
+  element("watched-again").hidden = !view.watchedAgain;
 
   element("page").hidden = view.page === null;
   if (view.page !== null) {
@@ -114,42 +110,62 @@ function render(view: PopupView): void {
     );
   }
 
-  element("clear-site").hidden = view.question === null;
-  element("question").textContent =
-    view.question === null ? "" : text(view.question);
+  element("ignore-site").hidden = view.ignoreQuestion === null;
+  element("ignore-question").textContent =
+    view.ignoreQuestion === null ? "" : text(view.ignoreQuestion);
+  element("unignore-site").hidden = !view.unignore;
+  element("clear-site").hidden = view.clearQuestion === null;
+  element("clear-question").textContent =
+    view.clearQuestion === null ? "" : text(view.clearQuestion);
 }
 
 function show(): void {
   if (data !== null) {
     render(
-      viewOf(data, table.providers, (since) => dates.format(since), siteText),
+      viewOf(
+        data,
+        table.providers,
+        (since) => dates.format(since),
+        siteText,
+        watchedAgain,
+      ),
     );
   }
 }
 
-// The answer comes from the extension's own event page, in the shape the
-// contract of core/popup-message.ts gives it.
-async function ask<T>(request: PopupRequest): Promise<T> {
-  return (await browser.runtime.sendMessage(request)) as T;
+async function load(): Promise<void> {
+  if (tab !== null) {
+    data = await ask<PopupData>({ kind: "popup", ...tab });
+    show();
+  }
 }
 
 async function open(): Promise<void> {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-  if (tab?.id === undefined) {
+  const [active] = await browser.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (active?.id === undefined) {
     throw new Error("no active tab");
   }
-  data = await ask<PopupData>({
-    kind: "popup",
-    tabId: tab.id,
-    privateWindow: tab.incognito,
-  });
-  show();
+  tab = { tabId: active.id, privateWindow: active.incognito };
+  await load();
 }
 
 // A popup cannot open a dialog, so the footer itself becomes the question.
-function askToConfirm(asking: boolean): void {
-  element("footer").hidden = asking;
-  element("confirmation").hidden = !asking;
+// Firefox scrolls a popup taller than 600 pixels, which would leave the
+// question, at its foot, out of view.
+function askToConfirm(asking: "clear" | "ignore" | null): void {
+  element("footer").hidden = asking !== null;
+  const clearing = element("clear-confirmation");
+  const ignoring = element("ignore-confirmation");
+  clearing.hidden = asking !== "clear";
+  ignoring.hidden = asking !== "ignore";
+  if (asking !== null) {
+    (asking === "clear" ? clearing : ignoring).scrollIntoView({
+      block: "nearest",
+    });
+  }
 }
 
 // What a clear takes depends on the site and the window, which the answer of
@@ -166,16 +182,51 @@ async function clear(): Promise<void> {
     data = cleared(shown, since);
   }
   show();
-  askToConfirm(false);
+  askToConfirm(null);
 }
 
-document.documentElement.lang = language;
-for (const target of Array.from(
-  document.querySelectorAll<HTMLElement>("[data-message]"),
-)) {
-  target.textContent = browser.i18n.getMessage(target.dataset["message"] ?? "");
+// Never from a private window, so that no site visited in private enters the
+// list kept on disk. Ignoring turns the tabs of the site ignored on the event
+// page, so the popup asks it again what the tab shows.
+async function ignore(): Promise<void> {
+  const shown = data;
+  if (shown !== null && shown.site !== null && !shown.privateWindow) {
+    await ask<IgnoredData>({ kind: "ignoreSite", host: shown.site });
+    watchedAgain = false;
+    await load();
+  }
+  askToConfirm(null);
 }
-element("clear-site").addEventListener("click", () => askToConfirm(true));
-element("cancel").addEventListener("click", () => askToConfirm(false));
+
+// Nothing is lost by watching a site again, so the popup asks nothing.
+async function unignore(): Promise<void> {
+  const shown = data;
+  if (shown !== null && shown.site !== null) {
+    await ask<IgnoredData>({ kind: "unignoreSite", site: shown.site });
+    watchedAgain = true;
+    await load();
+  }
+}
+
+// Selecting the tab of about:addons hides no popup of an extension
+// (Tabbrowser.sys.mjs, Firefox 159.0.1), which would stay open over the
+// preferences it opened.
+async function openPreferences(): Promise<void> {
+  await browser.runtime.openOptionsPage();
+  window.close();
+}
+
+writeLabels();
+const gear = element("preferences");
+const preferences = browser.i18n.getMessage("popupPreferences");
+gear.setAttribute("aria-label", preferences);
+gear.setAttribute("title", preferences);
+gear.addEventListener("click", () => report(openPreferences()));
+element("ignore-site").addEventListener("click", () => askToConfirm("ignore"));
+element("ignore-cancel").addEventListener("click", () => askToConfirm(null));
+element("ignore").addEventListener("click", () => report(ignore()));
+element("unignore-site").addEventListener("click", () => report(unignore()));
+element("clear-site").addEventListener("click", () => askToConfirm("clear"));
+element("clear-cancel").addEventListener("click", () => askToConfirm(null));
 element("clear").addEventListener("click", () => report(clear()));
 report(open());

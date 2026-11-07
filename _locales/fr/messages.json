@@ -185,9 +185,21 @@
     "message": "Voir la carte",
     "description": "Popup button for the map."
   },
+  "popupIgnoreSite": {
+    "message": "Ignorer",
+    "description": "Popup button that asks to ignore the site shown from now on, which erases its counts. Hidden when the popup shows no site, in a private window, so that no site visited in private enters the list of ignored sites kept on disk, and for a site already ignored."
+  },
+  "popupUnignoreSite": {
+    "message": "Ne plus ignorer",
+    "description": "Popup button that watches the ignored site shown again, at once and without a question, since nothing is lost. Shown only for an ignored site, in a private window too."
+  },
   "popupClearSite": {
-    "message": "Effacer ce site",
-    "description": "Popup button that asks to clear the counts of the site shown and of no other site: its kept counts, or in a private window its counts of the private session. Hidden when the popup shows no site."
+    "message": "Effacer",
+    "description": "Popup button that asks to clear the counts of the site shown and of no other site: its kept counts, or in a private window its counts of the private session. Hidden when the popup shows no site, and for an ignored site, which keeps no count."
+  },
+  "popupIgnore": {
+    "message": "Ignorer",
+    "description": "Popup button that confirms ignoring the site the popup shows, which erases its counts."
   },
   "popupClear": {
     "message": "Effacer",
@@ -195,7 +207,17 @@
   },
   "popupCancel": {
     "message": "Annuler",
-    "description": "Popup button that gives up the clearing of the counts of the site the popup shows."
+    "description": "Popup button that gives up the clearing of the counts of the site the popup shows, or ignoring it."
+  },
+  "popupIgnoreSiteQuestion": {
+    "message": "Ignorer $SITE$ et effacer ses comptes\u00a0?",
+    "description": "Question the popup asks before it ignores the site shown, with the site as the popup header shows it. Ignoring a site erases its counts.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "legifrance.gouv.fr"
+      }
+    }
   },
   "popupClearSiteQuestion": {
     "message": "Effacer les comptes de $SITE$ gardés depuis le $DATE$\u00a0?",
@@ -221,6 +243,22 @@
       }
     }
   },
+  "popupIgnored": {
+    "message": "Site ignoré",
+    "description": "Title the popup shows in place of the counts when the user asked to ignore the site shown."
+  },
+  "popupIgnoredText": {
+    "message": "Cloud Leak ne regarde pas les requêtes de ce site et n'en compte aucune.",
+    "description": "Popup text under the title of an ignored site, which says why the popup shows no count."
+  },
+  "popupWatchedAgain": {
+    "message": "Ce site est de nouveau regardé, à partir du prochain chargement de la page.",
+    "description": "Popup text shown right after the user stopped ignoring the site shown: the page still open was not watched meanwhile."
+  },
+  "popupPreferences": {
+    "message": "Préférences",
+    "description": "Accessible name and tooltip of the gear of the popup, which opens the preferences of the extension in the add-ons manager."
+  },
   "level1": {
     "message": "Niveau 1, passage",
     "description": "Name of leak level 1 in a row of the popup."
@@ -244,5 +282,67 @@
   "decryptionUnproven": {
     "message": "déchiffrement non prouvé",
     "description": "Proof line under an orange row of the popup."
+  },
+  "optionsIgnoredSites": {
+    "message": "Sites ignorés",
+    "description": "Title of the list of ignored sites, the first title of the preferences page."
+  },
+  "optionsIgnoredText": {
+    "message": "Cloud Leak ne regarde pas les requêtes de ces sites et n'en compte aucune.",
+    "description": "Text under the title of the list of ignored sites in the preferences."
+  },
+  "optionsRemove": {
+    "message": "Retirer",
+    "description": "Button of each ignored site in the preferences, which watches the site again at once, without a question, since nothing is lost."
+  },
+  "optionsRemoveSite": {
+    "message": "Retirer $SITE$",
+    "description": "Accessible name of the button that removes an ignored site in the preferences, with the site as the list shows it.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "bücher.de"
+      }
+    }
+  },
+  "optionsEmpty": {
+    "message": "Aucun site n'est ignoré. Ajoutez-en un ci-dessous, ou cliquez sur Ignorer dans la fenêtre de Cloud Leak.",
+    "description": "Text of the preferences in place of the list when no site is ignored. \"Ignore\" is the button of the popup, the window the toolbar button opens."
+  },
+  "optionsAddSite": {
+    "message": "Ajouter un site",
+    "description": "Label of the field of the preferences where the user types a site to ignore."
+  },
+  "optionsAdd": {
+    "message": "Ajouter",
+    "description": "Button of the preferences that ignores the site the field names, which erases its counts, without a question."
+  },
+  "optionsHelp": {
+    "message": "Un domaine ou une adresse, réduit à son site (www.twitch.tv donne twitch.tv). Ses comptes sont effacés.",
+    "description": "Help under the field of the preferences while nothing is typed: what to type, how it is reduced to its registrable domain, and that adding a site erases its counts."
+  },
+  "optionsPreview": {
+    "message": "Sera ajouté\u00a0:",
+    "description": "Line under the field of the preferences while the text typed names a site, followed by that site, in bold: what the Add button will ignore."
+  },
+  "optionsRefused": {
+    "message": "Aucun site ne correspond à «\u00a0$TEXT$\u00a0». Saisissez un domaine, comme twitch.tv.",
+    "description": "Line under the field of the preferences when the text typed names no site, with that text: nothing is added.",
+    "placeholders": {
+      "text": {
+        "content": "$1",
+        "example": "twitch tv"
+      }
+    }
+  },
+  "optionsAlready": {
+    "message": "$SITE$ est déjà ignoré.",
+    "description": "Line under the field of the preferences when the text typed names a site already in the list, with the site as the list shows it.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "twitch.tv"
+      }
+    }
   }
 }
