@@ -577,11 +577,11 @@ describe("the popup messages", () => {
   it("ask to clear the site shown, kept or of the private session", () => {
     const fr = getMessageOf("fr");
     const en = getMessageOf("en");
-    assert.equal(fr("popupClearSite", []), "Effacer");
+    assert.equal(fr("popupClearSite", []), "Purger");
     assert.equal(en("popupClearSite", []), "Clear");
     assert.equal(
       fr("popupClearSiteQuestion", ["bücher.example", "7 novembre 2026"]),
-      "Effacer les comptes de bücher.example gardés depuis le 7 novembre 2026\u00a0?",
+      "Purger les statistiques de bücher.example gardées depuis le 7 novembre 2026\u00a0?",
     );
     assert.equal(
       en("popupClearSiteQuestion", ["bücher.example", "November 7, 2026"]),
@@ -589,13 +589,13 @@ describe("the popup messages", () => {
     );
     assert.equal(
       fr("popupClearSiteQuestionPrivate", ["bücher.example"]),
-      "Effacer les comptes de bücher.example dans cette session privée\u00a0?",
+      "Purger les statistiques de bücher.example dans cette session privée\u00a0?",
     );
     assert.equal(
       en("popupClearSiteQuestionPrivate", ["bücher.example"]),
       "Clear the counts of bücher.example in this private session?",
     );
-    assert.equal(fr("popupClear", []), "Effacer");
+    assert.equal(fr("popupClear", []), "Purger");
     assert.equal(fr("popupCancel", []), "Annuler");
   });
 
@@ -606,7 +606,7 @@ describe("the popup messages", () => {
     assert.equal(en("popupIgnoreSite", []), "Ignore");
     assert.equal(
       fr("popupIgnoreSiteQuestion", ["bücher.example"]),
-      "Ignorer bücher.example et effacer ses comptes\u00a0?",
+      "Ignorer bücher.example et purger ses statistiques\u00a0?",
     );
     assert.equal(
       en("popupIgnoreSiteQuestion", ["bücher.example"]),
