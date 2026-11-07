@@ -577,14 +577,14 @@ describe("the tooltip text", () => {
       "Niveau 2, usage\u00a0: 1 requête\n" +
         "\n" +
         "Cloudflare sert des ressources publiques de cette page\u00a0: il sait que vous la visitez, et quand.\n" +
-        "Vue partielle\u00a0: l'extension n'a pas vu toutes les requêtes de cette page, par exemple celles que sert un service worker, elle ne montre que ce qu'elle a vu.",
+        "Vue partielle\u00a0: l'extension n'a pas pu voir toutes les requêtes de cette page.",
     );
     assert.equal(
       text(state, en),
       "Level 2, usage: 1 request\n" +
         "\n" +
         "Cloudflare serves public resources of this page: it knows you are visiting it, and when.\n" +
-        "Partial view: the extension did not see every request of this page, such as those a service worker serves, so it shows only what it saw.",
+        "Partial view: the extension could not see every request of this page.",
     );
   });
 

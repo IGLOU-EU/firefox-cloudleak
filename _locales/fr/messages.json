@@ -136,7 +136,7 @@
     "description": "Line added to the tooltip when the extension lacks the access to all sites."
   },
   "titleMissed": {
-    "message": "Vue partielle\u00a0: l'extension n'a pas vu toutes les requêtes de cette page, par exemple celles que sert un service worker, elle ne montre que ce qu'elle a vu.",
+    "message": "Vue partielle\u00a0: l'extension n'a pas pu voir toutes les requêtes de cette page.",
     "description": "Line added to the tooltip when the extension got the response of a request whose sending it never saw, or started after the page did."
   },
   "popupPage": {
