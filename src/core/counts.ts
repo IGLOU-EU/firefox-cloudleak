@@ -20,11 +20,14 @@ export interface SeenRequest {
 // epoch.
 export interface KeptCounts {
   readonly since: number;
+  // A site cleared since has counted only from its clear, so the common start
+  // would claim more than was observed for it.
+  readonly siteSince: { readonly [site: string]: number };
   readonly sites: { readonly [site: string]: SiteCounts };
 }
 
 export function emptyCounts(since: number): KeptCounts {
-  return { since, sites: {} };
+  return { since, siteSince: {}, sites: {} };
 }
 
 // The category the icon and the badge show for a request: its colour, then
@@ -72,4 +75,29 @@ export function countRequest(
 // provider and for a document that has no site.
 export function totalsOf(counts: KeptCounts, site: string | null): SiteCounts {
   return site === null ? {} : (counts.sites[site] ?? {});
+}
+
+// The counts of one site go, and it counts again from the given moment, while
+// every other site keeps its counts and its start. The counts given are never
+// changed.
+export function clearSite(
+  counts: KeptCounts,
+  site: string,
+  at: number,
+): KeptCounts {
+  return {
+    since: counts.since,
+    siteSince: { ...counts.siteSince, [site]: at },
+    sites: Object.fromEntries(
+      Object.entries(counts.sites).filter(([key]) => key !== site),
+    ),
+  };
+}
+
+// When the counts of a site started: at its last clear, or with all the
+// counts for a site never cleared and for a document that has no site.
+export function sinceOf(counts: KeptCounts, site: string | null): number {
+  return site === null
+    ? counts.since
+    : (counts.siteSince[site] ?? counts.since);
 }

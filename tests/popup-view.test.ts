@@ -25,7 +25,7 @@ import {
   NOT_OBSERVED,
   type TabState,
 } from "../src/core/tab-state.js";
-import { messagesOf, POPUP_MESSAGES } from "./messages.js";
+import { getMessageOf, messagesOf, POPUP_MESSAGES } from "./messages.js";
 
 const PROVIDERS = [
   { id: "cloudflare", name: "Cloudflare" },
@@ -36,6 +36,7 @@ const dateOf = (sinceMs: number) => `date ${sinceMs}`;
 const noDate = () => {
   throw new Error("no date in a private window");
 };
+const siteOf = (site: string) => `shown ${site}`;
 
 const SESSION: Leak = {
   level: 4,
@@ -73,7 +74,7 @@ function data(changes: Partial<PopupData> = {}): PopupData {
 }
 
 function view(changes: Partial<PopupData> = {}): PopupView {
-  return viewOf(data(changes), PROVIDERS, dateOf);
+  return viewOf(data(changes), PROVIDERS, dateOf, siteOf);
 }
 
 function row(
@@ -228,6 +229,7 @@ describe("the site section of the popup", () => {
       data({ privateWindow: true }),
       PROVIDERS,
       noDate,
+      siteOf,
     ).totals;
     assert.deepEqual(totals?.title, line("popupSitePrivate"));
   });
@@ -301,24 +303,39 @@ describe("the site section of the popup", () => {
   });
 });
 
-describe("the question of clear all", () => {
-  it("names the date the kept counts started", () => {
+describe("the question of the clear of the site", () => {
+  it("names the site as the header shows it, and the date its counts started", () => {
     assert.deepEqual(
       view().question,
-      line("popupClearQuestion", `date ${SINCE}`),
+      line("popupClearSiteQuestion", "shown site.example", `date ${SINCE}`),
     );
   });
 
-  it("sets the private session apart in a private window", () => {
+  it("names the site and the private session in a private window, without asking for a date", () => {
     assert.deepEqual(
-      viewOf(data({ privateWindow: true }), PROVIDERS, noDate).question,
-      line("popupClearQuestionPrivate"),
+      viewOf(data({ privateWindow: true }), PROVIDERS, noDate, siteOf).question,
+      line("popupClearSiteQuestionPrivate", "shown site.example"),
+    );
+  });
+
+  it("is left out without a site, since there is nothing to clear", () => {
+    assert.equal(view({ page: "browser", site: null }).question, null);
+    assert.equal(view({ page: "reader", site: null }).question, null);
+    assert.equal(view({ page: "site", site: null }).question, null);
+    assert.equal(
+      viewOf(
+        data({ privateWindow: true, site: null }),
+        PROVIDERS,
+        noDate,
+        siteOf,
+      ).question,
+      null,
     );
   });
 });
 
 describe("cleared", () => {
-  it("empties the totals and takes the start of the new period", () => {
+  it("empties the totals and takes the new start of the counts of the site", () => {
     assert.deepEqual(cleared(data({ totals: TOTALS }), 5), {
       ...data(),
       totals: {},
@@ -337,7 +354,8 @@ describe("the popup messages", () => {
     locale,
     messages: messagesOf(locale),
   }));
-  const withDate = ["popupSite", "popupClearQuestion"];
+  const withDate = ["popupSite", "popupClearSiteQuestion"];
+  const withSite = ["popupClearSiteQuestion", "popupClearSiteQuestionPrivate"];
 
   it("exist in every locale", () => {
     for (const { locale, messages } of locales) {
@@ -350,7 +368,7 @@ describe("the popup messages", () => {
   it("cover every message the view produces", () => {
     const views = [
       view({ state: PAGE, totals: TOTALS }),
-      viewOf(data({ privateWindow: true }), PROVIDERS, noDate),
+      viewOf(data({ privateWindow: true }), PROVIDERS, noDate, siteOf),
       view({ site: null }),
       view({ page: "browser", site: null }),
     ];
@@ -369,7 +387,9 @@ describe("the popup messages", () => {
       if (entry.totals !== null) {
         produced.add(entry.totals.title.message);
       }
-      produced.add(entry.question.message);
+      if (entry.question !== null) {
+        produced.add(entry.question.message);
+      }
     }
     assert.ok(produced.size >= 8);
     for (const name of produced) {
@@ -394,6 +414,60 @@ describe("the popup messages", () => {
         );
       }
     }
+  });
+
+  it("put the site where a site is given, and nowhere else, before the date", () => {
+    for (const { locale, messages } of locales) {
+      for (const name of POPUP_MESSAGES) {
+        const entry = messages[name];
+        const expected = withSite.includes(name);
+        assert.equal(
+          entry?.message.includes("$SITE$"),
+          expected,
+          `${locale}: ${name}`,
+        );
+        assert.equal(
+          entry?.placeholders?.["site"]?.content,
+          expected ? "$1" : undefined,
+          `${locale}: ${name}`,
+        );
+      }
+      assert.equal(
+        messages["popupClearSiteQuestion"]?.placeholders?.["date"]?.content,
+        "$2",
+        locale,
+      );
+      assert.equal(
+        messages["popupSite"]?.placeholders?.["date"]?.content,
+        "$1",
+        locale,
+      );
+    }
+  });
+
+  it("ask to clear the site shown, kept or of the private session", () => {
+    const fr = getMessageOf("fr");
+    const en = getMessageOf("en");
+    assert.equal(fr("popupClearSite", []), "Effacer ce site");
+    assert.equal(en("popupClearSite", []), "Clear this site");
+    assert.equal(
+      fr("popupClearSiteQuestion", ["bücher.example", "7 novembre 2026"]),
+      "Effacer les comptes de bücher.example gardés depuis le 7 novembre 2026\u00a0?",
+    );
+    assert.equal(
+      en("popupClearSiteQuestion", ["bücher.example", "November 7, 2026"]),
+      "Clear the counts of bücher.example kept since November 7, 2026?",
+    );
+    assert.equal(
+      fr("popupClearSiteQuestionPrivate", ["bücher.example"]),
+      "Effacer les comptes de bücher.example dans cette session privée\u00a0?",
+    );
+    assert.equal(
+      en("popupClearSiteQuestionPrivate", ["bücher.example"]),
+      "Clear the counts of bücher.example in this private session?",
+    );
+    assert.equal(fr("popupClear", []), "Effacer");
+    assert.equal(fr("popupCancel", []), "Annuler");
   });
 
   it("hold no line break", () => {

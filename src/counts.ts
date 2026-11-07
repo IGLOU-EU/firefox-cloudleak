@@ -3,10 +3,12 @@
 
 import { batch, WRITE_DELAY_MS } from "./batch.js";
 import {
+  clearSite,
   countRequest,
   emptyCounts,
   type KeptCounts,
   type SeenRequest,
+  sinceOf,
   totalsOf,
 } from "./core/counts.js";
 import type { SiteCounts } from "./core/popup-message.js";
@@ -14,9 +16,14 @@ import { report } from "./toolbar.js";
 
 // storage.local holds the kept counts and nothing else: when they started,
 // and the counts of each site under its own key, so that a burst of requests
-// writes the sites it touched rather than the whole history.
+// writes the sites it touched rather than the whole history. A site cleared
+// since has its own start under a key of its own, rather than inside its
+// counts, so that the counts stored before any clear read as they are,
+// without a migration, and a site without that key starts with all the
+// counts.
 const SINCE_KEY = "since";
 const SITE_PREFIX = "site:";
+const SITE_SINCE_PREFIX = "since:";
 
 // The counts of private windows never reach the disk: they live in
 // storage.session, beside the tabs, and go with the private session, which
@@ -27,14 +34,14 @@ const PRIVATE_KEY = "privateCounts";
 let kept: KeptCounts = emptyCounts(0);
 let privateSession: KeptCounts = emptyCounts(0);
 
-function sitesOf(
+function sitesOf<T>(
   items: Record<string, unknown>,
   prefix: string,
-): Record<string, SiteCounts> {
-  const sites: Record<string, SiteCounts> = {};
+): Record<string, T> {
+  const sites: Record<string, T> = {};
   for (const [key, value] of Object.entries(items)) {
     if (key.startsWith(prefix)) {
-      sites[key.slice(prefix.length)] = value as SiteCounts;
+      sites[key.slice(prefix.length)] = value as T;
     }
   }
   return sites;
@@ -46,12 +53,13 @@ async function readKept(): Promise<void> {
   try {
     const items = await browser.storage.local.get(null);
     const since = items[SINCE_KEY];
-    const sites = sitesOf(items, SITE_PREFIX);
+    const siteSince = sitesOf<number>(items, SITE_SINCE_PREFIX);
+    const sites = sitesOf<SiteCounts>(items, SITE_PREFIX);
     if (typeof since === "number") {
-      kept = { since, sites };
+      kept = { since, siteSince, sites };
       return;
     }
-    kept = { since: Date.now(), sites };
+    kept = { since: Date.now(), siteSince, sites };
     await browser.storage.local.set({ [SINCE_KEY]: kept.since });
   } catch (error: unknown) {
     console.error(`Cloud Leak: kept counts not read: ${String(error)}`);
@@ -90,7 +98,10 @@ async function readPrivate(): Promise<void> {
       await dropPrivate();
       return;
     }
-    privateSession = { since: 0, sites: sites as KeptCounts["sites"] };
+    privateSession = {
+      ...emptyCounts(0),
+      sites: sites as KeptCounts["sites"],
+    };
   } catch (error: unknown) {
     console.error(`Cloud Leak: private counts not read: ${String(error)}`);
   }
@@ -150,26 +161,35 @@ export function totals(
 }
 
 // Zero in a private window: its counts live only for the session.
-export function since(privateWindow: boolean): number {
-  return privateWindow ? 0 : kept.since;
+export function since(site: string | null, privateWindow: boolean): number {
+  return privateWindow ? 0 : sinceOf(kept, site);
 }
 
-// The counts the popup of the window shows go, written or not. In a private
-// window, those of the private session, and nothing of the kept counts:
-// a write still pending writes what was counted since. Outside, a new period
-// starts now, and a write still pending finds nothing to write. A site
-// counted while the storage was being cleared is written again, so that the
-// clear takes nothing counted after it.
-export async function clear(privateWindow: boolean): Promise<number> {
+// The counts of the site the popup of the window shows go, written or not,
+// and nothing of the other sites. In a private window, its counts of the
+// private session, and nothing of the kept counts: the private write takes
+// what is counted when it runs. Outside, its kept counts start again now, and
+// a write still pending finds nothing of the site to write. Firefox makes the
+// writes of storage.local in the order they are asked, each in one IndexedDB
+// transaction that is kept whole or not at all (child/ext-storage.js and
+// ExtensionStorageIDB.sys.mjs, LibreWolf 159.0.1): a request counted after
+// the clear is written after it, and the counts written empty rather than
+// removed go in the same transaction as their new start, since one without
+// the other would claim what was not observed.
+export async function clear(
+  site: string,
+  privateWindow: boolean,
+): Promise<number> {
   if (privateWindow) {
-    await dropPrivate();
-    return since(true);
+    privateSession = clearSite(privateSession, site, 0);
+    schedulePrivateWrite(site);
+    return since(site, true);
   }
-  kept = emptyCounts(Date.now());
-  await browser.storage.local.clear();
-  await browser.storage.local.set({ [SINCE_KEY]: kept.since });
-  for (const site of Object.keys(kept.sites)) {
-    scheduleKeptWrite(site);
-  }
-  return kept.since;
+  const at = Date.now();
+  kept = clearSite(kept, site, at);
+  await browser.storage.local.set({
+    [`${SITE_SINCE_PREFIX}${site}`]: at,
+    [`${SITE_PREFIX}${site}`]: {},
+  });
+  return at;
 }

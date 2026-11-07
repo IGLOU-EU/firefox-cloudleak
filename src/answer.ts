@@ -19,18 +19,24 @@ export function answer(
   if (request === null) {
     return undefined;
   }
-  return request.kind === "popup"
-    ? popupData(request)
-    : cleared(request.privateWindow);
+  return request.kind === "popup" ? popupData(request) : cleared(request);
 }
 
 function requestOf(message: unknown): PopupRequest | null {
   if (typeof message !== "object" || message === null) {
     return null;
   }
-  const { kind, tabId, privateWindow } = message as Record<string, unknown>;
-  if (kind === "clear" && typeof privateWindow === "boolean") {
-    return { kind, privateWindow };
+  const { kind, tabId, site, privateWindow } = message as Record<
+    string,
+    unknown
+  >;
+  if (
+    kind === "clearSite" &&
+    typeof site === "string" &&
+    site !== "" &&
+    typeof privateWindow === "boolean"
+  ) {
+    return { kind, site, privateWindow };
   }
   if (
     kind === "popup" &&
@@ -56,12 +62,17 @@ async function popupData({
     page,
     site,
     privateWindow,
-    since: since(privateWindow),
+    since: since(site, privateWindow),
     totals: totals(site, privateWindow),
   };
 }
 
-async function cleared(privateWindow: boolean): Promise<ClearedData> {
+// Not before the stored counts are read, which would bring the counts of the
+// site back.
+async function cleared({
+  site,
+  privateWindow,
+}: Extract<PopupRequest, { kind: "clearSite" }>): Promise<ClearedData> {
   await ready;
-  return { since: await clear(privateWindow) };
+  return { since: await clear(site, privateWindow) };
 }
