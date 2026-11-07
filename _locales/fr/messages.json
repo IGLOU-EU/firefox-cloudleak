@@ -149,7 +149,7 @@
   },
   "popupSite": {
     "message": "Ce site depuis le $DATE$",
-    "description": "Title of the popup section that shows the kept counts of the site, with the date they started.",
+    "description": "Title of the popup section that shows the kept counts of the site, with the date they started: when the site was last cleared, or when the extension started counting for a site never cleared.",
     "placeholders": {
       "date": {
         "content": "$1",
@@ -181,31 +181,41 @@
     "message": "Voir la carte",
     "description": "Popup button for the map."
   },
-  "popupClearAll": {
-    "message": "Tout effacer",
-    "description": "Popup button that asks to clear the kept counts of every site, or in a private window the counts of the private session."
+  "popupClearSite": {
+    "message": "Effacer ce site",
+    "description": "Popup button that asks to clear the counts of the site shown and of no other site: its kept counts, or in a private window its counts of the private session. Hidden when the popup shows no site."
   },
   "popupClear": {
     "message": "Effacer",
-    "description": "Popup button that confirms the clearing of the counts the popup shows."
+    "description": "Popup button that confirms the clearing of the counts of the site the popup shows."
   },
   "popupCancel": {
     "message": "Annuler",
-    "description": "Popup button that gives up the clearing of the counts the popup shows."
+    "description": "Popup button that gives up the clearing of the counts of the site the popup shows."
   },
-  "popupClearQuestion": {
-    "message": "Effacer les comptes de tous les sites gardés depuis le $DATE$\u00a0?",
-    "description": "Question the popup asks before it clears the kept counts of every site, with the date they started.",
+  "popupClearSiteQuestion": {
+    "message": "Effacer les comptes de $SITE$ gardés depuis le $DATE$\u00a0?",
+    "description": "Question the popup asks before it clears the kept counts of the site shown, and of no other site, with the site as the popup header shows it and the date its counts started.",
     "placeholders": {
-      "date": {
+      "site": {
         "content": "$1",
+        "example": "legifrance.gouv.fr"
+      },
+      "date": {
+        "content": "$2",
         "example": "7 novembre 2026"
       }
     }
   },
-  "popupClearQuestionPrivate": {
-    "message": "Effacer les comptes de cette session privée\u00a0?",
-    "description": "Question the popup of a private window asks before it clears the counts of the private session, and nothing of the kept counts."
+  "popupClearSiteQuestionPrivate": {
+    "message": "Effacer les comptes de $SITE$ dans cette session privée\u00a0?",
+    "description": "Question the popup of a private window asks before it clears the counts of the site shown in the private session, and nothing of its kept counts nor of the other sites, with the site as the popup header shows it.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "legifrance.gouv.fr"
+      }
+    }
   },
   "level1": {
     "message": "Niveau 1, passage",

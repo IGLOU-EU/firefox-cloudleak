@@ -35,11 +35,15 @@ export type PopupRequest =
       readonly tabId: number;
       readonly privateWindow: boolean;
     }
-  // Clear the counts the popup shows. Outside a private window, the kept
-  // counts of every site, and a new period starts. In a private window, the
-  // counts of the private session, those the popup shows there, and the kept
-  // counts are left alone.
-  | { readonly kind: "clear"; readonly privateWindow: boolean };
+  // Clear the counts of the site the popup shows, the one PopupData.site
+  // gave it, and of no other. Outside a private window, its kept counts,
+  // which start again at once. In a private window, its counts of the private
+  // session, those the popup shows there, and its kept counts are left alone.
+  | {
+      readonly kind: "clearSite";
+      readonly site: string;
+      readonly privateWindow: boolean;
+    };
 
 export interface PopupData {
   // Of the document the tab shows.
@@ -49,16 +53,18 @@ export interface PopupData {
   // of the browser and for a website whose site the extension does not know.
   readonly site: string | null;
   readonly privateWindow: boolean;
-  // When the kept counts started, in milliseconds since the epoch. Zero in a
-  // private window, whose counts live only for the private session.
+  // When the counts of the site started, in milliseconds since the epoch: at
+  // its last clear, or when the kept counts started for a site never cleared
+  // and for a document without a site. Zero in a private window, whose counts
+  // live only for the private session.
   readonly since: number;
   // Of the site, kept without limit of time, or of the private session only.
   // Empty when nothing of the site went through a provider.
   readonly totals: SiteCounts;
 }
 
-// The answer to a "clear" request.
+// The answer to a "clearSite" request.
 export interface ClearedData {
-  // The start of the new period, zero in a private window.
+  // The new start of the counts of the site, zero in a private window.
   readonly since: number;
 }

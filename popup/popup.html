@@ -29,7 +29,8 @@
 <footer id="footer" class="footer">
   <!-- "See the map" opens nothing: the extension has no map. -->
   <button type="button" class="primary" data-message="popupMap"></button>
-  <button type="button" id="clear-all" data-message="popupClearAll"></button>
+  <!-- Hidden until the event page names the site, the only counts it clears. -->
+  <button type="button" id="clear-site" data-message="popupClearSite" hidden></button>
 </footer>
 <div id="confirmation" class="confirmation" hidden>
   <p id="question" class="question"></p>

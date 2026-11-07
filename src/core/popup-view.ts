@@ -73,8 +73,9 @@ export interface PopupView {
   // Whether the popup says there is nothing to count, which it says only
   // when it shows nothing else.
   readonly notice: boolean;
-  // What "clear all" asks before it clears.
-  readonly question: TitleLine;
+  // What the clear of the site asks before it clears. Null without a site,
+  // which leaves nothing to clear.
+  readonly question: TitleLine | null;
 }
 
 export type Providers = readonly {
@@ -83,11 +84,14 @@ export type Providers = readonly {
 }[];
 
 // The date is asked for only outside a private window, whose counts have no
-// start: they live with the private session.
+// start: they live with the private session. The site is asked for in the
+// form the header shows it, so that the question names the site the user
+// reads above.
 export function viewOf(
   data: PopupData,
   providers: Providers,
   formatDate: (sinceMs: number) => string,
+  formatSite: (site: string) => string,
 ): PopupView {
   const display = displayOf(data.state, providers);
   const date = data.privateWindow ? null : formatDate(data.since);
@@ -106,15 +110,26 @@ export function viewOf(
     page,
     totals,
     notice: page === null && totals === null,
-    question:
-      date === null
-        ? line("popupClearQuestionPrivate")
-        : line("popupClearQuestion", date),
+    question: questionOf(data.site, date, formatSite),
   };
 }
 
-// A clear takes the counts the popup shows, those of the private session in
-// a private window, whose start the event page gives as zero.
+function questionOf(
+  site: string | null,
+  date: string | null,
+  formatSite: (site: string) => string,
+): TitleLine | null {
+  if (site === null) {
+    return null;
+  }
+  return date === null
+    ? line("popupClearSiteQuestionPrivate", formatSite(site))
+    : line("popupClearSiteQuestion", formatSite(site), date);
+}
+
+// A clear takes the counts of the site the popup shows, those of the private
+// session in a private window, and the event page gives their new start,
+// zero in a private window.
 export function cleared(data: PopupData, since: number): PopupData {
   return { ...data, totals: {}, since };
 }

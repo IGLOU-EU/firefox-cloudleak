@@ -114,12 +114,16 @@ function render(view: PopupView): void {
     );
   }
 
-  element("question").textContent = text(view.question);
+  element("clear-site").hidden = view.question === null;
+  element("question").textContent =
+    view.question === null ? "" : text(view.question);
 }
 
 function show(): void {
   if (data !== null) {
-    render(viewOf(data, table.providers, (since) => dates.format(since)));
+    render(
+      viewOf(data, table.providers, (since) => dates.format(since), siteText),
+    );
   }
 }
 
@@ -148,13 +152,15 @@ function askToConfirm(asking: boolean): void {
   element("confirmation").hidden = !asking;
 }
 
-// What a clear takes depends on the window, which the answer of the event
-// page gives: without it, the popup cannot say which counts would go.
+// What a clear takes depends on the site and the window, which the answer of
+// the event page gives: without it, the popup cannot say which counts would
+// go.
 async function clear(): Promise<void> {
   const shown = data;
-  if (shown !== null) {
+  if (shown !== null && shown.site !== null) {
     const { since } = await ask<ClearedData>({
-      kind: "clear",
+      kind: "clearSite",
+      site: shown.site,
       privateWindow: shown.privateWindow,
     });
     data = cleared(shown, since);
@@ -169,7 +175,7 @@ for (const target of Array.from(
 )) {
   target.textContent = browser.i18n.getMessage(target.dataset["message"] ?? "");
 }
-element("clear-all").addEventListener("click", () => askToConfirm(true));
+element("clear-site").addEventListener("click", () => askToConfirm(true));
 element("cancel").addEventListener("click", () => askToConfirm(false));
 element("clear").addEventListener("click", () => report(clear()));
 report(open());

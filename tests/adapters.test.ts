@@ -45,6 +45,7 @@ interface Cname {
 interface Counts {
   readonly ready: Promise<void>;
   totals(site: string | null, privateWindow: boolean): SiteCounts;
+  since(site: string | null, privateWindow: boolean): number;
   onWindowRemoved(): Promise<void>;
 }
 
@@ -176,10 +177,6 @@ function event(name: string) {
         for (const [key, value] of Object.entries(items)) {
           local.set(key, value);
         }
-        return Promise.resolve();
-      },
-      clear: () => {
-        local.clear();
         return Promise.resolve();
       },
     },
@@ -1107,71 +1104,138 @@ describe("the kept counts", () => {
     assert.deepEqual((await popup(tab)).totals, {});
   });
 
-  it("clear everything counted, written or not, start a new period, and leave the private session alone", async () => {
+  it("clear the site shown, written or not, start its counts again, and leave the other sites, the common date and the private session alone", async () => {
     const tab = 1160;
     const site = "t1160.example";
+    const other = 1161;
+    const otherSite = "t1161.example";
+    const privateTab = 1162;
     await commit(tab, "doc-1160", 1000, [], `https://${site}/`);
+    await commit(other, "doc-1161", 1000, [], `https://${otherSite}/`);
+    await commit(privateTab, "doc-1162", 1000, [], `https://${site}/`);
     await exchange(tab, "image", 1100, EDGE_IP);
+    await exchange(other, "image", 1100, EDGE_IP);
+    await privateExchange(privateTab, "private-1162", 1100);
     mock.timers.runAll();
     assert.notEqual(siteCounts(site), undefined);
     // Counted, and not yet written.
     await exchange(tab, "image", 1200, EDGE_IP);
     mock.timers.tick(1);
+    const common = local.get("since");
+    assert.equal(common, INSTALLED_AT);
+    const otherBefore = JSON.stringify(siteCounts(otherSite));
     const privateBefore = JSON.stringify(session.get("privateCounts"));
     const now = Date.now();
     assert.ok(now > INSTALLED_AT);
     const cleared = (await answer({
-      kind: "clear",
+      kind: "clearSite",
+      site,
       privateWindow: false,
     })) as ClearedData;
     assert.equal(cleared.since, now);
-    assert.deepEqual([...local.keys()], ["since"]);
-    assert.equal(local.get("since"), now);
+    assert.deepEqual(siteCounts(site), {});
+    assert.equal(local.get(`since:${site}`), now);
+    // The write pending since before the clear brings nothing back.
     mock.timers.runAll();
-    assert.deepEqual([...local.keys()], ["since"]);
+    assert.deepEqual(siteCounts(site), {});
+    assert.equal(local.get(`since:${site}`), now);
+    assert.equal(local.get("since"), common);
+    assert.equal(JSON.stringify(siteCounts(otherSite)), otherBefore);
+    assert.equal(local.has(`since:${otherSite}`), false);
     assert.equal(JSON.stringify(session.get("privateCounts")), privateBefore);
     const data = await popup(tab);
     assert.equal(data.since, now);
     assert.deepEqual(data.totals, {});
+    const otherData = await popup(other);
+    assert.equal(otherData.since, common);
+    assert.deepEqual(otherData.totals, { edge: { blue2: { "GET image": 1 } } });
+    const privateData = await popup(privateTab, true);
+    assert.equal(privateData.since, 0);
+    assert.deepEqual(privateData.totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
     await exchange(tab, "image", 1300, EDGE_IP);
     mock.timers.runAll();
     assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
+    assert.equal((await popup(tab)).since, now);
   });
 
-  it("clear in a private window the counts of the private session only, and nothing of the kept counts", async () => {
+  it("clear in a private window the counts of the site in the private session only, and nothing of the kept counts nor of the other sites", async () => {
     const kept = 1170;
-    const keptSite = "t1170.example";
-    await commit(kept, "doc-1170", 1000, [], `https://${keptSite}/`);
+    const site = "t1170.example";
+    await commit(kept, "doc-1170", 1000, [], `https://${site}/`);
     await exchange(kept, "image", 1100, EDGE_IP);
     const tab = 1171;
-    const site = "t1171.example";
     await commit(tab, "doc-1171", 1000, [], `https://${site}/`);
     await privateExchange(tab, "private-1171", 1100);
+    const other = 1172;
+    const otherSite = "t1172.example";
+    await commit(other, "doc-1172", 1000, [], `https://${otherSite}/`);
+    await privateExchange(other, "private-1172", 1100);
     mock.timers.runAll();
     assert.notDeepEqual((await popup(tab, true)).totals, {});
+    // Counted, and not yet written.
+    await privateExchange(tab, "private-1171-b", 1150);
     const keptBefore = JSON.stringify([...local.entries()]);
     const writes = localWrites.length;
     const cleared = (await answer({
-      kind: "clear",
+      kind: "clearSite",
+      site,
       privateWindow: true,
     })) as ClearedData;
     assert.equal(cleared.since, 0);
-    assert.equal(session.has("privateCounts"), false);
     const data = await popup(tab, true);
     assert.equal(data.since, 0);
     assert.deepEqual(data.totals, {});
     mock.timers.runAll();
-    assert.equal(session.has("privateCounts"), false);
-    assert.equal(localWrites.length, writes);
-    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
-    assert.deepEqual((await popup(kept)).totals, {
+    const stored = session.get("privateCounts") as Record<string, SiteCounts>;
+    assert.equal(stored[site], undefined);
+    assert.deepEqual(stored[otherSite], {
       edge: { blue2: { "GET image": 1 } },
     });
-    await privateExchange(tab, "private-1171-b", 1200);
+    assert.deepEqual((await popup(other, true)).totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    assert.equal(localWrites.length, writes);
+    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
+    const keptData = await popup(kept);
+    assert.equal(keptData.since, local.get("since"));
+    assert.deepEqual(keptData.totals, { edge: { blue2: { "GET image": 1 } } });
+    await privateExchange(tab, "private-1171-c", 1200);
     mock.timers.runAll();
     assert.deepEqual((await popup(tab, true)).totals, {
       edge: { blue2: { "GET image": 1 } },
     });
+    assert.deepEqual(
+      (session.get("privateCounts") as Record<string, SiteCounts>)[site],
+      { edge: { blue2: { "GET image": 1 } } },
+    );
+  });
+
+  it("read at a wake-up the start of each site cleared, and the common date for a site stored before any clear", async () => {
+    const common = local.get("since");
+    const clearedAt = INSTALLED_AT + 5000;
+    local.set("site:t1175.example", { edge: { blue2: { "GET image": 2 } } });
+    local.set("site:t1176.example", {});
+    local.set("since:t1176.example", clearedAt);
+    const privateBefore = session.get("privateCounts");
+    try {
+      const woken = await importModule<Counts>("counts.js?cleared-sites");
+      await woken.ready;
+      assert.equal(woken.since("t1175.example", false), common);
+      assert.deepEqual(woken.totals("t1175.example", false), {
+        edge: { blue2: { "GET image": 2 } },
+      });
+      assert.equal(woken.since("t1176.example", false), clearedAt);
+      assert.deepEqual(woken.totals("t1176.example", false), {});
+      assert.equal(woken.since("t1176.example", true), 0);
+      assert.equal(woken.since(null, false), common);
+      assert.equal(local.get("since"), common);
+    } finally {
+      if (privateBefore !== undefined) {
+        session.set("privateCounts", privateBefore);
+      }
+    }
   });
 });
 
@@ -1290,7 +1354,12 @@ describe("a tab the extension has not seen navigate", () => {
       partial: false,
       missed: false,
     });
-    const shown = viewOf(data, [], () => "");
+    const shown = viewOf(
+      data,
+      [],
+      () => "",
+      (site) => site,
+    );
     assert.deepEqual(shown.header, { kind: "browser-page" });
     assert.equal(shown.icon, "neutral");
     assert.equal(shown.page, null);
@@ -1555,8 +1624,24 @@ describe("the message handler", () => {
       answer({ kind: "popup", tabId: 1, privateWindow: "yes" }),
       undefined,
     );
-    assert.equal(answer({ kind: "clear" }), undefined);
-    assert.equal(answer({ kind: "clear", privateWindow: 1 }), undefined);
+    assert.equal(answer({ kind: "clear", privateWindow: false }), undefined);
+    assert.equal(
+      answer({ kind: "clearSite", privateWindow: false }),
+      undefined,
+    );
+    assert.equal(
+      answer({ kind: "clearSite", site: "", privateWindow: false }),
+      undefined,
+    );
+    assert.equal(
+      answer({ kind: "clearSite", site: 1, privateWindow: false }),
+      undefined,
+    );
+    assert.equal(answer({ kind: "clearSite", site: "a.example" }), undefined);
+    assert.equal(
+      answer({ kind: "clearSite", site: "a.example", privateWindow: "no" }),
+      undefined,
+    );
   });
 
   it("is registered by the event page on runtime.onMessage, and answers with a promise", async () => {
