@@ -41,6 +41,12 @@ interface Cname {
   canonicalNameOf(host: string, now: number): Promise<string | null>;
 }
 
+interface Counts {
+  readonly ready: Promise<void>;
+  totals(site: string | null, privateWindow: boolean): SiteCounts;
+  onWindowRemoved(): Promise<void>;
+}
+
 const EDGE_IP = "192.0.2.10";
 const OTHER_IP = "203.0.113.1";
 
@@ -75,6 +81,12 @@ const local = new Map<string, unknown>();
 const localWrites: Record<string, unknown>[] = [];
 const resolved: string[] = [];
 let allSites = true;
+// The windows Firefox lists, those of private windows only when the
+// extension may run in them.
+let openWindows: { id: number; incognito: boolean }[] | Error = [
+  { id: 1, incognito: false },
+];
+let windowReads = 0;
 let resolve: (host: string) => Promise<{ canonicalName?: string }> = () =>
   Promise.resolve({ canonicalName: "" });
 
@@ -175,6 +187,15 @@ function event(name: string) {
     onUpdated: event("tabs.onUpdated"),
     onRemoved: event("tabs.onRemoved"),
   },
+  windows: {
+    getAll: () => {
+      windowReads += 1;
+      return openWindows instanceof Error
+        ? Promise.reject(openWindows)
+        : Promise.resolve(openWindows);
+    },
+    onRemoved: event("windows.onRemoved"),
+  },
   action: {
     setIcon: (details: { tabId: number; path: string }) => {
       record(details.tabId, "icon", details.path);
@@ -221,6 +242,7 @@ mock.timers.enable({ apis: ["setTimeout", "Date"], now: INSTALLED_AT });
 const tabs = await importModule<Tabs>("tabs.js");
 const requests = await importModule<Requests>("requests.js");
 const cname = await importModule<Cname>("cname.js");
+const counts = await importModule<Counts>("counts.js");
 const { answer } = await importModule<Answer>("answer.js");
 await importModule<object>("background.js");
 
@@ -1125,6 +1147,136 @@ describe("the kept counts", () => {
       edge: { blue2: { "GET image": 1 } },
     });
   });
+});
+
+describe("the counts of a private session", () => {
+  const PRIVATE: SiteCounts = { edge: { blue2: { "GET image": 4 } } };
+  const NORMAL = { id: 1, incognito: false };
+
+  after(() => {
+    openWindows = [NORMAL];
+  });
+
+  // A tab of a private window whose site counted one image.
+  async function privateSite(tab: number): Promise<string> {
+    const site = `t${tab}.example`;
+    await commit(tab, `doc-${tab}`, 1000, [], `https://${site}/`);
+    await privateExchange(tab, `private-${tab}`, 1100);
+    mock.timers.runAll();
+    assert.deepEqual(counts.totals(site, true), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    return site;
+  }
+
+  // Firefox fires windows.onRemoved once the window is gone from
+  // windows.getAll (nsAppShellService.cpp, Firefox 159.0.1).
+  async function close(id: number): Promise<void> {
+    openWindows = (openWindows as { id: number; incognito: boolean }[]).filter(
+      (window) => window.id !== id,
+    );
+    await counts.onWindowRemoved();
+  }
+
+  it("stay while a private window is open, and go when the last one closes, leaving the kept counts alone", async () => {
+    openWindows = [
+      NORMAL,
+      { id: 2, incognito: true },
+      { id: 3, incognito: true },
+    ];
+    const site = await privateSite(1180);
+    await commit(1181, "doc-1181", 1000, [], "https://t1181.example/");
+    await exchange(1181, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    const keptBefore = JSON.stringify([...local.entries()]);
+    await close(2);
+    assert.notDeepEqual(counts.totals(site, true), {});
+    assert.equal(session.has("privateCounts"), true);
+    await close(3);
+    assert.deepEqual(counts.totals(site, true), {});
+    assert.equal(session.has("privateCounts"), false);
+    mock.timers.runAll();
+    assert.equal(session.has("privateCounts"), false);
+    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
+    assert.deepEqual(counts.totals("t1181.example", false), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+  });
+
+  it("ask nothing of Firefox when a window closes while the private session counted nothing", async () => {
+    const reads = windowReads;
+    await counts.onWindowRemoved();
+    assert.equal(windowReads, reads);
+  });
+
+  it("stay when Firefox cannot list its windows, which is logged", async () => {
+    openWindows = [NORMAL, { id: 4, incognito: true }];
+    const site = await privateSite(1182);
+    openWindows = new Error("NS_ERROR_FAILURE");
+    const errors = mock.method(console, "error", () => {});
+    try {
+      await counts.onWindowRemoved();
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(
+        String(errors.mock.calls[0]?.arguments[0]),
+        /^Cloud Leak: .*NS_ERROR_FAILURE/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+    assert.notDeepEqual(counts.totals(site, true), {});
+    openWindows = [NORMAL];
+    await counts.onWindowRemoved();
+    assert.deepEqual(counts.totals(site, true), {});
+  });
+
+  it("are dropped by the event page through windows.onRemoved, which wakes it when suspended", async () => {
+    openWindows = [NORMAL, { id: 5, incognito: true }];
+    const site = await privateSite(1183);
+    const registered = listeners.get("windows.onRemoved") ?? [];
+    assert.equal(registered.length, 1);
+    openWindows = [NORMAL];
+    registered[0]?.(5);
+    await new Promise((done) => setImmediate(done));
+    assert.deepEqual(counts.totals(site, true), {});
+  });
+
+  // The page reads the counts at each wake-up, and the last private window
+  // may have closed while it was suspended.
+  for (const [name, windows, expected] of [
+    ["go at a wake-up when no private window is open", [NORMAL], {}],
+    [
+      "stay at a wake-up while a private window is open",
+      [NORMAL, { id: 6, incognito: true }],
+      PRIVATE,
+    ],
+    [
+      "stay at a wake-up when Firefox cannot list its windows",
+      new Error("NS_ERROR_FAILURE"),
+      PRIVATE,
+    ],
+  ] as const) {
+    it(name, async () => {
+      session.set("privateCounts", { "t1190.example": PRIVATE });
+      openWindows = windows instanceof Error ? windows : [...windows];
+      const errors = mock.method(console, "error", () => {});
+      try {
+        const woken = await importModule<Counts>(
+          `counts.js?${encodeURIComponent(name)}`,
+        );
+        await woken.ready;
+        assert.deepEqual(woken.totals("t1190.example", true), expected);
+        assert.equal(
+          session.has("privateCounts"),
+          Object.keys(expected).length > 0,
+        );
+        assert.equal(errors.mock.callCount(), windows instanceof Error ? 1 : 0);
+      } finally {
+        errors.mock.restore();
+        session.delete("privateCounts");
+      }
+    });
+  }
 });
 
 describe("the message handler", () => {
