@@ -94,6 +94,15 @@ export function clearSite(
   };
 }
 
+// The start of the counts is kept to the day, at its local midnight: the
+// popup shows no more, and the moment of a clear, made while on the site it
+// clears, would tell when the user was there.
+export function dayOf(ms: number): number {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
 // When the counts of a site started: at its last clear, or with all the
 // counts for a site never cleared and for a document that has no site.
 export function sinceOf(counts: KeptCounts, site: string | null): number {

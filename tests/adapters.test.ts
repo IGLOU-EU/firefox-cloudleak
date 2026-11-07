@@ -8,6 +8,7 @@
 
 import assert from "node:assert/strict";
 import { after, before, describe, it, mock } from "node:test";
+import { dayOf } from "../src/core/counts.js";
 import type {
   ClearedData,
   PopupData,
@@ -953,8 +954,8 @@ describe("the kept counts", () => {
   }
 
   it("start when the extension first runs, before anything is counted", async () => {
-    assert.equal(local.get("since"), INSTALLED_AT);
-    assert.equal((await popup(1100)).since, INSTALLED_AT);
+    assert.equal(local.get("since"), dayOf(INSTALLED_AT));
+    assert.equal((await popup(1100)).since, dayOf(INSTALLED_AT));
   });
 
   for (const commitFirst of [false, true]) {
@@ -1122,29 +1123,30 @@ describe("the kept counts", () => {
     await exchange(tab, "image", 1200, EDGE_IP);
     mock.timers.tick(1);
     const common = local.get("since");
-    assert.equal(common, INSTALLED_AT);
+    assert.equal(common, dayOf(INSTALLED_AT));
     const otherBefore = JSON.stringify(siteCounts(otherSite));
     const privateBefore = JSON.stringify(session.get("privateCounts"));
     const now = Date.now();
     assert.ok(now > INSTALLED_AT);
+    const today = dayOf(now);
     const cleared = (await answer({
       kind: "clearSite",
       site,
       privateWindow: false,
     })) as ClearedData;
-    assert.equal(cleared.since, now);
+    assert.equal(cleared.since, today);
     assert.deepEqual(siteCounts(site), {});
-    assert.equal(local.get(`since:${site}`), now);
+    assert.equal(local.get(`since:${site}`), today);
     // The write pending since before the clear brings nothing back.
     mock.timers.runAll();
     assert.deepEqual(siteCounts(site), {});
-    assert.equal(local.get(`since:${site}`), now);
+    assert.equal(local.get(`since:${site}`), today);
     assert.equal(local.get("since"), common);
     assert.equal(JSON.stringify(siteCounts(otherSite)), otherBefore);
     assert.equal(local.has(`since:${otherSite}`), false);
     assert.equal(JSON.stringify(session.get("privateCounts")), privateBefore);
     const data = await popup(tab);
-    assert.equal(data.since, now);
+    assert.equal(data.since, today);
     assert.deepEqual(data.totals, {});
     const otherData = await popup(other);
     assert.equal(otherData.since, common);
@@ -1157,7 +1159,7 @@ describe("the kept counts", () => {
     await exchange(tab, "image", 1300, EDGE_IP);
     mock.timers.runAll();
     assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
-    assert.equal((await popup(tab)).since, now);
+    assert.equal((await popup(tab)).since, today);
   });
 
   it("clear in a private window the counts of the site in the private session only, and nothing of the kept counts nor of the other sites", async () => {
