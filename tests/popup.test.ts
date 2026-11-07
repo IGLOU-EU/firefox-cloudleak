@@ -273,6 +273,7 @@ describe("the popup", () => {
     assert.equal(page.text("site"), "bücher.example");
     assert.equal(page.element("site").hidden, false);
     assert.equal(page.element("browser-page").hidden, true);
+    assert.equal(page.element("unknown-site").hidden, true);
     assert.equal(page.element("browser-notice").hidden, true);
     assert.equal(page.element("page").hidden, false);
     assert.equal(page.element("page-unit").hidden, false);
@@ -395,6 +396,7 @@ describe("the popup", () => {
     );
     assert.equal(page.element("site").hidden, true);
     assert.equal(page.element("browser-page").hidden, false);
+    assert.equal(page.element("unknown-site").hidden, true);
     assert.equal(page.element("browser-notice").hidden, false);
     assert.equal(page.element("page").hidden, true);
     assert.equal(page.element("totals").hidden, true);
@@ -404,6 +406,30 @@ describe("the popup", () => {
       page.text("question"),
       `popupClearQuestion ${dates.format(SINCE)}`,
     );
+  });
+
+  it("shows what a page of the browser saw without the notice that there is nothing to count", async () => {
+    const page = await open({
+      answer: { ...RED_SITE, page: "reader", site: null, totals: {} },
+    });
+    assert.equal(page.element("browser-page").hidden, false);
+    assert.equal(page.element("browser-notice").hidden, true);
+    assert.equal(page.element("page").hidden, false);
+    assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
+    assert.equal(page.element("totals").hidden, true);
+  });
+
+  it("says the site of a website is unknown, with what the tab saw and no totals", async () => {
+    const page = await open({
+      answer: { ...RED_SITE, page: "site", site: null, totals: {} },
+    });
+    assert.equal(page.element("site").hidden, true);
+    assert.equal(page.element("browser-page").hidden, true);
+    assert.equal(page.element("unknown-site").hidden, false);
+    assert.equal(page.element("browser-notice").hidden, true);
+    assert.equal(page.element("page").hidden, false);
+    assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
+    assert.equal(page.element("totals").hidden, true);
   });
 
   it("shows the site as it came when Firefox gives no display form, or fails to", async () => {

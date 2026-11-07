@@ -45,8 +45,8 @@ export interface PopupData {
   // Of the document the tab shows.
   readonly state: TabState;
   readonly page: Page;
-  // The registrable domain of the document, in punycode, or null when the
-  // document is no website.
+  // The registrable domain of the document, in punycode, or null for a page
+  // of the browser and for a website whose site the extension does not know.
   readonly site: string | null;
   readonly privateWindow: boolean;
   // When the kept counts started, in milliseconds since the epoch. Zero in a

@@ -87,6 +87,12 @@ let openWindows: { id: number; incognito: boolean }[] | Error = [
   { id: 1, incognito: false },
 ];
 let windowReads = 0;
+// What Firefox answers to webNavigation.getFrame for the top frame of a tab:
+// null for a frame it cannot give, such as that of a discarded tab.
+type Frame = { readonly url?: string } | null;
+const NO_FRAME = () => Promise.resolve(null);
+let frameOf: (tabId: number) => Promise<Frame> = NO_FRAME;
+const frameReads: { tabId: number; frameId: number }[] = [];
 let resolve: (host: string) => Promise<{ canonicalName?: string }> = () =>
   Promise.resolve({ canonicalName: "" });
 
@@ -232,6 +238,10 @@ function event(name: string) {
   webNavigation: {
     onCommitted: event("webNavigation.onCommitted"),
     onCompleted: event("webNavigation.onCompleted"),
+    getFrame: (details: { tabId: number; frameId: number }) => {
+      frameReads.push(details);
+      return frameOf(details.tabId);
+    },
   },
   runtime: { onMessage: event("runtime.onMessage") },
 };
@@ -718,6 +728,21 @@ describe("a page of the browser, without the access to all sites", () => {
     });
   }
 
+  it("shows neutral a page of the browser open before the extension started, once Firefox gives its URL", async () => {
+    const tab = 740;
+    frameOf = (tabId) =>
+      Promise.resolve(tabId === tab ? { url: "about:newtab" } : null);
+    try {
+      await statusWithoutUrl(tab);
+      await new Promise((done) => setImmediate(done));
+      mock.timers.runAll();
+      assert.deepEqual(iconOf(tab), NEUTRAL);
+      assert.equal(shown(tab).title, "titleNeutral\ntitleMissed");
+    } finally {
+      frameOf = NO_FRAME;
+    }
+  });
+
   it("says not observed a site out of reach whose commit only its completion follows", async () => {
     const tab = 713;
     await redPage(tab, 1000);
@@ -1017,7 +1042,7 @@ describe("the kept counts", () => {
     assert.deepEqual((await popup(tab)).totals, {});
   });
 
-  it("count nothing for a tab the extension has not seen navigate, whose site it does not know", async () => {
+  it("count nothing for a tab the extension has not seen navigate, when Firefox gives no page for it", async () => {
     const tab = 1135;
     mock.timers.runAll();
     const writes = localWrites.length;
@@ -1146,6 +1171,176 @@ describe("the kept counts", () => {
     assert.deepEqual((await popup(tab, true)).totals, {
       edge: { blue2: { "GET image": 1 } },
     });
+  });
+});
+
+describe("a tab the extension has not seen navigate", () => {
+  after(() => {
+    frameOf = NO_FRAME;
+  });
+
+  function siteCounts(site: string): SiteCounts | undefined {
+    return local.get(`site:${site}`) as SiteCounts | undefined;
+  }
+
+  function readsOf(tabId: number) {
+    return frameReads.filter((read) => read.tabId === tabId);
+  }
+
+  async function popup(tabId: number): Promise<PopupData> {
+    return (await answer({
+      kind: "popup",
+      tabId,
+      privateWindow: false,
+    })) as PopupData;
+  }
+
+  // Firefox answers getFrame after the request that made the page ask.
+  function answered(): Promise<void> {
+    return new Promise((done) => setImmediate(done));
+  }
+
+  function frames(entries: Record<number, Frame | Error>): void {
+    frameOf = (tabId) => {
+      const frame = entries[tabId] ?? null;
+      return frame instanceof Error
+        ? Promise.reject(frame)
+        : Promise.resolve(frame);
+    };
+  }
+
+  // A frame Firefox gives only when the test lets it.
+  function heldFrame(tab: number): (frame: Frame) => void {
+    let give: (frame: Frame) => void = () => {};
+    frameOf = (tabId) =>
+      tabId === tab
+        ? new Promise<Frame>((done) => {
+            give = done;
+          })
+        : Promise.resolve(null);
+    return (frame) => give(frame);
+  }
+
+  it("takes its site from the page Firefox shows in it, once, and counts its requests for that site", async () => {
+    const tab = 1400;
+    frames({ [tab]: { url: "https://www.t1400.example/live?channel=1" } });
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answered();
+    await exchange(tab, "script", 1200, EDGE_IP);
+    mock.timers.runAll();
+    assert.deepEqual(readsOf(tab), [{ tabId: tab, frameId: 0 }]);
+    assert.equal(tabs.recordOf(tab).site, "t1400.example");
+    assert.equal(tabs.recordOf(tab).page, "site");
+    assert.deepEqual(siteCounts("t1400.example"), {
+      edge: { blue2: { "GET image": 1, "GET script": 1 } },
+    });
+    assert.equal(
+      JSON.stringify([...session.values()]).includes("channel"),
+      false,
+    );
+  });
+
+  it("keeps the requests that arrive while Firefox is asked, and counts them once it answers", async () => {
+    const tab = 1401;
+    const give = heldFrame(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await exchange(tab, "image", 1200, EDGE_IP);
+    mock.timers.runAll();
+    assert.equal(siteCounts("t1401.example"), undefined);
+    assert.equal(tabs.recordOf(tab).uncounted.length, 2);
+    give({ url: "https://t1401.example/" });
+    await answered();
+    mock.timers.runAll();
+    assert.deepEqual(siteCounts("t1401.example"), {
+      edge: { blue2: { "GET image": 2 } },
+    });
+    assert.deepEqual(tabs.recordOf(tab).uncounted, []);
+    assert.equal(readsOf(tab).length, 1);
+  });
+
+  it("is a page of the browser when Firefox shows one, such as about:debugging, and counts nothing", async () => {
+    const tab = 1402;
+    frames({ [tab]: { url: "about:debugging#/runtime/this-firefox" } });
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answered();
+    mock.timers.runAll();
+    assert.equal(tabs.recordOf(tab).page, "browser");
+    assert.equal(tabs.recordOf(tab).site, null);
+    assert.equal(localWrites.length, writes);
+    const data = await popup(tab);
+    assert.equal(data.page, "browser");
+    assert.equal(data.site, null);
+  });
+
+  it("stays unknown when Firefox gives no frame, as for a discarded tab, and its requests are dropped", async () => {
+    const tab = 1403;
+    frames({});
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answered();
+    mock.timers.runAll();
+    assert.equal(tabs.recordOf(tab).site, null);
+    assert.deepEqual(tabs.recordOf(tab).uncounted, []);
+    await exchange(tab, "image", 1200, EDGE_IP);
+    await answered();
+    assert.equal(readsOf(tab).length, 1);
+    const data = await popup(tab);
+    assert.equal(data.page, "site");
+    assert.equal(data.site, null);
+    assert.equal(readsOf(tab).length, 1);
+  });
+
+  it("stays unknown when Firefox fails to answer, which is logged once", async () => {
+    const tab = 1404;
+    frames({ [tab]: new Error(`Invalid tab ID: ${tab}`) });
+    const errors = mock.method(console, "error", () => {});
+    try {
+      await exchange(tab, "image", 1100, EDGE_IP);
+      await answered();
+      await exchange(tab, "image", 1200, EDGE_IP);
+      await answered();
+      mock.timers.runAll();
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(
+        String(errors.mock.calls[0]?.arguments[0]),
+        /^Cloud Leak: .*Invalid tab ID/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+    assert.equal(tabs.recordOf(tab).site, null);
+    assert.deepEqual(tabs.recordOf(tab).uncounted, []);
+  });
+
+  it("gives no site to the document the tab left when another commits before Firefox answers", async () => {
+    const tab = 1405;
+    const give = heldFrame(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await commit(tab, "doc-1405", 1200, [], "https://t1405.example/");
+    give({ url: "https://t1405.example/" });
+    await answered();
+    mock.timers.runAll();
+    const record = tabs.recordOf(tab);
+    assert.equal(record.site, "t1405.example");
+    assert.equal(record.previous[0]?.site, null);
+    assert.deepEqual(record.previous[0]?.uncounted, []);
+    assert.equal(siteCounts("t1405.example"), undefined);
+  });
+
+  it("is asked by the popup, which answers with the site and the totals Firefox's page gives", async () => {
+    const counted = 1410;
+    await commit(counted, "doc-1410", 1000, [], "https://t1410.example/");
+    await exchange(counted, "image", 1100, EDGE_IP);
+    const tab = 1411;
+    frames({ [tab]: { url: "https://www.t1410.example/stream" } });
+    const data = await popup(tab);
+    assert.equal(data.page, "site");
+    assert.equal(data.site, "t1410.example");
+    assert.deepEqual(data.state, EMPTY_RECORD.state);
+    assert.deepEqual(data.totals, { edge: { blue2: { "GET image": 1 } } });
+    await popup(tab);
+    assert.equal(readsOf(tab).length, 1);
   });
 });
 
@@ -1316,7 +1511,7 @@ describe("the message handler", () => {
     assert.equal(data.site, "t1210.example");
   });
 
-  it("answers for a tab it never saw with an empty record and no totals", async () => {
+  it("answers for a tab it never saw, when Firefox gives no page for it, with an empty record and no totals", async () => {
     assert.deepEqual(await answer(popup), {
       state: EMPTY_RECORD.state,
       page: "site",

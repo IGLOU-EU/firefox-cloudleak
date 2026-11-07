@@ -11,6 +11,7 @@ import {
   EMPTY_RECORD,
   foldRequest,
   HIDDEN_SITE,
+  learnUnseenDocument,
   markHiddenSite,
   markMissedRequest,
   markPartialView,
@@ -18,6 +19,7 @@ import {
   PREVIOUS_DOCUMENTS,
   showCompletedDocument,
   showDocument,
+  siteToLearn,
   startNavigation,
   type TabRecord,
   takeCountable,
@@ -778,11 +780,48 @@ describe("takeCountable", () => {
     );
   });
 
-  it("drops the requests of a tab the extension has not seen navigate, whose site it does not know", () => {
+  it("drops the requests of a tab the extension has not seen navigate, once Firefox gave no site for it", () => {
     const record = fold(EMPTY_RECORD, "", BLUE_2);
     assert.equal(record.state.kind, "seen");
     assert.deepEqual(taken(record), []);
     assert.deepEqual(takeCountable(record).record.uncounted, []);
+  });
+
+  it("keeps the requests of a tab the extension has not seen navigate while its site is asked, then takes them for that site", () => {
+    const record = fold(fold(EMPTY_RECORD, "", BLUE_2), "", RED_3);
+    const asking = takeCountable(record, true);
+    assert.equal(asking.record, record);
+    assert.deepEqual(asking.countable, []);
+    const learned = learnUnseenDocument(record, false, "site", SITE);
+    assert.deepEqual(taken(learned), [
+      [SITE, 2],
+      [SITE, 3],
+    ]);
+    assert.deepEqual(takeCountable(learned).record.uncounted, []);
+  });
+
+  it("keeps waiting only the requests of the document whose site is asked", () => {
+    const unseen = fold(EMPTY_RECORD, "", BLUE_2);
+    const pending = fold(startNavigation(unseen, "1", false, 200), "1", RED_3);
+    const committed = showDocument(
+      pending,
+      "doc-a",
+      210,
+      false,
+      false,
+      "site",
+      "a.example",
+    );
+    const { record, countable } = takeCountable(committed, true);
+    assert.deepEqual(
+      countable.map(({ site, request }) => [
+        site,
+        request.classification.leak.level,
+      ]),
+      [["a.example", 3]],
+    );
+    assert.deepEqual(record.uncounted, []);
+    assert.equal(record.previous[0]?.uncounted.length, 1);
   });
 
   it("takes what the wait for a site out of reach saw once the site commits", () => {
@@ -799,6 +838,122 @@ describe("takeCountable", () => {
       "hidden.example",
     );
     assert.deepEqual(taken(committed), [["hidden.example", 2]]);
+  });
+});
+
+describe("the document of a tab the extension has not seen navigate", () => {
+  it("asks for its site while the tab shows it, and only then", () => {
+    assert.equal(siteToLearn(EMPTY_RECORD), true);
+    assert.equal(siteToLearn(fold(EMPTY_RECORD, "", BLUE_2)), true);
+    assert.equal(siteToLearn(markHiddenSite(EMPTY_RECORD)), true);
+    assert.equal(
+      siteToLearn(startNavigation(EMPTY_RECORD, "1", false, 100)),
+      true,
+    );
+    assert.equal(
+      siteToLearn(learnUnseenDocument(EMPTY_RECORD, false, "site", SITE)),
+      false,
+    );
+    assert.equal(
+      siteToLearn(learnUnseenDocument(EMPTY_RECORD, false, "browser", null)),
+      false,
+    );
+    assert.equal(
+      siteToLearn(load(EMPTY_RECORD, "1", "doc-a", 100, null)),
+      false,
+    );
+    assert.equal(
+      siteToLearn(showDocument(EMPTY_RECORD, "doc-a", 100, false)),
+      false,
+    );
+  });
+
+  it("takes the site Firefox gives, and keeps what the tab saw", () => {
+    const record = fold(EMPTY_RECORD, "", BLUE_2);
+    const learned = learnUnseenDocument(record, false, "site", SITE);
+    assert.equal(learned.site, SITE);
+    assert.equal(learned.page, "site");
+    assert.deepEqual(shown(learned), shown(record));
+  });
+
+  it("gives the site to the document still shown while a navigation is pending, and to the requests it sent before", () => {
+    const pending = startNavigation(
+      fold(EMPTY_RECORD, "", BLUE_2),
+      "1",
+      false,
+      200,
+    );
+    const learned = learnUnseenDocument(pending, false, "site", SITE);
+    assert.equal(learned.site, null);
+    assert.equal(learned.previous[0]?.site, SITE);
+    const late = fold(learned, navigationAt(learned, 150), RED_3);
+    assert.deepEqual(taken(late), [
+      [SITE, 2],
+      [SITE, 3],
+    ]);
+  });
+
+  it("is left as it is once the tab shows another document, whose URL Firefox may have given", () => {
+    const committed = showDocument(
+      fold(EMPTY_RECORD, "", BLUE_2),
+      "doc-a",
+      100,
+      false,
+      false,
+      "site",
+      "a.example",
+    );
+    assert.equal(
+      learnUnseenDocument(committed, false, "site", "b.example"),
+      committed,
+    );
+    const learned = learnUnseenDocument(EMPTY_RECORD, false, "site", SITE);
+    assert.equal(
+      learnUnseenDocument(learned, false, "site", "b.example"),
+      learned,
+    );
+  });
+
+  it("becomes a page of the browser, never out of reach nor partial, and still missed requests", () => {
+    for (const record of [
+      markHiddenSite(EMPTY_RECORD),
+      markPartialView(EMPTY_RECORD),
+      EMPTY_RECORD,
+    ]) {
+      const learned = learnUnseenDocument(record, true, "browser", null);
+      assert.equal(learned.page, "browser");
+      assert.equal(learned.site, null);
+      assert.deepEqual(learned.state, markMissed(NEUTRAL));
+    }
+    const seenThere = learnUnseenDocument(
+      markPartialView(fold(EMPTY_RECORD, "", BLUE_2)),
+      true,
+      "browser",
+      null,
+    );
+    assert.deepEqual(seenThere.state, seen(BLUE_2, false, true));
+  });
+
+  it("becomes reader view, partial without the access to all sites, since it loads the article's images from the web", () => {
+    const learned = learnUnseenDocument(
+      markHiddenSite(EMPTY_RECORD),
+      true,
+      "reader",
+      null,
+    );
+    assert.equal(learned.page, "reader");
+    assert.deepEqual(learned.state, markMissed(markPartial(NEUTRAL)));
+  });
+
+  it("stays not observed on a site out of reach once its site is known", () => {
+    const learned = learnUnseenDocument(
+      markHiddenSite(EMPTY_RECORD),
+      true,
+      "site",
+      "hidden.example",
+    );
+    assert.equal(learned.site, "hidden.example");
+    assert.deepEqual(learned.state, NOT_OBSERVED);
   });
 });
 

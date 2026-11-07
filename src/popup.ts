@@ -85,11 +85,13 @@ function paragraphsOf(lines: readonly TitleLine[]): HTMLElement[] {
 
 function render(view: PopupView): void {
   element("state").setAttribute("src", ICONS[view.icon]);
+  const { header } = view;
   const site = element("site");
-  site.hidden = view.site === null;
-  site.textContent = view.site === null ? "" : siteText(view.site);
-  element("browser-page").hidden = view.site !== null;
-  element("browser-notice").hidden = view.site !== null;
+  site.hidden = header.kind !== "site";
+  site.textContent = header.kind === "site" ? siteText(header.site) : "";
+  element("unknown-site").hidden = header.kind !== "unknown-site";
+  element("browser-page").hidden = header.kind !== "browser-page";
+  element("browser-notice").hidden = !view.notice;
 
   element("page").hidden = view.page === null;
   if (view.page !== null) {

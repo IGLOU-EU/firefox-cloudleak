@@ -19,6 +19,7 @@ export const POPUP_MESSAGES: readonly string[] = [
   "popupSite",
   "popupSitePrivate",
   "popupBrowserPage",
+  "popupUnknownSite",
   "popupNothingBrowser",
   "popupNothingSite",
   "popupMap",

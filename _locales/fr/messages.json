@@ -163,11 +163,15 @@
   },
   "popupBrowserPage": {
     "message": "Page du navigateur",
-    "description": "Shown in place of the site name in the popup when the tab shows a page of the browser."
+    "description": "Shown in place of the site name in the popup when the tab shows a page of the browser, reader view included."
+  },
+  "popupUnknownSite": {
+    "message": "Site inconnu",
+    "description": "Shown in place of the site name in the popup when the tab shows a website whose site the extension does not know."
   },
   "popupNothingBrowser": {
     "message": "Aucun site n'est affiché, il n'y a rien à compter.",
-    "description": "Popup notice for a page of the browser, which has no site to count."
+    "description": "Popup notice for a page of the browser, which has no site to count, shown only when the popup shows nothing else of the page."
   },
   "popupNothingSite": {
     "message": "Aucune requête vue sur ce site n'est passée par un intermédiaire connu.",

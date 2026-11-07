@@ -8,7 +8,7 @@ import type {
 } from "./core/popup-message.js";
 import { displayedDocument } from "./core/tab-record.js";
 import { clear, since, totals } from "./counts.js";
-import { ready, recordOf } from "./tabs.js";
+import { learnedRecordOf, ready } from "./tabs.js";
 
 // The answer to a message of the popup, or nothing for a message of another
 // shape, which is left to whoever it is for.
@@ -42,14 +42,15 @@ function requestOf(message: unknown): PopupRequest | null {
   return null;
 }
 
-// Of the document the tab shows, and of its site. A tab the extension never
-// saw navigate shows a document without a site, so its totals are empty.
+// Of the document the tab shows, and of its site, which Firefox gives for a
+// tab the extension never saw navigate. Without it, the site is unknown and
+// the totals are empty.
 async function popupData({
   tabId,
   privateWindow,
 }: Extract<PopupRequest, { kind: "popup" }>): Promise<PopupData> {
   await ready;
-  const { state, page, site } = displayedDocument(recordOf(tabId));
+  const { state, page, site } = displayedDocument(await learnedRecordOf(tabId));
   return {
     state,
     page,
