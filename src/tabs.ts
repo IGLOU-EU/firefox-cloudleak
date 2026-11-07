@@ -9,12 +9,14 @@ import {
   displayedDocument,
   EMPTY_RECORD,
   foldRequest,
+  learnUnseenDocument,
   markHiddenSite,
   markMissedRequest,
   markPartialView,
   type Page,
   showCompletedDocument,
   showDocument,
+  siteToLearn,
   startNavigation,
   type TabRecord,
   takeCountable,
@@ -131,6 +133,30 @@ function documentOf(url: string): Document {
   }
   const name = /^about:([^?#]*)/i.exec(url)?.[1]?.toLowerCase();
   return { page: name === "reader" ? "reader" : "browser", site: null };
+}
+
+// What a tab shows, for a tab the extension has not seen navigate. Firefox
+// gives the URL of the top document to getFrame whatever the access to its
+// site, as to the navigation events: the address the content process gave at
+// the commit, or that of a page Firefox loads in its own process, such as its
+// settings (ext-webNavigation.js, WebNavigationFrames.sys.mjs,
+// CanonicalBrowsingContext.cpp and BrowserParent.cpp, Firefox 159.0.1). The
+// URL is read and reduced here, as at a commit, and goes no further. Firefox
+// gives no frame for a discarded tab, which the types, stopping at Firefox
+// 143, do not say.
+async function documentShownIn(tabId: number): Promise<Document | null> {
+  try {
+    const frame = (await browser.webNavigation.getFrame({
+      tabId,
+      frameId: 0,
+    })) as { readonly url?: string } | null;
+    return frame?.url === undefined ? null : documentOf(frame.url);
+  } catch (error: unknown) {
+    console.error(
+      `Cloud Leak: page of tab ${tabId} not read: ${String(error)}`,
+    );
+    return null;
+  }
 }
 
 // The host as the URL gives it, in punycode, with the brackets of an IPv6
@@ -281,20 +307,66 @@ const scheduleWrite = batch<number>(WRITE_DELAY_MS, (tabIds) => {
   }
 });
 
+// The tabs whose page Firefox is asked for, until it answers, and those it
+// was asked for during this run of the page, so that each is asked once.
+const learning = new Map<number, Promise<void>>();
+const asked = new Set<number>();
+
+// A tab that shows the document the extension did not see open, such as one
+// open before it started, gets its site from Firefox as a commit would give
+// it. The call returns at once and holds no event: the requests of the
+// document wait in its record for the answer. The promise settles once the
+// answer is in the record, and there is none when nothing is asked.
+function askSite(tabId: number, record: TabRecord): Promise<void> | undefined {
+  const asking = learning.get(tabId);
+  if (
+    asking !== undefined ||
+    asked.has(tabId) ||
+    closed.has(tabId) ||
+    !siteToLearn(record)
+  ) {
+    return asking;
+  }
+  asked.add(tabId);
+  const learned = documentShownIn(tabId).then((shown) => {
+    learning.delete(tabId);
+    update(tabId, (current) =>
+      shown === null
+        ? current
+        : learnUnseenDocument(current, !hasAllSites(), shown.page, shown.site),
+    );
+  });
+  learning.set(tabId, learned);
+  report(learned);
+  return learned;
+}
+
+// The popup waits for the site of a tab the extension has not seen navigate,
+// which Firefox gives within milliseconds and which holds no request.
+export async function learnedRecordOf(tabId: number): Promise<TabRecord> {
+  await askSite(tabId, recordOf(tabId));
+  return recordOf(tabId);
+}
+
 // The display follows the document the tab shows, which changes when a
 // pending navigation commits even if no count does. The kept counts take
 // what a change lets them, at the same point where the tab counts it, so
-// that the badge and the kept counts agree.
+// that the badge and the kept counts agree. An answer of Firefox may change
+// nothing but what the kept counts can take.
 function update(tabId: number, change: (record: TabRecord) => TabRecord): void {
   if (closed.has(tabId)) {
     return;
   }
   const record = recordOf(tabId);
   const changed = change(record);
-  if (changed === record) {
+  askSite(tabId, changed);
+  const { record: next, countable } = takeCountable(
+    changed,
+    learning.has(tabId),
+  );
+  if (next === record) {
     return;
   }
-  const { record: next, countable } = takeCountable(changed);
   records.set(tabId, next);
   for (const { site, request } of countable) {
     count(site, request);

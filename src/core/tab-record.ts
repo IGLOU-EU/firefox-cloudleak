@@ -64,11 +64,16 @@ export interface TabRecord extends DocumentRecord {
 // that branched (nsSHistory.cpp and nsSHistory.h, Firefox 159.0.1).
 export const PREVIOUS_DOCUMENTS = 8;
 
+// The document of a tab the extension has not seen navigate, whose id Firefox
+// never gave it. No id Firefox gives is empty.
+const UNSEEN_DOCUMENT = "";
+
 // A tab the extension has not seen navigate yet, such as one opened before
 // it was installed, updated or reloaded: it shows a document whose id the
-// extension never got, and whose first requests it missed.
+// extension never got, and whose first requests it missed. What it is, and
+// its site, are asked of Firefox (siteToLearn).
 export const EMPTY_RECORD: TabRecord = {
-  document: "",
+  document: UNSEEN_DOCUMENT,
   shownAt: 0,
   navigation: "",
   state: markMissed(NEUTRAL),
@@ -225,6 +230,53 @@ export function showCompletedDocument(
     : showDocument(record, document, completedAt, partial, false, page, site);
 }
 
+// Whether the tab shows the document the extension has not seen open, and
+// does not know what it is yet: Firefox is asked for the URL of the page the
+// tab shows, so that its requests count for its site as those of a document
+// the extension saw commit.
+export function siteToLearn(record: TabRecord): boolean {
+  const shown = displayedDocument(record);
+  return (
+    shown.document === UNSEEN_DOCUMENT &&
+    shown.page === "site" &&
+    shown.site === null
+  );
+}
+
+// Firefox gave what the tab shows. It speaks of the document the extension
+// did not see open only while the tab still shows it: once another document
+// committed, the URL may be the new one's. That document then becomes what a
+// commit would have made it, and keeps what its requests showed. A website
+// and reader view, which loads the images of the article from the web, keep
+// the requests they missed before the extension started. A page of the
+// browser sends no request of its own, so it had nothing to miss: it shows
+// as a committed page of the browser does, neither partial nor missed.
+export function learnUnseenDocument(
+  record: TabRecord,
+  partial: boolean,
+  page: Page,
+  site: string | null,
+): TabRecord {
+  if (!siteToLearn(record)) {
+    return record;
+  }
+  const shown = displayedDocument(record);
+  const lacking = partial && page !== "browser";
+  const opened = openedState(shown.state, page, lacking);
+  return replace(record, shown, {
+    ...shown,
+    page,
+    site,
+    state: page === "browser" ? clearMissed(opened) : markMissed(opened),
+  });
+}
+
+function clearMissed(state: TabState): TabState {
+  return state.kind === "not-observed" || !state.missed
+    ? state
+    : { ...state, missed: false };
+}
+
 // What the tab shows. A navigation that has not committed shows nothing yet,
 // and may never commit: a download, a 204 response or a stop end without one
 // (DocumentLoadListener.cpp and nsURILoader.cpp, Firefox 159.0.1), and the
@@ -282,15 +334,27 @@ export interface Countable {
 // What the kept counts can take: the uncounted requests of every document
 // that committed with a site. Those of a document that committed without a
 // site are dropped, since a page of the browser has no site to count for, and
-// those of a navigation still pending wait for its commit. The record comes
-// back as it is when there is nothing to take nor drop.
-export function takeCountable(record: TabRecord): {
+// those of a navigation still pending wait for its commit. The document the
+// extension did not see open counts as committed, yet its site comes later,
+// from Firefox, asked when the tab first shows up: while it is asked, its
+// requests wait as those of a pending navigation do, since the requests that
+// made the tab show up would otherwise be dropped before the answer could
+// give them their site. The record comes back as it is when there is nothing
+// to take nor drop.
+export function takeCountable(
+  record: TabRecord,
+  siteAsked = false,
+): {
   readonly record: TabRecord;
   readonly countable: readonly Countable[];
 } {
   const countable: Countable[] = [];
   const settle = (entry: DocumentRecord): DocumentRecord => {
-    if (entry.document === null || entry.uncounted.length === 0) {
+    if (
+      entry.document === null ||
+      entry.uncounted.length === 0 ||
+      (siteAsked && entry.document === UNSEEN_DOCUMENT)
+    ) {
       return entry;
     }
     if (entry.site !== null) {

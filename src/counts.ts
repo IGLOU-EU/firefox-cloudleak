@@ -19,8 +19,9 @@ const SINCE_KEY = "since";
 const SITE_PREFIX = "site:";
 
 // The counts of private windows never reach the disk: they live in
-// storage.session, beside the tabs, and go with the browser session. They
-// are few, so they fit under one key.
+// storage.session, beside the tabs, and go with the private session, which
+// Firefox ends when its last private window closes. They are few, so they
+// fit under one key.
 const PRIVATE_KEY = "privateCounts";
 
 let kept: KeptCounts = emptyCounts(0);
@@ -57,13 +58,39 @@ async function readKept(): Promise<void> {
   }
 }
 
+// Firefox lists a private window only to an extension allowed to run in it,
+// which alone receives its requests, and removes a closing window from the
+// list before it fires windows.onRemoved (ext-browser.js, ext-windows.js and
+// nsAppShellService.cpp, Firefox 159.0.1). Not knowing keeps the counts, so
+// that a failure loses nothing the session counted.
+async function privateSessionEnded(): Promise<boolean> {
+  try {
+    const windows = await browser.windows.getAll();
+    return !windows.some((window) => window.incognito);
+  } catch (error: unknown) {
+    console.error(`Cloud Leak: windows not read: ${String(error)}`);
+    return false;
+  }
+}
+
+async function dropPrivate(): Promise<void> {
+  privateSession = emptyCounts(0);
+  await browser.storage.session.remove(PRIVATE_KEY);
+}
+
+// The last private window may have closed while the page was suspended.
 async function readPrivate(): Promise<void> {
   try {
     const items = await browser.storage.session.get(PRIVATE_KEY);
     const sites = items[PRIVATE_KEY];
-    if (typeof sites === "object" && sites !== null) {
-      privateSession = { since: 0, sites: sites as KeptCounts["sites"] };
+    if (typeof sites !== "object" || sites === null) {
+      return;
     }
+    if (await privateSessionEnded()) {
+      await dropPrivate();
+      return;
+    }
+    privateSession = { since: 0, sites: sites as KeptCounts["sites"] };
   } catch (error: unknown) {
     console.error(`Cloud Leak: private counts not read: ${String(error)}`);
   }
@@ -75,6 +102,17 @@ export const ready: Promise<void> = Promise.all([
   readKept(),
   readPrivate(),
 ]).then(() => undefined);
+
+// Every window that closes wakes the page for this, so Firefox is asked
+// nothing while the private session counted nothing.
+export async function onWindowRemoved(): Promise<void> {
+  await ready;
+  if (Object.keys(privateSession.sites).length > 0) {
+    if (await privateSessionEnded()) {
+      await dropPrivate();
+    }
+  }
+}
 
 const scheduleKeptWrite = batch<string>(WRITE_DELAY_MS, (sites) => {
   const items: Record<string, SiteCounts> = {};
@@ -116,12 +154,17 @@ export function since(privateWindow: boolean): number {
   return privateWindow ? 0 : kept.since;
 }
 
-// A new period starts now, and everything counted before goes, written or
-// not: a write still pending finds nothing to write. The counts of private
-// windows are not kept, so they are left alone. A site counted while the
-// storage was being cleared is written again, so that the clear takes
-// nothing counted after it.
-export async function clear(): Promise<number> {
+// The counts the popup of the window shows go, written or not. In a private
+// window, those of the private session, and nothing of the kept counts:
+// a write still pending writes what was counted since. Outside, a new period
+// starts now, and a write still pending finds nothing to write. A site
+// counted while the storage was being cleared is written again, so that the
+// clear takes nothing counted after it.
+export async function clear(privateWindow: boolean): Promise<number> {
+  if (privateWindow) {
+    await dropPrivate();
+    return since(true);
+  }
   kept = emptyCounts(Date.now());
   await browser.storage.local.clear();
   await browser.storage.local.set({ [SINCE_KEY]: kept.since });

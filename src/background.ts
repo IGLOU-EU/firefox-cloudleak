@@ -5,6 +5,7 @@
 // so listeners must be added synchronously at the top level of this module.
 
 import { answer } from "./answer.js";
+import { onWindowRemoved } from "./counts.js";
 import {
   onBeforeRedirect,
   onErrorOccurred,
@@ -60,6 +61,13 @@ browser.tabs.onUpdated.addListener(
   { properties: ["status"] },
 );
 browser.tabs.onRemoved.addListener((tabId) => report(forget(tabId)));
+
+// The counts of a private session go with it, when its last private window
+// closes. The event wakes the page when it is suspended: its listener is
+// primed then, as for every persistent event of an event page
+// (ext-windows.js, ext-backgroundPage.js and ExtensionCommon.sys.mjs,
+// Firefox 159.0.1).
+browser.windows.onRemoved.addListener(() => report(onWindowRemoved()));
 
 // Both fire for a grant or a withdrawal the user makes in the add-ons
 // manager or the extensions panel (ext-permissions.js and

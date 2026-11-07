@@ -13,6 +13,7 @@ import type {
   PopupData,
   SiteCounts,
 } from "../src/core/popup-message.js";
+import { viewOf } from "../src/core/popup-view.js";
 import { EMPTY_RECORD, type TabRecord } from "../src/core/tab-record.js";
 import { importModule, writeTable } from "./built-extension.js";
 
@@ -39,6 +40,12 @@ interface Tabs {
 
 interface Cname {
   canonicalNameOf(host: string, now: number): Promise<string | null>;
+}
+
+interface Counts {
+  readonly ready: Promise<void>;
+  totals(site: string | null, privateWindow: boolean): SiteCounts;
+  onWindowRemoved(): Promise<void>;
 }
 
 const EDGE_IP = "192.0.2.10";
@@ -75,6 +82,18 @@ const local = new Map<string, unknown>();
 const localWrites: Record<string, unknown>[] = [];
 const resolved: string[] = [];
 let allSites = true;
+// The windows Firefox lists, those of private windows only when the
+// extension may run in them.
+let openWindows: { id: number; incognito: boolean }[] | Error = [
+  { id: 1, incognito: false },
+];
+let windowReads = 0;
+// What Firefox answers to webNavigation.getFrame for the top frame of a tab:
+// null for a frame it cannot give, such as that of a discarded tab.
+type Frame = { readonly url?: string } | null;
+const NO_FRAME = () => Promise.resolve(null);
+let frameOf: (tabId: number) => Promise<Frame> = NO_FRAME;
+const frameReads: { tabId: number; frameId: number }[] = [];
 let resolve: (host: string) => Promise<{ canonicalName?: string }> = () =>
   Promise.resolve({ canonicalName: "" });
 
@@ -175,6 +194,15 @@ function event(name: string) {
     onUpdated: event("tabs.onUpdated"),
     onRemoved: event("tabs.onRemoved"),
   },
+  windows: {
+    getAll: () => {
+      windowReads += 1;
+      return openWindows instanceof Error
+        ? Promise.reject(openWindows)
+        : Promise.resolve(openWindows);
+    },
+    onRemoved: event("windows.onRemoved"),
+  },
   action: {
     setIcon: (details: { tabId: number; path: string }) => {
       record(details.tabId, "icon", details.path);
@@ -211,6 +239,10 @@ function event(name: string) {
   webNavigation: {
     onCommitted: event("webNavigation.onCommitted"),
     onCompleted: event("webNavigation.onCompleted"),
+    getFrame: (details: { tabId: number; frameId: number }) => {
+      frameReads.push(details);
+      return frameOf(details.tabId);
+    },
   },
   runtime: { onMessage: event("runtime.onMessage") },
 };
@@ -221,6 +253,7 @@ mock.timers.enable({ apis: ["setTimeout", "Date"], now: INSTALLED_AT });
 const tabs = await importModule<Tabs>("tabs.js");
 const requests = await importModule<Requests>("requests.js");
 const cname = await importModule<Cname>("cname.js");
+const counts = await importModule<Counts>("counts.js");
 const { answer } = await importModule<Answer>("answer.js");
 await importModule<object>("background.js");
 
@@ -288,6 +321,28 @@ async function exchange(
     response(tabId, requestId, type, timeStamp + 1, ip),
   );
   return requestId;
+}
+
+// An image of a private window through the edge.
+async function privateExchange(
+  tabId: number,
+  requestId: string,
+  timeStamp: number,
+): Promise<void> {
+  await requests.onSendHeaders({
+    tabId,
+    requestId,
+    type: "image",
+    timeStamp,
+    url: "https://site.example/logo.png",
+    method: "GET",
+    requestHeaders: [],
+    incognito: true,
+  });
+  await requests.onResponseStarted({
+    ...response(tabId, requestId, "image", timeStamp + 1, EDGE_IP),
+    incognito: true,
+  });
 }
 
 async function commit(
@@ -674,6 +729,21 @@ describe("a page of the browser, without the access to all sites", () => {
     });
   }
 
+  it("shows neutral a page of the browser open before the extension started, once Firefox gives its URL", async () => {
+    const tab = 740;
+    frameOf = (tabId) =>
+      Promise.resolve(tabId === tab ? { url: "about:newtab" } : null);
+    try {
+      await statusWithoutUrl(tab);
+      await new Promise((done) => setImmediate(done));
+      mock.timers.runAll();
+      assert.deepEqual(iconOf(tab), NEUTRAL);
+      assert.equal(shown(tab).title, "titleNeutral");
+    } finally {
+      frameOf = NO_FRAME;
+    }
+  });
+
   it("says not observed a site out of reach whose commit only its completion follows", async () => {
     const tab = 713;
     await redPage(tab, 1000);
@@ -973,7 +1043,7 @@ describe("the kept counts", () => {
     assert.deepEqual((await popup(tab)).totals, {});
   });
 
-  it("count nothing for a tab the extension has not seen navigate, whose site it does not know", async () => {
+  it("count nothing for a tab the extension has not seen navigate, when Firefox gives no page for it", async () => {
     const tab = 1135;
     mock.timers.runAll();
     const writes = localWrites.length;
@@ -1050,7 +1120,10 @@ describe("the kept counts", () => {
     const privateBefore = JSON.stringify(session.get("privateCounts"));
     const now = Date.now();
     assert.ok(now > INSTALLED_AT);
-    const cleared = (await answer({ kind: "clear" })) as ClearedData;
+    const cleared = (await answer({
+      kind: "clear",
+      privateWindow: false,
+    })) as ClearedData;
     assert.equal(cleared.since, now);
     assert.deepEqual([...local.keys()], ["since"]);
     assert.equal(local.get("since"), now);
@@ -1064,6 +1137,365 @@ describe("the kept counts", () => {
     mock.timers.runAll();
     assert.deepEqual(siteCounts(site), { edge: { blue2: { "GET image": 1 } } });
   });
+
+  it("clear in a private window the counts of the private session only, and nothing of the kept counts", async () => {
+    const kept = 1170;
+    const keptSite = "t1170.example";
+    await commit(kept, "doc-1170", 1000, [], `https://${keptSite}/`);
+    await exchange(kept, "image", 1100, EDGE_IP);
+    const tab = 1171;
+    const site = "t1171.example";
+    await commit(tab, "doc-1171", 1000, [], `https://${site}/`);
+    await privateExchange(tab, "private-1171", 1100);
+    mock.timers.runAll();
+    assert.notDeepEqual((await popup(tab, true)).totals, {});
+    const keptBefore = JSON.stringify([...local.entries()]);
+    const writes = localWrites.length;
+    const cleared = (await answer({
+      kind: "clear",
+      privateWindow: true,
+    })) as ClearedData;
+    assert.equal(cleared.since, 0);
+    assert.equal(session.has("privateCounts"), false);
+    const data = await popup(tab, true);
+    assert.equal(data.since, 0);
+    assert.deepEqual(data.totals, {});
+    mock.timers.runAll();
+    assert.equal(session.has("privateCounts"), false);
+    assert.equal(localWrites.length, writes);
+    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
+    assert.deepEqual((await popup(kept)).totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    await privateExchange(tab, "private-1171-b", 1200);
+    mock.timers.runAll();
+    assert.deepEqual((await popup(tab, true)).totals, {
+      edge: { blue2: { "GET image": 1 } },
+    });
+  });
+});
+
+describe("a tab the extension has not seen navigate", () => {
+  after(() => {
+    frameOf = NO_FRAME;
+  });
+
+  function siteCounts(site: string): SiteCounts | undefined {
+    return local.get(`site:${site}`) as SiteCounts | undefined;
+  }
+
+  function readsOf(tabId: number) {
+    return frameReads.filter((read) => read.tabId === tabId);
+  }
+
+  async function popup(tabId: number): Promise<PopupData> {
+    return (await answer({
+      kind: "popup",
+      tabId,
+      privateWindow: false,
+    })) as PopupData;
+  }
+
+  // Firefox answers getFrame after the request that made the page ask.
+  function answered(): Promise<void> {
+    return new Promise((done) => setImmediate(done));
+  }
+
+  function frames(entries: Record<number, Frame | Error>): void {
+    frameOf = (tabId) => {
+      const frame = entries[tabId] ?? null;
+      return frame instanceof Error
+        ? Promise.reject(frame)
+        : Promise.resolve(frame);
+    };
+  }
+
+  // A frame Firefox gives only when the test lets it.
+  function heldFrame(tab: number): (frame: Frame) => void {
+    let give: (frame: Frame) => void = () => {};
+    frameOf = (tabId) =>
+      tabId === tab
+        ? new Promise<Frame>((done) => {
+            give = done;
+          })
+        : Promise.resolve(null);
+    return (frame) => give(frame);
+  }
+
+  it("takes its site from the page Firefox shows in it, once, and counts its requests for that site", async () => {
+    const tab = 1400;
+    frames({ [tab]: { url: "https://www.t1400.example/live?channel=1" } });
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answered();
+    await exchange(tab, "script", 1200, EDGE_IP);
+    mock.timers.runAll();
+    assert.deepEqual(readsOf(tab), [{ tabId: tab, frameId: 0 }]);
+    assert.equal(tabs.recordOf(tab).site, "t1400.example");
+    assert.equal(tabs.recordOf(tab).page, "site");
+    assert.deepEqual(siteCounts("t1400.example"), {
+      edge: { blue2: { "GET image": 1, "GET script": 1 } },
+    });
+    assert.equal(
+      JSON.stringify([...session.values()]).includes("channel"),
+      false,
+    );
+  });
+
+  it("keeps the requests that arrive while Firefox is asked, and counts them once it answers", async () => {
+    const tab = 1401;
+    const give = heldFrame(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await exchange(tab, "image", 1200, EDGE_IP);
+    mock.timers.runAll();
+    assert.equal(siteCounts("t1401.example"), undefined);
+    assert.equal(tabs.recordOf(tab).uncounted.length, 2);
+    give({ url: "https://t1401.example/" });
+    await answered();
+    mock.timers.runAll();
+    assert.deepEqual(siteCounts("t1401.example"), {
+      edge: { blue2: { "GET image": 2 } },
+    });
+    assert.deepEqual(tabs.recordOf(tab).uncounted, []);
+    assert.equal(readsOf(tab).length, 1);
+  });
+
+  it("is a page of the browser when Firefox shows one, such as about:debugging, and counts nothing", async () => {
+    const tab = 1402;
+    frames({ [tab]: { url: "about:debugging#/runtime/this-firefox" } });
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answered();
+    mock.timers.runAll();
+    assert.equal(tabs.recordOf(tab).page, "browser");
+    assert.equal(tabs.recordOf(tab).site, null);
+    assert.equal(localWrites.length, writes);
+    const data = await popup(tab);
+    assert.equal(data.page, "browser");
+    assert.equal(data.site, null);
+    const state = data.state;
+    assert.equal(
+      state.kind === "seen" && !state.missed && !state.partial,
+      true,
+    );
+  });
+
+  it("shows a page of the browser opened before the extension as one it saw commit: neutral, with nothing to count", async () => {
+    const tab = 1406;
+    frames({ [tab]: { url: "about:debugging#/runtime/this-firefox" } });
+    const data = await popup(tab);
+    assert.equal(data.page, "browser");
+    assert.deepEqual(data.state, {
+      kind: "neutral",
+      partial: false,
+      missed: false,
+    });
+    const shown = viewOf(data, [], () => "");
+    assert.deepEqual(shown.header, { kind: "browser-page" });
+    assert.equal(shown.icon, "neutral");
+    assert.equal(shown.page, null);
+    assert.equal(shown.totals, null);
+    assert.equal(shown.notice, true);
+  });
+
+  it("stays unknown when Firefox gives no frame, as for a discarded tab, and its requests are dropped", async () => {
+    const tab = 1403;
+    frames({});
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answered();
+    mock.timers.runAll();
+    assert.equal(tabs.recordOf(tab).site, null);
+    assert.deepEqual(tabs.recordOf(tab).uncounted, []);
+    await exchange(tab, "image", 1200, EDGE_IP);
+    await answered();
+    assert.equal(readsOf(tab).length, 1);
+    const data = await popup(tab);
+    assert.equal(data.page, "site");
+    assert.equal(data.site, null);
+    assert.equal(readsOf(tab).length, 1);
+  });
+
+  it("stays unknown when Firefox fails to answer, which is logged once", async () => {
+    const tab = 1404;
+    frames({ [tab]: new Error(`Invalid tab ID: ${tab}`) });
+    const errors = mock.method(console, "error", () => {});
+    try {
+      await exchange(tab, "image", 1100, EDGE_IP);
+      await answered();
+      await exchange(tab, "image", 1200, EDGE_IP);
+      await answered();
+      mock.timers.runAll();
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(
+        String(errors.mock.calls[0]?.arguments[0]),
+        /^Cloud Leak: .*Invalid tab ID/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+    assert.equal(tabs.recordOf(tab).site, null);
+    assert.deepEqual(tabs.recordOf(tab).uncounted, []);
+  });
+
+  it("gives no site to the document the tab left when another commits before Firefox answers", async () => {
+    const tab = 1405;
+    const give = heldFrame(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await commit(tab, "doc-1405", 1200, [], "https://t1405.example/");
+    give({ url: "https://t1405.example/" });
+    await answered();
+    mock.timers.runAll();
+    const record = tabs.recordOf(tab);
+    assert.equal(record.site, "t1405.example");
+    assert.equal(record.previous[0]?.site, null);
+    assert.deepEqual(record.previous[0]?.uncounted, []);
+    assert.equal(siteCounts("t1405.example"), undefined);
+  });
+
+  it("is asked by the popup, which answers with the site and the totals Firefox's page gives", async () => {
+    const counted = 1410;
+    await commit(counted, "doc-1410", 1000, [], "https://t1410.example/");
+    await exchange(counted, "image", 1100, EDGE_IP);
+    const tab = 1411;
+    frames({ [tab]: { url: "https://www.t1410.example/stream" } });
+    const data = await popup(tab);
+    assert.equal(data.page, "site");
+    assert.equal(data.site, "t1410.example");
+    assert.deepEqual(data.state, EMPTY_RECORD.state);
+    assert.deepEqual(data.totals, { edge: { blue2: { "GET image": 1 } } });
+    await popup(tab);
+    assert.equal(readsOf(tab).length, 1);
+  });
+});
+
+describe("the counts of a private session", () => {
+  const PRIVATE: SiteCounts = { edge: { blue2: { "GET image": 4 } } };
+  const NORMAL = { id: 1, incognito: false };
+
+  after(() => {
+    openWindows = [NORMAL];
+  });
+
+  // A tab of a private window whose site counted one image.
+  async function privateSite(tab: number): Promise<string> {
+    const site = `t${tab}.example`;
+    await commit(tab, `doc-${tab}`, 1000, [], `https://${site}/`);
+    await privateExchange(tab, `private-${tab}`, 1100);
+    mock.timers.runAll();
+    assert.deepEqual(counts.totals(site, true), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    return site;
+  }
+
+  // Firefox fires windows.onRemoved once the window is gone from
+  // windows.getAll (nsAppShellService.cpp, Firefox 159.0.1).
+  async function close(id: number): Promise<void> {
+    openWindows = (openWindows as { id: number; incognito: boolean }[]).filter(
+      (window) => window.id !== id,
+    );
+    await counts.onWindowRemoved();
+  }
+
+  it("stay while a private window is open, and go when the last one closes, leaving the kept counts alone", async () => {
+    openWindows = [
+      NORMAL,
+      { id: 2, incognito: true },
+      { id: 3, incognito: true },
+    ];
+    const site = await privateSite(1180);
+    await commit(1181, "doc-1181", 1000, [], "https://t1181.example/");
+    await exchange(1181, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    const keptBefore = JSON.stringify([...local.entries()]);
+    await close(2);
+    assert.notDeepEqual(counts.totals(site, true), {});
+    assert.equal(session.has("privateCounts"), true);
+    await close(3);
+    assert.deepEqual(counts.totals(site, true), {});
+    assert.equal(session.has("privateCounts"), false);
+    mock.timers.runAll();
+    assert.equal(session.has("privateCounts"), false);
+    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
+    assert.deepEqual(counts.totals("t1181.example", false), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+  });
+
+  it("ask nothing of Firefox when a window closes while the private session counted nothing", async () => {
+    const reads = windowReads;
+    await counts.onWindowRemoved();
+    assert.equal(windowReads, reads);
+  });
+
+  it("stay when Firefox cannot list its windows, which is logged", async () => {
+    openWindows = [NORMAL, { id: 4, incognito: true }];
+    const site = await privateSite(1182);
+    openWindows = new Error("NS_ERROR_FAILURE");
+    const errors = mock.method(console, "error", () => {});
+    try {
+      await counts.onWindowRemoved();
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(
+        String(errors.mock.calls[0]?.arguments[0]),
+        /^Cloud Leak: .*NS_ERROR_FAILURE/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+    assert.notDeepEqual(counts.totals(site, true), {});
+    openWindows = [NORMAL];
+    await counts.onWindowRemoved();
+    assert.deepEqual(counts.totals(site, true), {});
+  });
+
+  it("are dropped by the event page through windows.onRemoved, which wakes it when suspended", async () => {
+    openWindows = [NORMAL, { id: 5, incognito: true }];
+    const site = await privateSite(1183);
+    const registered = listeners.get("windows.onRemoved") ?? [];
+    assert.equal(registered.length, 1);
+    openWindows = [NORMAL];
+    registered[0]?.(5);
+    await new Promise((done) => setImmediate(done));
+    assert.deepEqual(counts.totals(site, true), {});
+  });
+
+  // The page reads the counts at each wake-up, and the last private window
+  // may have closed while it was suspended.
+  for (const [name, windows, expected] of [
+    ["go at a wake-up when no private window is open", [NORMAL], {}],
+    [
+      "stay at a wake-up while a private window is open",
+      [NORMAL, { id: 6, incognito: true }],
+      PRIVATE,
+    ],
+    [
+      "stay at a wake-up when Firefox cannot list its windows",
+      new Error("NS_ERROR_FAILURE"),
+      PRIVATE,
+    ],
+  ] as const) {
+    it(name, async () => {
+      session.set("privateCounts", { "t1190.example": PRIVATE });
+      openWindows = windows instanceof Error ? windows : [...windows];
+      const errors = mock.method(console, "error", () => {});
+      try {
+        const woken = await importModule<Counts>(
+          `counts.js?${encodeURIComponent(name)}`,
+        );
+        await woken.ready;
+        assert.deepEqual(woken.totals("t1190.example", true), expected);
+        assert.equal(
+          session.has("privateCounts"),
+          Object.keys(expected).length > 0,
+        );
+        assert.equal(errors.mock.callCount(), windows instanceof Error ? 1 : 0);
+      } finally {
+        errors.mock.restore();
+        session.delete("privateCounts");
+      }
+    });
+  }
 });
 
 describe("the message handler", () => {
@@ -1103,7 +1535,7 @@ describe("the message handler", () => {
     assert.equal(data.site, "t1210.example");
   });
 
-  it("answers for a tab it never saw with an empty record and no totals", async () => {
+  it("answers for a tab it never saw, when Firefox gives no page for it, with an empty record and no totals", async () => {
     assert.deepEqual(await answer(popup), {
       state: EMPTY_RECORD.state,
       page: "site",
@@ -1123,6 +1555,8 @@ describe("the message handler", () => {
       answer({ kind: "popup", tabId: 1, privateWindow: "yes" }),
       undefined,
     );
+    assert.equal(answer({ kind: "clear" }), undefined);
+    assert.equal(answer({ kind: "clear", privateWindow: 1 }), undefined);
   });
 
   it("is registered by the event page on runtime.onMessage, and answers with a promise", async () => {

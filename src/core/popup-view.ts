@@ -55,15 +55,24 @@ export interface SiteSection {
   readonly providers: readonly ProviderRows[];
 }
 
+// What the header names: the registrable domain of a website, in punycode, a
+// website whose site the extension does not know, or a page of the browser,
+// reader view included.
+export type Header =
+  | { readonly kind: "site"; readonly site: string }
+  | { readonly kind: "unknown-site" }
+  | { readonly kind: "browser-page" };
+
 export interface PopupView {
   readonly icon: Icon;
-  // The registrable domain of the document, in punycode, or null for a page
-  // of the browser.
-  readonly site: string | null;
+  readonly header: Header;
   // Null for a page of the browser whose state has nothing to say.
   readonly page: PageSection | null;
-  // Null for a page of the browser, which has no site.
+  // Null when the site is not known, as for a page of the browser.
   readonly totals: SiteSection | null;
+  // Whether the popup says there is nothing to count, which it says only
+  // when it shows nothing else.
+  readonly notice: boolean;
   // What "clear all" asks before it clears.
   readonly question: TitleLine;
 }
@@ -82,20 +91,21 @@ export function viewOf(
 ): PopupView {
   const display = displayOf(data.state, providers);
   const date = data.privateWindow ? null : formatDate(data.since);
+  const page = pageOf(data, display);
+  const totals: SiteSection | null =
+    data.site === null
+      ? null
+      : {
+          title:
+            date === null ? line("popupSitePrivate") : line("popupSite", date),
+          providers: providerRows(data.totals, providers),
+        };
   return {
     icon: display.icon,
-    site: data.site,
-    page: pageOf(data, display),
-    totals:
-      data.site === null
-        ? null
-        : {
-            title:
-              date === null
-                ? line("popupSitePrivate")
-                : line("popupSite", date),
-            providers: providerRows(data.totals, providers),
-          },
+    header: headerOf(data),
+    page,
+    totals,
+    notice: page === null && totals === null,
     question:
       date === null
         ? line("popupClearQuestionPrivate")
@@ -103,10 +113,21 @@ export function viewOf(
   };
 }
 
-// The counts of a private session are not kept, so a clear leaves them alone
-// and the popup of a private window keeps showing them.
+// A clear takes the counts the popup shows, those of the private session in
+// a private window, whose start the event page gives as zero.
 export function cleared(data: PopupData, since: number): PopupData {
-  return data.privateWindow ? data : { ...data, totals: {}, since };
+  return { ...data, totals: {}, since };
+}
+
+// A website whose site the extension does not know is still a website: it
+// is not named a page of the browser.
+function headerOf(data: PopupData): Header {
+  if (data.page !== "site") {
+    return { kind: "browser-page" };
+  }
+  return data.site === null
+    ? { kind: "unknown-site" }
+    : { kind: "site", site: data.site };
 }
 
 const PARTIAL = new Set(["titlePartial", "titleMissed"]);
@@ -115,11 +136,12 @@ const PARTIAL = new Set(["titlePartial", "titleMissed"]);
 // rows here, and its last paragraph is what they mean. A page of the browser
 // sends no request of its own, so a state that says nothing is left to the
 // notice of the page, while reader view loads the images of the article from
-// the web, so what such a tab saw is shown as for a site.
+// the web, so what such a tab saw is shown as for a site. A website always
+// says what the tab saw, whether its site is known or not.
 function pageOf(data: PopupData, display: Display): PageSection | null {
   const state = data.state;
   if (
-    data.site === null &&
+    data.page !== "site" &&
     state.kind === "neutral" &&
     !state.partial &&
     !state.missed

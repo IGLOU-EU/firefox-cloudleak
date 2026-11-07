@@ -136,7 +136,7 @@
     "description": "Line added to the tooltip when the extension lacks the access to all sites."
   },
   "titleMissed": {
-    "message": "Partial view: the extension did not see every request of this page, such as those a service worker serves, so it shows only what it saw.",
+    "message": "Partial view: the extension could not see every request of this page.",
     "description": "Line added to the tooltip when the extension got the response of a request whose sending it never saw, or started after the page did."
   },
   "popupPage": {
@@ -163,11 +163,15 @@
   },
   "popupBrowserPage": {
     "message": "Browser page",
-    "description": "Shown in place of the site name in the popup when the tab shows a page of the browser."
+    "description": "Shown in place of the site name in the popup when the tab shows a page of the browser, reader view included."
+  },
+  "popupUnknownSite": {
+    "message": "Unknown site",
+    "description": "Shown in place of the site name in the popup when the tab shows a website whose site the extension does not know."
   },
   "popupNothingBrowser": {
     "message": "No site is shown, so there is nothing to count.",
-    "description": "Popup notice for a page of the browser, which has no site to count."
+    "description": "Popup notice for a page of the browser, which has no site to count, shown only when the popup shows nothing else of the page."
   },
   "popupNothingSite": {
     "message": "No request seen on this site went through a known intermediary.",
@@ -179,15 +183,15 @@
   },
   "popupClearAll": {
     "message": "Clear all",
-    "description": "Popup button that asks to clear the kept counts of every site."
+    "description": "Popup button that asks to clear the kept counts of every site, or in a private window the counts of the private session."
   },
   "popupClear": {
     "message": "Clear",
-    "description": "Popup button that confirms the clearing of the kept counts."
+    "description": "Popup button that confirms the clearing of the counts the popup shows."
   },
   "popupCancel": {
     "message": "Cancel",
-    "description": "Popup button that gives up the clearing of the kept counts."
+    "description": "Popup button that gives up the clearing of the counts the popup shows."
   },
   "popupClearQuestion": {
     "message": "Clear the counts of every site kept since $DATE$?",
@@ -200,8 +204,8 @@
     }
   },
   "popupClearQuestionPrivate": {
-    "message": "Clear the kept counts of every site, this private session apart?",
-    "description": "Question the popup asks before it clears the kept counts of every site, in a private window, whose own counts are not kept."
+    "message": "Clear the counts of this private session?",
+    "description": "Question the popup of a private window asks before it clears the counts of the private session, and nothing of the kept counts."
   },
   "level1": {
     "message": "Level 1, passage",

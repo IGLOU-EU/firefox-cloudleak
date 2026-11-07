@@ -223,7 +223,9 @@ async function open(options: Options): Promise<Opened> {
       sendMessage: (request: PopupRequest) => {
         sent.push(request);
         if (request.kind === "clear") {
-          return Promise.resolve({ since: CLEARED_AT });
+          return Promise.resolve({
+            since: request.privateWindow ? 0 : CLEARED_AT,
+          });
         }
         return answer instanceof Error
           ? Promise.reject(answer)
@@ -271,6 +273,7 @@ describe("the popup", () => {
     assert.equal(page.text("site"), "bücher.example");
     assert.equal(page.element("site").hidden, false);
     assert.equal(page.element("browser-page").hidden, true);
+    assert.equal(page.element("unknown-site").hidden, true);
     assert.equal(page.element("browser-notice").hidden, true);
     assert.equal(page.element("page").hidden, false);
     assert.equal(page.element("page-unit").hidden, false);
@@ -318,7 +321,7 @@ describe("the popup", () => {
     page.element("clear-all").click();
     page.element("clear").click();
     await settled();
-    assert.deepEqual(page.sent[1], { kind: "clear" });
+    assert.deepEqual(page.sent[1], { kind: "clear", privateWindow: false });
     assert.equal(page.element("confirmation").hidden, true);
     assert.equal(page.element("footer").hidden, false);
     assert.equal(
@@ -335,7 +338,7 @@ describe("the popup", () => {
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
   });
 
-  it("names the private session in a private window, and keeps its counts through a clear", async () => {
+  it("names the private session in a private window, and clears only its counts", async () => {
     const page = await open({
       tab: { id: 3, incognito: true },
       answer: { ...RED_SITE, privateWindow: true, since: 0 },
@@ -344,14 +347,36 @@ describe("the popup", () => {
       { kind: "popup", tabId: 3, privateWindow: true },
     ]);
     assert.equal(page.text("totals-title"), "popupSitePrivate");
+    assert.deepEqual(page.summary("totals-rows"), TOTALS_ROWS);
     assert.equal(page.text("question"), "popupClearQuestionPrivate");
     page.element("clear-all").click();
     page.element("clear").click();
     await settled();
-    assert.deepEqual(page.sent[1], { kind: "clear" });
+    assert.deepEqual(page.sent[1], { kind: "clear", privateWindow: true });
     assert.equal(page.element("confirmation").hidden, true);
     assert.equal(page.text("totals-title"), "popupSitePrivate");
-    assert.deepEqual(page.summary("totals-rows"), TOTALS_ROWS);
+    assert.equal(page.text("question"), "popupClearQuestionPrivate");
+    assert.equal(page.element("totals-empty").hidden, false);
+    assert.equal(page.element("totals-unit").hidden, true);
+    assert.deepEqual(page.summary("totals-rows"), []);
+    assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
+  });
+
+  it("sends no clear when the event page never answered, since it cannot say which counts", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      const page = await open({
+        answer: new Error("Receiving end does not exist"),
+      });
+      page.element("clear-all").click();
+      page.element("clear").click();
+      await settled();
+      assert.equal(page.sent.length, 1);
+      assert.equal(page.element("confirmation").hidden, true);
+      assert.equal(page.element("footer").hidden, false);
+    } finally {
+      errors.mock.restore();
+    }
   });
 
   it("says a page of the browser has no site, and keeps the buttons", async () => {
@@ -371,6 +396,7 @@ describe("the popup", () => {
     );
     assert.equal(page.element("site").hidden, true);
     assert.equal(page.element("browser-page").hidden, false);
+    assert.equal(page.element("unknown-site").hidden, true);
     assert.equal(page.element("browser-notice").hidden, false);
     assert.equal(page.element("page").hidden, true);
     assert.equal(page.element("totals").hidden, true);
@@ -380,6 +406,30 @@ describe("the popup", () => {
       page.text("question"),
       `popupClearQuestion ${dates.format(SINCE)}`,
     );
+  });
+
+  it("shows what a page of the browser saw without the notice that there is nothing to count", async () => {
+    const page = await open({
+      answer: { ...RED_SITE, page: "reader", site: null, totals: {} },
+    });
+    assert.equal(page.element("browser-page").hidden, false);
+    assert.equal(page.element("browser-notice").hidden, true);
+    assert.equal(page.element("page").hidden, false);
+    assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
+    assert.equal(page.element("totals").hidden, true);
+  });
+
+  it("says the site of a website is unknown, with what the tab saw and no totals", async () => {
+    const page = await open({
+      answer: { ...RED_SITE, page: "site", site: null, totals: {} },
+    });
+    assert.equal(page.element("site").hidden, true);
+    assert.equal(page.element("browser-page").hidden, true);
+    assert.equal(page.element("unknown-site").hidden, false);
+    assert.equal(page.element("browser-notice").hidden, true);
+    assert.equal(page.element("page").hidden, false);
+    assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
+    assert.equal(page.element("totals").hidden, true);
   });
 
   it("shows the site as it came when Firefox gives no display form, or fails to", async () => {

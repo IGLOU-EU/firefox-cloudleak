@@ -85,11 +85,13 @@ function paragraphsOf(lines: readonly TitleLine[]): HTMLElement[] {
 
 function render(view: PopupView): void {
   element("state").setAttribute("src", ICONS[view.icon]);
+  const { header } = view;
   const site = element("site");
-  site.hidden = view.site === null;
-  site.textContent = view.site === null ? "" : siteText(view.site);
-  element("browser-page").hidden = view.site !== null;
-  element("browser-notice").hidden = view.site !== null;
+  site.hidden = header.kind !== "site";
+  site.textContent = header.kind === "site" ? siteText(header.site) : "";
+  element("unknown-site").hidden = header.kind !== "unknown-site";
+  element("browser-page").hidden = header.kind !== "browser-page";
+  element("browser-notice").hidden = !view.notice;
 
   element("page").hidden = view.page === null;
   if (view.page !== null) {
@@ -146,10 +148,16 @@ function askToConfirm(asking: boolean): void {
   element("confirmation").hidden = !asking;
 }
 
+// What a clear takes depends on the window, which the answer of the event
+// page gives: without it, the popup cannot say which counts would go.
 async function clear(): Promise<void> {
-  const { since } = await ask<ClearedData>({ kind: "clear" });
-  if (data !== null) {
-    data = cleared(data, since);
+  const shown = data;
+  if (shown !== null) {
+    const { since } = await ask<ClearedData>({
+      kind: "clear",
+      privateWindow: shown.privateWindow,
+    });
+    data = cleared(shown, since);
   }
   show();
   askToConfirm(false);

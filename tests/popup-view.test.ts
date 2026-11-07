@@ -114,8 +114,39 @@ describe("the header of the popup", () => {
     assert.equal(view({ state: NEUTRAL }).icon, "neutral");
     assert.equal(view({ state: NOT_OBSERVED }).icon, "not-observed");
     assert.equal(view({ state: PAGE }).icon, "red");
-    assert.equal(view().site, "site.example");
-    assert.equal(view({ site: null }).site, null);
+    assert.deepEqual(view().header, { kind: "site", site: "site.example" });
+  });
+
+  it("names a page of the browser, reader view included, which has no site", () => {
+    assert.deepEqual(view({ page: "browser", site: null }).header, {
+      kind: "browser-page",
+    });
+    assert.deepEqual(view({ page: "reader", site: null }).header, {
+      kind: "browser-page",
+    });
+  });
+
+  it("says the site of a website is unknown when the extension does not know it", () => {
+    assert.deepEqual(view({ page: "site", site: null }).header, {
+      kind: "unknown-site",
+    });
+  });
+});
+
+describe("the notice that there is nothing to count", () => {
+  it("shows for a page of the browser whose state has nothing to say", () => {
+    assert.equal(view({ page: "browser", site: null }).notice, true);
+    assert.equal(view({ page: "reader", site: null }).notice, true);
+  });
+
+  it("never shows beside counts or messages", () => {
+    for (const state of [markMissed(NEUTRAL), markPartial(NEUTRAL), PAGE]) {
+      const shown = view({ page: "browser", site: null, state });
+      assert.notEqual(shown.page, null);
+      assert.equal(shown.notice, false);
+    }
+    assert.equal(view({ page: "site", site: null }).notice, false);
+    assert.equal(view({ state: NEUTRAL }).notice, false);
   });
 });
 
@@ -159,16 +190,31 @@ describe("the page section of the popup", () => {
   });
 
   it("is left out for a page of the browser with nothing to say, and kept where its state says something", () => {
-    assert.equal(view({ site: null, state: NEUTRAL }).page, null);
+    const browser = { page: "browser", site: null } as const;
+    assert.equal(view({ ...browser, state: NEUTRAL }).page, null);
+    assert.equal(view({ page: "reader", site: null }).page, null);
     assert.deepEqual(
-      view({ site: null, state: markPartial(NEUTRAL) }).page?.partial,
+      view({ ...browser, state: markPartial(NEUTRAL) }).page?.partial,
       [line("titlePartial")],
     );
     assert.deepEqual(
-      view({ site: null, state: fold([request({ level: 2 }, false)]) }).page
+      view({ ...browser, state: fold([request({ level: 2 }, false)]) }).page
         ?.rows,
       [row("blue", 2, null, 1)],
     );
+  });
+
+  it("says what the tab saw of a website whose site is unknown, as of any website", () => {
+    assert.deepEqual(view({ site: null, state: NEUTRAL }).page, {
+      rows: [],
+      lines: [line("titleNeutral")],
+      partial: [],
+    });
+    assert.deepEqual(view({ site: null, state: markMissed(NEUTRAL) }).page, {
+      rows: [],
+      lines: [line("titleNeutral")],
+      partial: [line("titleMissed")],
+    });
   });
 });
 
@@ -186,7 +232,11 @@ describe("the site section of the popup", () => {
     assert.deepEqual(totals?.title, line("popupSitePrivate"));
   });
 
-  it("is left out for a page of the browser", () => {
+  it("is left out for a page of the browser, and for a website whose site is unknown", () => {
+    assert.equal(
+      view({ page: "browser", site: null, totals: TOTALS }).totals,
+      null,
+    );
     assert.equal(view({ site: null, totals: TOTALS }).totals, null);
   });
 
@@ -276,9 +326,9 @@ describe("cleared", () => {
     });
   });
 
-  it("leaves the data of a private window as it is, whose counts are the session's", () => {
+  it("empties the totals of a private window, which has no start", () => {
     const before = data({ privateWindow: true, since: 0, totals: TOTALS });
-    assert.equal(cleared(before, 5), before);
+    assert.deepEqual(cleared(before, 0), { ...before, totals: {} });
   });
 });
 
@@ -302,6 +352,7 @@ describe("the popup messages", () => {
       view({ state: PAGE, totals: TOTALS }),
       viewOf(data({ privateWindow: true }), PROVIDERS, noDate),
       view({ site: null }),
+      view({ page: "browser", site: null }),
     ];
     const produced = new Set<string>();
     for (const entry of views) {
