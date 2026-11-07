@@ -8,6 +8,7 @@ import {
   categoryOf,
   clearSite,
   countRequest,
+  dayOf,
   emptyCounts,
   type KeptCounts,
   requestKindOf,
@@ -243,5 +244,17 @@ describe("sinceOf", () => {
     assert.equal(sinceOf(cleared, "leboncoin.fr"), 5);
     assert.equal(sinceOf(cleared, null), 5);
     assert.equal(sinceOf(emptyCounts(5), SITE), 5);
+  });
+});
+
+describe("dayOf", () => {
+  it("keeps the day at its local midnight, whatever the hour", () => {
+    const evening = new Date(2026, 10, 7, 21, 34, 5, 678).getTime();
+    assert.equal(dayOf(evening), new Date(2026, 10, 7).getTime());
+  });
+
+  it("leaves a midnight as it is", () => {
+    const midnight = new Date(2026, 10, 7).getTime();
+    assert.equal(dayOf(midnight), midnight);
   });
 });

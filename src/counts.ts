@@ -5,6 +5,7 @@ import { batch, WRITE_DELAY_MS } from "./batch.js";
 import {
   clearSite,
   countRequest,
+  dayOf,
   emptyCounts,
   type KeptCounts,
   type SeenRequest,
@@ -59,7 +60,7 @@ async function readKept(): Promise<void> {
       kept = { since, siteSince, sites };
       return;
     }
-    kept = { since: Date.now(), siteSince, sites };
+    kept = { since: dayOf(Date.now()), siteSince, sites };
     await browser.storage.local.set({ [SINCE_KEY]: kept.since });
   } catch (error: unknown) {
     console.error(`Cloud Leak: kept counts not read: ${String(error)}`);
@@ -185,7 +186,7 @@ export async function clear(
     schedulePrivateWrite(site);
     return since(site, true);
   }
-  const at = Date.now();
+  const at = dayOf(Date.now());
   kept = clearSite(kept, site, at);
   await browser.storage.local.set({
     [`${SITE_SINCE_PREFIX}${site}`]: at,
