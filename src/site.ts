@@ -43,6 +43,37 @@ export function siteOf(hostname: string): string {
   }
 }
 
+// The schemes that "*" covers in a match pattern, the only ones a site whose
+// access the user grants or withdraws can have.
+export const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
+
+// The host as the URL gives it, in punycode, with the brackets of an IPv6
+// address, which Firefox's registrable domain accepts.
+export function siteOfUrl(url: string): string | null {
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    return null;
+  }
+  return hostname === "" ? null : siteOf(hostname);
+}
+
+// What the user names a site by: a host, a host and its port, or the address
+// of a page. Reduced as the URL of a committed document is, so that it gives
+// the site the pages of that host count under. URL reads a host and its port
+// as a scheme and a path, so text whose first colon is followed by a digit,
+// or that has none, is taken for a host. Of the text, only the scheme and the
+// host are read, and only the site goes further.
+export function siteOfTyped(text: string): string | null {
+  const typed = text.trim();
+  const scheme = /^([a-z][a-z\d+.-]*):(?!\d)/i.exec(typed)?.[1]?.toLowerCase();
+  if (scheme === undefined) {
+    return siteOfUrl(`http://${typed}`);
+  }
+  return WEB_SCHEMES.has(scheme) ? siteOfUrl(typed) : null;
+}
+
 // The site is kept in punycode, and Firefox writes it in Unicode where no
 // character could pass for one of another script (publicSuffix
 // DomainEncoding). The call throws on a name it cannot read, which is then

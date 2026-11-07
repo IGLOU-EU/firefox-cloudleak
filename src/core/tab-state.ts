@@ -34,6 +34,9 @@ export type TabState =
       readonly missed: boolean;
     }
   | { readonly kind: "not-observed" }
+  // The user asked to ignore the site of the document, so none of its
+  // requests is looked at and there is nothing to say of it.
+  | { readonly kind: "ignored" }
   | {
       readonly kind: "seen";
       // The most serious request of the tab, which gives the icon its colour
@@ -64,20 +67,24 @@ export const NEUTRAL: TabState = {
 // through a known provider, so it cannot know.
 export const NOT_OBSERVED: TabState = { kind: "not-observed" };
 
+export const IGNORED: TabState = { kind: "ignored" };
+
 const COLOUR_RANK: Record<Colour, number> = { blue: 0, orange: 1, red: 2 };
 
 function isPartial(state: TabState): boolean {
-  return state.kind === "not-observed" || state.partial;
+  return (
+    state.kind === "not-observed" || (state.kind !== "ignored" && state.partial)
+  );
 }
 
 // The tab shows its most serious request, so that one alarming request is
 // never hidden by many harmless ones, even when the view is partial: what was
-// seen is still true.
+// seen is still true. A document of an ignored site counts nothing.
 export function addRequest(
   state: TabState,
   request: Classification | null,
 ): TabState {
-  if (request === null) {
+  if (request === null || state.kind === "ignored") {
     return state;
   }
   const seen = state.kind === "seen" ? state : null;
@@ -180,9 +187,14 @@ function isPossibleSession(request: Classification): boolean {
 
 // The extension lacks the access to all sites. What it saw stays true, and a
 // tab where it saw nothing stays neutral: the crossed cloud is kept for a tab
-// whose own site is out of reach.
+// whose own site is out of reach. A document of an ignored site looks at
+// nothing, so what the extension could not see does not concern it.
 export function markPartial(state: TabState): TabState {
-  if (state.kind === "not-observed" || state.partial) {
+  if (
+    state.kind === "not-observed" ||
+    state.kind === "ignored" ||
+    state.partial
+  ) {
     return state;
   }
   return { ...state, partial: true };
@@ -190,9 +202,14 @@ export function markPartial(state: TabState): TabState {
 
 // Requests of the page went unseen. What was seen stays true, and a tab where
 // nothing was seen stays neutral. A tab not observed already says the
-// extension can say nothing of it.
+// extension can say nothing of it, and a document of an ignored site misses
+// nothing it would look at.
 export function markMissed(state: TabState): TabState {
-  if (state.kind === "not-observed" || state.missed) {
+  if (
+    state.kind === "not-observed" ||
+    state.kind === "ignored" ||
+    state.missed
+  ) {
     return state;
   }
   return { ...state, missed: true };
@@ -204,6 +221,9 @@ export function markMissed(state: TabState): TabState {
 export function clearPartial(state: TabState): TabState {
   if (state.kind === "not-observed") {
     return NEUTRAL;
+  }
+  if (state.kind === "ignored") {
+    return state;
   }
   return state.partial ? { ...state, partial: false } : state;
 }

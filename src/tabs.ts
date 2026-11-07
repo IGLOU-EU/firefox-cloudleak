@@ -11,8 +11,10 @@ import {
   foldRequest,
   learnUnseenDocument,
   markHiddenSite,
+  markIgnoredSite,
   markMissedRequest,
   markPartialView,
+  markWatchedSite,
   type Page,
   showCompletedDocument,
   showDocument,
@@ -21,15 +23,16 @@ import {
   type TabRecord,
   takeCountable,
 } from "./core/tab-record.js";
-import { count, ready as countsReady } from "./counts.js";
+import { count, ready as countsReady, isIgnored } from "./counts.js";
 import table from "./providers.js";
-import { siteOf } from "./site.js";
+import { siteOfUrl, WEB_SCHEMES } from "./site.js";
 import { forgetSent, render, report } from "./toolbar.js";
 
 // Firefox suspends the event page after 30 s without an event and its memory
 // goes with it, so the tabs live in storage.session, which stays in memory
 // and never reaches the disk. Private windows are kept the same way. Only
-// the kept counts, by site, go to storage.local (counts.ts).
+// the kept counts, by site, and the sites the user ignores go to
+// storage.local (counts.ts).
 const PREFIX = "tab:";
 
 // Every request changes the counts of its tab, so the toolbar is updated
@@ -99,10 +102,6 @@ type DocumentDetails = {
   readonly url: string;
 };
 
-// The schemes that "*" covers in a match pattern, the only ones a site whose
-// access the user grants or withdraws can have.
-const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
-
 // What a committed document is: a website, reader view or another page of
 // the browser, and for a website its site.
 interface Document {
@@ -159,18 +158,6 @@ async function documentShownIn(tabId: number): Promise<Document | null> {
   }
 }
 
-// The host as the URL gives it, in punycode, with the brackets of an IPv6
-// address, which Firefox's registrable domain accepts.
-function siteOfUrl(url: string): string | null {
-  let hostname: string;
-  try {
-    hostname = new URL(url).hostname;
-  } catch {
-    return null;
-  }
-  return hostname === "" ? null : siteOf(hostname);
-}
-
 // The icon speaks of the page the tab shows, not of its frames. The
 // documentId of a page brought back from the back-forward cache is the one
 // it had when first loaded (MDN, Work with documentId).
@@ -192,6 +179,7 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
       backOrForward,
       page,
       site,
+      isIgnored(site),
     ),
   );
 }
@@ -215,6 +203,7 @@ export async function onCompleted(details: DocumentDetails): Promise<void> {
       !hasAllSites(),
       page,
       site,
+      isIgnored(site),
     ),
   );
 }
@@ -276,6 +265,22 @@ export async function onAccessChange(): Promise<void> {
   }
 }
 
+// The tabs that show a site the user ignores turn ignored at once, and those
+// of a site watched again neutral, saying what they missed meanwhile. The
+// tabs the page keeps are all the tabs it can know a site of: any other is
+// decided when Firefox gives its site.
+export function ignoreInTabs(site: string): void {
+  for (const tabId of [...records.keys()]) {
+    update(tabId, (record) => markIgnoredSite(record, site));
+  }
+}
+
+export function watchInTabs(site: string): void {
+  for (const tabId of [...records.keys()]) {
+    update(tabId, (record) => markWatchedSite(record, site, !hasAllSites()));
+  }
+}
+
 // After the read of the wake-up, which may still hold the tab when its
 // closing is what woke the page.
 export async function forget(tabId: number): Promise<void> {
@@ -333,7 +338,13 @@ function askSite(tabId: number, record: TabRecord): Promise<void> | undefined {
     update(tabId, (current) =>
       shown === null
         ? current
-        : learnUnseenDocument(current, !hasAllSites(), shown.page, shown.site),
+        : learnUnseenDocument(
+            current,
+            !hasAllSites(),
+            shown.page,
+            shown.site,
+            isIgnored(shown.site),
+          ),
     );
   });
   learning.set(tabId, learned);

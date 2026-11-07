@@ -15,6 +15,10 @@
     "message": "Site non observé\u00a0: l'accès à ce site a été retiré à l'extension, elle ne peut rien en dire.",
     "description": "Tooltip of the toolbar icon when the extension has no access to the site of the tab and saw nothing."
   },
+  "titleIgnored": {
+    "message": "Site ignoré",
+    "description": "Tooltip of the toolbar icon when the user asked the extension to ignore the site of the tab."
+  },
   "countLevel2One": {
     "message": "Niveau 2, usage\u00a0: 1 requête",
     "description": "Line of the tooltip that counts the requests of the tab at level 2, blue, when there is one."

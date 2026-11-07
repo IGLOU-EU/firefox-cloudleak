@@ -69,6 +69,7 @@ function data(changes: Partial<PopupData> = {}): PopupData {
     privateWindow: false,
     since: SINCE,
     totals: {},
+    ignored: false,
     ...changes,
   };
 }

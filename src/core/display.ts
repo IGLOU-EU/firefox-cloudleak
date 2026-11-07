@@ -46,6 +46,11 @@ export function displayOf(
       title: [[line("titleNotObserved")]],
     };
   }
+  // The user chose not to watch the site, so the icon has nothing to warn of
+  // and only says why.
+  if (state.kind === "ignored") {
+    return { icon: "neutral", badge: "", title: [[line("titleIgnored")]] };
+  }
   const request = state.request;
   const provider =
     providers.find((entry) => entry.id === request.provider)?.name ??

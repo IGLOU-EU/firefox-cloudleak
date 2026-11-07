@@ -9,6 +9,7 @@ import {
   clearSite,
   countRequest,
   dayOf,
+  dropSite,
   emptyCounts,
   type KeptCounts,
   requestKindOf,
@@ -226,6 +227,47 @@ describe("clearSite", () => {
       cloudflare: { blue2: { "GET image": 1 } },
     });
     assert.equal(sinceOf(after, SITE), 900);
+  });
+});
+
+describe("dropSite", () => {
+  const LEBONCOIN = "leboncoin.fr";
+  const before = clearSite(
+    clearSite(
+      fold(
+        [
+          [SITE, seen(request({ level: 3 }, true), "GET", "main_frame")],
+          [LEBONCOIN, seen(request({ level: 2 }, true))],
+        ],
+        5,
+      ),
+      LEBONCOIN,
+      700,
+    ),
+    "example.org",
+    800,
+  );
+  const counted = countRequest(before, LEBONCOIN, seen(request(SESSION, true)));
+
+  it("keeps nothing of the site, neither its counts nor its own start, and leaves the others and the common start", () => {
+    const after = dropSite(counted, LEBONCOIN);
+    assert.deepEqual(after, {
+      since: 5,
+      siteSince: { "example.org": 800 },
+      sites: { [SITE]: counted.sites[SITE] },
+    });
+    assert.equal(sinceOf(after, LEBONCOIN), 5);
+    assert.deepEqual(totalsOf(after, LEBONCOIN), {});
+  });
+
+  it("leaves the counts it is given as they were", () => {
+    const frozen = JSON.stringify(counted);
+    dropSite(counted, LEBONCOIN);
+    assert.equal(JSON.stringify(counted), frozen);
+  });
+
+  it("changes nothing of a site it does not know", () => {
+    assert.deepEqual(dropSite(counted, "unknown.example"), counted);
   });
 });
 

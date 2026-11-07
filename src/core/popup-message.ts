@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-// What the popup and the event page exchange through runtime.sendMessage: the
-// popup asks, the event page answers. The popup thus never reads the layout
-// of the storage, and the event page stays the only writer of the counts.
+// What the popup, the preferences page and the event page exchange through
+// runtime.sendMessage: the pages ask, the event page answers. The pages thus
+// never read the layout of the storage, and the event page stays the only
+// writer of the counts and of the ignored sites.
 
 import type { Colour, LeakLevel } from "./classify.js";
 import type { Page } from "./tab-record.js";
@@ -43,7 +44,17 @@ export type PopupRequest =
       readonly kind: "clearSite";
       readonly site: string;
       readonly privateWindow: boolean;
-    };
+    }
+  // Ignore a site from now on. The host is a site, as PopupData.site gives
+  // it, or what the user typed in the preferences, and the event page reduces
+  // it to its registrable domain. The kept counts of the site and its counts
+  // of the private session go, its requests are no longer looked at, and the
+  // tabs that show it turn to the ignored state.
+  | { readonly kind: "ignoreSite"; readonly host: string }
+  // Watch a site again: its counts start from nothing.
+  | { readonly kind: "unignoreSite"; readonly site: string }
+  // The ignored sites, for the preferences page.
+  | { readonly kind: "ignoredSites" };
 
 export interface PopupData {
   // Of the document the tab shows.
@@ -61,10 +72,21 @@ export interface PopupData {
   // Of the site, kept without limit of time, or of the private session only.
   // Empty when nothing of the site went through a provider.
   readonly totals: SiteCounts;
+  // The user asked to ignore the site: nothing of it is looked at or kept.
+  readonly ignored: boolean;
 }
 
 // The answer to a "clearSite" request.
 export interface ClearedData {
   // The new start of the counts of the site, zero in a private window.
   readonly since: number;
+}
+
+// The answer to "ignoreSite", "unignoreSite" and "ignoredSites".
+export interface IgnoredData {
+  // In punycode, in alphabetical order.
+  readonly sites: readonly string[];
+  // The site the request named, once reduced, or null when what the user
+  // typed names no site. Null for "ignoredSites".
+  readonly site: string | null;
 }

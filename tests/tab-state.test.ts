@@ -13,6 +13,7 @@ import {
 import {
   addRequest,
   clearPartial,
+  IGNORED,
   markMissed,
   markPartial,
   NEUTRAL,
@@ -43,6 +44,7 @@ function fold(requests: (Classification | null)[], start = NEUTRAL): TabState {
 type View =
   | { kind: "neutral"; partial: boolean }
   | { kind: "not-observed" }
+  | { kind: "ignored" }
   | { kind: "seen"; colour: Colour; level: LeakLevel; partial: boolean };
 
 // What the icon shows of a state: its colour, its level and whether the view
@@ -51,8 +53,8 @@ function view(state: TabState): View {
   if (state.kind === "neutral") {
     return { kind: "neutral", partial: state.partial };
   }
-  if (state.kind === "not-observed") {
-    return { kind: "not-observed" };
+  if (state.kind === "not-observed" || state.kind === "ignored") {
+    return { kind: state.kind };
   }
   const level = state.request.leak.level;
   return {
@@ -430,7 +432,9 @@ describe("markPartial", () => {
 
 describe("markMissed", () => {
   function missedOf(state: TabState): boolean | null {
-    return state.kind === "not-observed" ? null : state.missed;
+    return state.kind === "not-observed" || state.kind === "ignored"
+      ? null
+      : state.missed;
   }
 
   it("says a tab where nothing was seen missed requests, and keeps it neutral", () => {
@@ -501,5 +505,20 @@ describe("clearPartial", () => {
     const state = fold([BLUE_2]);
     assert.equal(clearPartial(state), state);
     assert.equal(clearPartial(NEUTRAL), NEUTRAL);
+  });
+});
+
+describe("a document of an ignored site", () => {
+  it("counts no request, whatever its level", () => {
+    assert.equal(fold([BLUE_2, RED_4, ORANGE_3], IGNORED), IGNORED);
+  });
+
+  it("stays ignored, neither partial nor missing requests, since it looks at nothing", () => {
+    assert.equal(markPartial(IGNORED), IGNORED);
+    assert.equal(markMissed(IGNORED), IGNORED);
+    assert.equal(clearPartial(IGNORED), IGNORED);
+    assert.deepEqual(view(markMissed(markPartial(IGNORED))), {
+      kind: "ignored",
+    });
   });
 });

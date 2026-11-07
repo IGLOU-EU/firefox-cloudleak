@@ -11,6 +11,7 @@ import { after, before, describe, it, mock } from "node:test";
 import { dayOf } from "../src/core/counts.js";
 import type {
   ClearedData,
+  IgnoredData,
   PopupData,
   SiteCounts,
 } from "../src/core/popup-message.js";
@@ -19,7 +20,13 @@ import { EMPTY_RECORD, type TabRecord } from "../src/core/tab-record.js";
 import { importModule, writeTable } from "./built-extension.js";
 
 interface Answer {
-  answer(message: unknown): Promise<PopupData | ClearedData> | undefined;
+  answer(
+    message: unknown,
+  ): Promise<PopupData | ClearedData | IgnoredData> | undefined;
+}
+
+interface Site {
+  siteOfTyped(text: string): string | null;
 }
 
 interface Requests {
@@ -48,6 +55,8 @@ interface Counts {
   totals(site: string | null, privateWindow: boolean): SiteCounts;
   since(site: string | null, privateWindow: boolean): number;
   onWindowRemoved(): Promise<void>;
+  isIgnored(site: string | null): boolean;
+  ignoredSites(): string[];
 }
 
 const EDGE_IP = "192.0.2.10";
@@ -180,6 +189,12 @@ function event(name: string) {
         }
         return Promise.resolve();
       },
+      remove: (keys: string | string[]) => {
+        for (const key of typeof keys === "string" ? [keys] : keys) {
+          local.delete(key);
+        }
+        return Promise.resolve();
+      },
     },
   },
   permissions: {
@@ -253,6 +268,7 @@ const requests = await importModule<Requests>("requests.js");
 const cname = await importModule<Cname>("cname.js");
 const counts = await importModule<Counts>("counts.js");
 const { answer } = await importModule<Answer>("answer.js");
+const { siteOfTyped } = await importModule<Site>("site.js");
 await importModule<object>("background.js");
 
 const closing = tabs.forget(CLOSED_AT_WAKE_UP);
@@ -1614,6 +1630,7 @@ describe("the message handler", () => {
       privateWindow: false,
       since: local.get("since"),
       totals: {},
+      ignored: false,
     });
   });
 
@@ -1656,5 +1673,405 @@ describe("the message handler", () => {
       registered[0]?.({ kind: "map" }, {}, () => {}),
       undefined,
     );
+  });
+});
+
+describe("a site the user ignores", () => {
+  const IGNORED_SHOWN = {
+    icon: "/icons/neutral.svg",
+    badge: "",
+    title: "titleIgnored",
+  };
+
+  after(() => {
+    frameOf = NO_FRAME;
+  });
+
+  async function ignore(host: string): Promise<IgnoredData> {
+    return (await answer({ kind: "ignoreSite", host })) as IgnoredData;
+  }
+
+  async function unignore(site: string): Promise<IgnoredData> {
+    return (await answer({ kind: "unignoreSite", site })) as IgnoredData;
+  }
+
+  async function popup(tabId: number, privateWindow = false) {
+    return (await answer({
+      kind: "popup",
+      tabId,
+      privateWindow,
+    })) as PopupData;
+  }
+
+  // A request of the tab to a host whose canonical name is not known yet,
+  // such as a library a page loads from a CDN.
+  async function exchangeTo(
+    host: string,
+    tabId: number,
+    type: string,
+    timeStamp: number,
+  ): Promise<void> {
+    const requestId = nextId();
+    await requests.onSendHeaders({
+      tabId,
+      requestId,
+      type,
+      timeStamp,
+      url: `https://${host}/lib.js`,
+      method: "GET",
+      requestHeaders: [],
+    });
+    await requests.onResponseStarted(
+      response(tabId, requestId, type, timeStamp + 1, OTHER_IP),
+    );
+  }
+
+  function resolutionsOf(host: string): string[] {
+    return resolved.filter((entry) => entry === host);
+  }
+
+  describe("named by what the user typed", () => {
+    const cases: [string, string | null][] = [
+      ["www.t1500.example", "t1500.example"],
+      ["www.t1500.example:8080", "t1500.example"],
+      ["https://www.t1500.example/directory?tab=1#top", "t1500.example"],
+      ["wss://chat.t1500.example/socket", "t1500.example"],
+      ["  WWW.T1500.Example  ", "t1500.example"],
+      ["http:t1500.example", "t1500.example"],
+      ["https://user:secret@www.t1500.example/", "t1500.example"],
+      ["www.bücher.example", "xn--bcher-kva.example"],
+      ["https://www.bücher.example/", "xn--bcher-kva.example"],
+      ["192.0.2.7", "192.0.2.7"],
+      ["192.0.2.7:8080", "192.0.2.7"],
+      ["[2001:db8::1]:8443", "[2001:db8::1]"],
+      ["localhost:3000", "localhost"],
+      ["", null],
+      ["   ", null],
+      ["www t1500 example", null],
+      ["ftp://files.t1500.example/", null],
+      ["file:///home/user/page.html", null],
+      ["about:config", null],
+      ["javascript:alert(1)", null],
+      ["mailto:user@t1500.example", null],
+      ["https://", null],
+      ["www.t1500.example:99999", null],
+      ["2001:db8::1", null],
+    ];
+
+    for (const [text, site] of cases) {
+      it(`gives ${site ?? "no site"} for ${JSON.stringify(text)}`, () => {
+        assert.equal(siteOfTyped(text), site);
+      });
+    }
+
+    it("is answered with the site it names, kept alone, in storage.local, with the ignored sites in order", async () => {
+      const first = await ignore("https://www.t1501b.example/live?channel=1");
+      assert.equal(first.site, "t1501b.example");
+      const second = await ignore("www.t1501a.example:8080");
+      assert.equal(second.site, "t1501a.example");
+      assert.deepEqual(second.sites, [...second.sites].sort());
+      assert.ok(second.sites.includes("t1501a.example"));
+      assert.ok(second.sites.includes("t1501b.example"));
+      assert.deepEqual(local.get("ignored"), second.sites);
+      assert.equal(JSON.stringify([...local.values()]).includes("live"), false);
+      assert.equal(JSON.stringify([...local.values()]).includes("8080"), false);
+      const again = await ignore("t1501a.example");
+      assert.deepEqual(again.sites, second.sites);
+    });
+
+    it("is answered with no site, and changes nothing, when what the user typed names no site", async () => {
+      const before = counts.ignoredSites();
+      const writes = localWrites.length;
+      for (const text of ["", "   ", "ftp://files.example/", "about:config"]) {
+        assert.deepEqual(await ignore(text), { sites: before, site: null });
+      }
+      assert.equal(localWrites.length, writes);
+    });
+  });
+
+  it("drops every request of a document of the site before it is classified, so that none costs a DNS resolution", async () => {
+    const tab = 1510;
+    const site = "t1510.example";
+    await ignore(site);
+    await commit(tab, "doc-1510", 1000, [], `https://www.${site}/`);
+    await status(tab);
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    await exchangeTo("cdn1510.example", tab, "script", 1100);
+    await exchange(tab, "image", 1200, EDGE_IP, true);
+    mock.timers.runAll();
+    assert.deepEqual(resolutionsOf("cdn1510.example"), []);
+    assert.deepEqual(tabs.recordOf(tab).state, { kind: "ignored" });
+    assert.deepEqual(shown(tab), IGNORED_SHOWN);
+    assert.equal(local.has(`site:${site}`), false);
+    assert.equal(localWrites.length, writes);
+    // The same request of a watched page is resolved: the stand-in sees
+    // every resolution.
+    const watched = 1511;
+    await commit(watched, "doc-1511", 1000, [], "https://t1511.example/");
+    await exchangeTo("cdn1510.example", watched, "script", 1100);
+    assert.deepEqual(resolutionsOf("cdn1510.example"), ["cdn1510.example"]);
+  });
+
+  it("drops a request sent before the site was ignored when its response comes after", async () => {
+    const tab = 1512;
+    const site = "t1512.example";
+    await commit(tab, "doc-1512", 1000, [], `https://${site}/`);
+    const requestId = nextId();
+    await requests.onSendHeaders({
+      tabId: tab,
+      requestId,
+      type: "script",
+      timeStamp: 1100,
+      url: "https://cdn1512.example/lib.js",
+      method: "GET",
+      requestHeaders: [],
+    });
+    await ignore(site);
+    await requests.onResponseStarted(
+      response(tab, requestId, "script", 1101, OTHER_IP),
+    );
+    mock.timers.runAll();
+    assert.deepEqual(resolutionsOf("cdn1512.example"), []);
+    assert.deepEqual(tabs.recordOf(tab).state, { kind: "ignored" });
+    assert.equal(local.has(`site:${site}`), false);
+  });
+
+  it("drops at the commit the top-level request classified before it, and counts nothing of it", async () => {
+    const tab = 1520;
+    const site = "t1520.example";
+    await ignore(site);
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    await exchange(tab, "main_frame", 2000, EDGE_IP, true);
+    await commit(tab, "doc-1520", 2010, [], `https://www.${site}/`);
+    await status(tab);
+    mock.timers.runAll();
+    const record = tabs.recordOf(tab);
+    assert.deepEqual(record.state, { kind: "ignored" });
+    assert.deepEqual(record.uncounted, []);
+    assert.deepEqual(shown(tab), IGNORED_SHOWN);
+    assert.equal(local.has(`site:${site}`), false);
+    assert.equal(localWrites.length, writes);
+  });
+
+  it("drops before it is classified the top-level request whose commit arrived first", async () => {
+    const tab = 1521;
+    const site = "t1521.example";
+    await ignore(site);
+    await commit(tab, "doc-1521", 2010, [], `https://www.${site}/`);
+    await exchangeTo("main1521.example", tab, "main_frame", 2000);
+    mock.timers.runAll();
+    assert.deepEqual(resolutionsOf("main1521.example"), []);
+    assert.deepEqual(tabs.recordOf(tab).state, { kind: "ignored" });
+  });
+
+  it("is decided for a tab the extension has not seen navigate once Firefox gives its site, and drops the requests held for it", async () => {
+    const tab = 1530;
+    const site = "t1530.example";
+    await ignore(site);
+    frameOf = (tabId) =>
+      Promise.resolve(
+        tabId === tab ? { url: `https://www.${site}/live` } : null,
+      );
+    try {
+      mock.timers.runAll();
+      const writes = localWrites.length;
+      await exchange(tab, "image", 1100, EDGE_IP);
+      await new Promise((done) => setImmediate(done));
+      mock.timers.runAll();
+      const record = tabs.recordOf(tab);
+      assert.equal(record.site, site);
+      assert.deepEqual(record.state, { kind: "ignored" });
+      assert.deepEqual(record.uncounted, []);
+      await exchangeTo("cdn1530.example", tab, "script", 1200);
+      mock.timers.runAll();
+      assert.deepEqual(resolutionsOf("cdn1530.example"), []);
+      assert.equal(local.has(`site:${site}`), false);
+      assert.equal(localWrites.length, writes);
+      const data = await popup(tab);
+      assert.equal(data.site, site);
+      assert.equal(data.ignored, true);
+      assert.deepEqual(data.totals, {});
+    } finally {
+      frameOf = NO_FRAME;
+    }
+  });
+
+  it("erases the kept counts of the site, written or not, its own start and its counts of the private session, and nothing of the other sites", async () => {
+    const tab = 1540;
+    const site = "t1540.example";
+    const privateTab = 1541;
+    const other = 1542;
+    const otherSite = "t1542.example";
+    await commit(tab, "doc-1540", 1000, [], `https://${site}/`);
+    await commit(privateTab, "doc-1541", 1000, [], `https://${site}/`);
+    await commit(other, "doc-1542", 1000, [], `https://${otherSite}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    await answer({ kind: "clearSite", site, privateWindow: false });
+    await exchange(tab, "image", 1200, EDGE_IP);
+    await exchange(other, "image", 1200, EDGE_IP);
+    await privateExchange(privateTab, "private-1541", 1200);
+    mock.timers.runAll();
+    // Counted, and not yet written.
+    await exchange(tab, "script", 1300, EDGE_IP);
+    assert.notEqual(local.get(`site:${site}`), undefined);
+    assert.notEqual(local.get(`since:${site}`), undefined);
+    assert.notEqual(
+      (session.get("privateCounts") as Record<string, SiteCounts>)[site],
+      undefined,
+    );
+    const otherBefore = JSON.stringify(local.get(`site:${otherSite}`));
+    await ignore(site);
+    assert.equal(local.has(`site:${site}`), false);
+    assert.equal(local.has(`since:${site}`), false);
+    mock.timers.runAll();
+    assert.equal(local.has(`site:${site}`), false);
+    assert.equal(
+      (session.get("privateCounts") as Record<string, SiteCounts>)[site],
+      undefined,
+    );
+    assert.deepEqual(counts.totals(site, false), {});
+    assert.deepEqual(counts.totals(site, true), {});
+    assert.equal(counts.since(site, false), local.get("since"));
+    assert.equal(JSON.stringify(local.get(`site:${otherSite}`)), otherBefore);
+    assert.deepEqual(counts.totals(otherSite, false), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+  });
+
+  it("turns at once every tab that shows the site ignored, private windows and pages Back brings back included", async () => {
+    const site = "t1550.example";
+    const red = 1550;
+    await exchange(red, "main_frame", 1000, EDGE_IP, true);
+    await commit(red, "doc-1550", 1010, [], `https://www.${site}/`);
+    await status(red);
+    const left = 1551;
+    await commit(left, "doc-1551", 1000, [], `https://${site}/`);
+    await exchange(left, "image", 1100, EDGE_IP);
+    await commit(left, "doc-1551-b", 2000, [], "https://t1551.example/");
+    await status(left);
+    const privateTab = 1552;
+    await commit(privateTab, "doc-1552", 1000, [], `https://${site}/`);
+    await status(privateTab);
+    await privateExchange(privateTab, "private-1552", 1100);
+    mock.timers.runAll();
+    assert.deepEqual(iconOf(red), RED);
+    assert.equal(shown(privateTab).icon, "/icons/blue.svg");
+    await ignore(site);
+    mock.timers.runAll();
+    assert.deepEqual(shown(red), IGNORED_SHOWN);
+    assert.deepEqual(shown(privateTab), IGNORED_SHOWN);
+    assert.equal(shown(left).title, "titleNeutral");
+    assert.deepEqual(tabs.recordOf(left).previous[0]?.state, {
+      kind: "ignored",
+    });
+    assert.deepEqual(
+      (session.get(`tab:${red}`) as TabRecord | undefined)?.state,
+      { kind: "ignored" },
+    );
+    await commit(left, "doc-1551", 3000, ["forward_back"], `https://${site}/`);
+    await status(left);
+    assert.deepEqual(shown(left), IGNORED_SHOWN);
+    const data = await popup(red);
+    assert.equal(data.ignored, true);
+    assert.deepEqual(data.state, { kind: "ignored" });
+    assert.deepEqual(data.totals, {});
+  });
+
+  it("is watched again from nothing: its open pages say they missed requests, and its counts start that day", async () => {
+    const tab = 1560;
+    const site = "t1560.example";
+    await ignore(site);
+    await commit(tab, "doc-1560", 1000, [], `https://www.${site}/`);
+    await status(tab);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    const watched = await unignore(site);
+    assert.equal(watched.site, site);
+    assert.equal(watched.sites.includes(site), false);
+    assert.deepEqual(local.get("ignored"), watched.sites);
+    mock.timers.runAll();
+    assert.deepEqual(shown(tab), {
+      icon: "/icons/neutral.svg",
+      badge: "",
+      title: "titleNeutral\ntitleMissed",
+    });
+    const today = dayOf(Date.now());
+    assert.equal(local.get(`since:${site}`), today);
+    assert.deepEqual(local.get(`site:${site}`), {});
+    const data = await popup(tab);
+    assert.equal(data.ignored, false);
+    assert.equal(data.since, today);
+    assert.deepEqual(data.totals, {});
+    await exchange(tab, "image", 1200, EDGE_IP);
+    mock.timers.runAll();
+    assert.deepEqual(local.get(`site:${site}`), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    assert.equal(shown(tab).badge, "1");
+    assert.match(shown(tab).title ?? "", /titleMissed/);
+    await commit(tab, "doc-1560-b", 2000, [], `https://www.${site}/next`);
+    await status(tab);
+    assert.equal(shown(tab).title, "titleNeutral");
+  });
+
+  it("changes nothing when the site watched again was not ignored, and keeps its counts", async () => {
+    const tab = 1561;
+    const site = "t1561.example";
+    await commit(tab, "doc-1561", 1000, [], `https://${site}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    const writes = localWrites.length;
+    const before = counts.ignoredSites();
+    assert.deepEqual(await unignore(site), { sites: before, site });
+    assert.equal(localWrites.length, writes);
+    assert.deepEqual(local.get(`site:${site}`), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+  });
+
+  it("keeps nothing when the popup clears it", async () => {
+    const site = "t1570.example";
+    await ignore(site);
+    const writes = localWrites.length;
+    await answer({ kind: "clearSite", site, privateWindow: false });
+    assert.equal(localWrites.length, writes);
+    assert.equal(local.has(`since:${site}`), false);
+  });
+
+  it("is read back from storage.local at a wake-up", async () => {
+    await ignore("t1580.example");
+    const privateBefore = session.get("privateCounts");
+    try {
+      const woken = await importModule<Counts>("counts.js?ignored-sites");
+      await woken.ready;
+      assert.equal(woken.isIgnored("t1580.example"), true);
+      assert.equal(woken.isIgnored("t1561.example"), false);
+      assert.equal(woken.isIgnored(null), false);
+      assert.deepEqual(woken.ignoredSites(), counts.ignoredSites());
+    } finally {
+      if (privateBefore !== undefined) {
+        session.set("privateCounts", privateBefore);
+      }
+    }
+  });
+
+  it("lists the ignored sites, in order", async () => {
+    const listed = (await answer({ kind: "ignoredSites" })) as IgnoredData;
+    assert.deepEqual(listed, { sites: counts.ignoredSites(), site: null });
+    assert.deepEqual(listed.sites, [...listed.sites].sort());
+    assert.ok(listed.sites.includes("t1580.example"));
+  });
+
+  it("answers no message of another shape", () => {
+    assert.equal(answer({ kind: "ignoreSite" }), undefined);
+    assert.equal(answer({ kind: "ignoreSite", host: 1 }), undefined);
+    assert.equal(answer({ kind: "ignoreSite", host: null }), undefined);
+    assert.equal(answer({ kind: "unignoreSite" }), undefined);
+    assert.equal(answer({ kind: "unignoreSite", site: "" }), undefined);
+    assert.equal(answer({ kind: "unignoreSite", site: 1 }), undefined);
+    assert.equal(answer({ kind: "ignored" }), undefined);
   });
 });
