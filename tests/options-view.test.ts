@@ -4,7 +4,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { line } from "../src/core/display.js";
-import { noteOf, rowsOf } from "../src/core/options-view.js";
+import {
+  limitOf,
+  noteOf,
+  recordViewOf,
+  rowsOf,
+} from "../src/core/options-view.js";
 import { getMessageOf, messagesOf, OPTIONS_MESSAGES } from "./messages.js";
 
 const shown = (site: string) =>
@@ -71,6 +76,84 @@ describe("the line under the field", () => {
       kind: "already",
       line: line("optionsAlready", "shown twitch.tv"),
     });
+  });
+});
+
+describe("the section of the recording", () => {
+  it("shows the limit while the choice records something, and asks nothing while the choice is the one kept", () => {
+    assert.deepEqual(recordViewOf("none", "none"), {
+      asking: false,
+      limit: false,
+    });
+    assert.deepEqual(recordViewOf("level4", "level4"), {
+      asking: false,
+      limit: true,
+    });
+    assert.deepEqual(recordViewOf("level3and4", "level3and4"), {
+      asking: false,
+      limit: true,
+    });
+  });
+
+  it("asks before going back to none from either level, and hides the limit while it asks", () => {
+    for (const kept of ["level4", "level3and4"] as const) {
+      assert.deepEqual(recordViewOf(kept, "none"), {
+        asking: true,
+        limit: false,
+      });
+    }
+  });
+
+  it("asks nothing when the choice records more, or other levels", () => {
+    assert.deepEqual(recordViewOf("none", "level4"), {
+      asking: false,
+      limit: true,
+    });
+    assert.deepEqual(recordViewOf("level3and4", "level4"), {
+      asking: false,
+      limit: true,
+    });
+    assert.deepEqual(recordViewOf("level4", "level3and4"), {
+      asking: false,
+      limit: true,
+    });
+  });
+});
+
+describe("the limit typed", () => {
+  it("takes an integer of at least 1, with no maximum", () => {
+    for (const [typed, limit] of [
+      ["1", 1],
+      ["100", 100],
+      ["1000", 1000],
+      ["1001", 1001],
+      ["250000", 250_000],
+      [" 42 ", 42],
+      ["007", 7],
+      [String(Number.MAX_SAFE_INTEGER), Number.MAX_SAFE_INTEGER],
+    ] as const) {
+      assert.equal(limitOf(typed), limit, typed);
+    }
+  });
+
+  it("refuses an empty field, 0, a negative number, a fraction, a number beyond the integers a number holds exactly, and what is no number", () => {
+    for (const typed of [
+      "",
+      "   ",
+      "0",
+      "00",
+      "-5",
+      "2.5",
+      "1,5",
+      "1e3",
+      "+12",
+      "12 000",
+      "9007199254740993",
+      "abc",
+      "Infinity",
+    ]) {
+      assert.equal(limitOf(typed), null, typed);
+    }
   });
 });
 
@@ -157,6 +240,76 @@ describe("the messages of the preferences", () => {
       en("optionsAlready", ["twitch.tv"]),
       "twitch.tv is already ignored.",
     );
+  });
+
+  it("read as written, for the recording of addresses", () => {
+    const fr = getMessageOf("fr");
+    const en = getMessageOf("en");
+    const read: [string, string, string][] = [
+      ["optionsRecord", "Enregistrer les adresses", "Record addresses"],
+      [
+        "optionsRecordText",
+        "Les adresses des requêtes des niveaux choisis sont gardées sur cet ordinateur, sans les valeurs de leurs paramètres, et peuvent révéler ce que vous avez fait sur un site\u00a0: dans le doute, laissez sur «\u00a0Aucune\u00a0».",
+        "The addresses of the requests of the chosen levels are kept on this computer, without the values of their parameters, and can reveal what you did on a site: when in doubt, leave it on “None”.",
+      ],
+      ["optionsRecordNone", "Aucune", "None"],
+      [
+        "optionsRecordLevel4",
+        "Niveau 4 seulement, données personnelles",
+        "Level 4 only, personal data",
+      ],
+      [
+        "optionsRecordLevel3and4",
+        "Niveaux 3 et 4, lecture et données personnelles",
+        "Levels 3 and 4, reading and personal data",
+      ],
+      [
+        "optionsRecordPrivate",
+        "Rien n'est enregistré en fenêtre privée.",
+        "Nothing is recorded in a private window.",
+      ],
+      [
+        "optionsRecordQuestion",
+        "Purger les adresses gardées\u00a0?",
+        "Clear the kept addresses?",
+      ],
+      ["optionsPurge", "Purger", "Clear"],
+      ["optionsCancel", "Annuler", "Cancel"],
+      [
+        "optionsRecordPurged",
+        "Les adresses gardées sont purgées.",
+        "The kept addresses are cleared.",
+      ],
+      ["optionsLimit", "Limite par ligne", "Limit per row"],
+      [
+        "optionsLimitHelp",
+        "Le nombre d'adresses à conserver pour chaque site, par type de requête et par méthode rencontrée.",
+        "The number of addresses to keep for each site, by request type and by method seen.",
+      ],
+      [
+        "optionsLimitError",
+        "Saisissez un nombre entier d'au moins 1.",
+        "Type a whole number of at least 1.",
+      ],
+    ];
+    for (const [name, french, english] of read) {
+      assert.equal(fr(name, []), french, name);
+      assert.equal(en(name, []), english, name);
+    }
+  });
+
+  it("name the choice of none in the text that advises it, and clear as the popup and the map do", () => {
+    const fr = getMessageOf("fr");
+    const en = getMessageOf("en");
+    for (const message of [fr, en]) {
+      assert.ok(
+        message("optionsRecordText", []).includes(
+          message("optionsRecordNone", []),
+        ),
+      );
+      assert.equal(message("optionsPurge", []), message("mapPurge", []));
+      assert.equal(message("optionsCancel", []), message("mapCancel", []));
+    }
   });
 
   it("name the button of the popup as the popup does", () => {

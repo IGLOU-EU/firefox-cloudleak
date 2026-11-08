@@ -177,21 +177,34 @@ describe("recordsLevel", () => {
 });
 
 describe("recordLimitOf", () => {
-  it("keeps an integer from 1 to 1000", () => {
-    for (const limit of [1, 100, 1000]) {
+  it("keeps any integer of at least 1, however large", () => {
+    for (const limit of [
+      1,
+      100,
+      1000,
+      1001,
+      5000,
+      1_000_000,
+      Number.MAX_SAFE_INTEGER,
+    ]) {
       assert.equal(recordLimitOf(limit), limit);
     }
   });
 
-  it("brings a number out of range to the nearest bound, and a fraction to the nearest integer", () => {
-    assert.equal(recordLimitOf(0), 1);
-    assert.equal(recordLimitOf(-5), 1);
-    assert.equal(recordLimitOf(1001), 1000);
-    assert.equal(recordLimitOf(Number.POSITIVE_INFINITY), 1000);
-    assert.equal(recordLimitOf(Number.NEGATIVE_INFINITY), 1);
-    assert.equal(recordLimitOf(2.4), 2);
-    assert.equal(recordLimitOf(2.5), 3);
-    assert.equal(recordLimitOf(0.4), 1);
+  it("refuses a number below 1, a fraction and what is beyond the integers a number holds exactly, rather than bring it near", () => {
+    for (const value of [
+      0,
+      -5,
+      0.4,
+      2.4,
+      2.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      1e300,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ]) {
+      assert.equal(recordLimitOf(value), null, String(value));
+    }
   });
 
   it("refuses what is no number", () => {
@@ -216,6 +229,10 @@ describe("settingsOf", () => {
       record: "level3and4",
       recordLimit: 1000,
     });
+    assert.deepEqual(
+      settingsOf({ record: "level3and4", recordLimit: 250_000 }),
+      { record: "level3and4", recordLimit: 250_000 },
+    );
   });
 
   it("falls back to the default of each setting that is not valid, so that a doubt records nothing", () => {
@@ -227,10 +244,12 @@ describe("settingsOf", () => {
       record: "level4",
       recordLimit: 100,
     });
-    assert.deepEqual(settingsOf({ record: "level4", recordLimit: 5000 }), {
-      record: "level4",
-      recordLimit: 1000,
-    });
+    for (const recordLimit of [0, 2.5, -1]) {
+      assert.deepEqual(settingsOf({ record: "level4", recordLimit }), {
+        record: "level4",
+        recordLimit: 100,
+      });
+    }
     for (const value of [null, "level4", 4, []]) {
       assert.deepEqual(settingsOf(value), DEFAULT_SETTINGS, String(value));
     }

@@ -6,11 +6,14 @@
 // of core/map-view.ts, which decides everything that is shown.
 
 import {
+  type AddressRow,
   type CategoryLine,
   type Choice,
   type Column,
+  type CopyTexts,
   colourOfCategory,
   columnOf,
+  type DetailLine,
   type Filters,
   formatsOf,
   type Heading,
@@ -28,6 +31,7 @@ import {
   placesOf,
   prepare,
   ROW_HEIGHT,
+  type SiteRecord,
   type SiteRow,
   selectionOf,
   toggled,
@@ -35,7 +39,12 @@ import {
   withoutLimit,
   yOf,
 } from "./core/map-view.js";
-import type { ClearedData, MapData } from "./core/popup-message.js";
+import type {
+  ClearedData,
+  MapData,
+  Settings,
+  SiteAddresses,
+} from "./core/popup-message.js";
 import { ask, element, writeLabels } from "./page.js";
 import table from "./providers.js";
 import { siteText } from "./site.js";
@@ -51,6 +60,12 @@ const LIST_WIDTH = 340;
 const LINKS_MIN_WIDTH = 400;
 const PILL_WIDTH = 200;
 const PILL_MARGIN = 18;
+
+// A cut address scrolls on hover and focus at this speed, in pixels a
+// second, so that the time it takes follows its length.
+const ADDRESS_SPEED = 80;
+// How long the chip of a copied address stays.
+const COPIED_MS = 1500;
 
 // Firefox gives an extension page of a private window the private browsing
 // of its window (ExtensionCommon.sys.mjs and child/ext-extension.js, Firefox
@@ -73,6 +88,12 @@ let column: Column | null = null;
 // Each link with what places it, so that a scroll moves it without a lookup.
 let drawn: { path: SVGPathElement; slot: number; end: number }[] = [];
 let pillX = LINKS_MIN_WIDTH - PILL_WIDTH - PILL_MARGIN;
+// The addresses the event page keeps of the site whose panel is open, and
+// the rows of that panel the user unfolded.
+let record: SiteRecord | null = null;
+let unfolded = new Set<string>();
+let lists = 0;
+const chips = new WeakMap<HTMLElement, number>();
 
 function svg<K extends keyof SVGElementTagNameMap>(
   tag: K,
@@ -481,21 +502,195 @@ function labelOf(text: string, proof: string | null): HTMLElement {
   return label;
 }
 
-function lineOf(line: CategoryLine): HTMLElement {
-  const row = html("div", "line");
-  row.append(
-    iconOf({ kind: "cloud", colour: line.colour }, 16),
-    labelOf(line.label, line.proof),
-    html("span", "count", line.count),
+// A cut address fades at its end, and scrolls on hover and focus as far as
+// it is cut, so each is measured once in the page: every width first, then
+// every change, so that the page is laid out once.
+function measure(list: HTMLElement): void {
+  const buttons = Array.from(list.querySelectorAll<HTMLElement>(".address"));
+  const cuts = buttons.map((button) => {
+    const text = button.querySelector<HTMLElement>(".text");
+    return text === null ? 0 : Math.ceil(text.scrollWidth - text.clientWidth);
+  });
+  buttons.forEach((button, index) => {
+    const cut = cuts[index] ?? 0;
+    button.classList.toggle("cut", cut > 0);
+    button.style.setProperty("--shift", `${-cut}px`);
+    button.style.setProperty("--duration", `${cut / ADDRESS_SPEED}s`);
+  });
+}
+
+// Firefox lets a page of the extension write to the clipboard during the
+// click that asks for it, without the clipboardWrite permission: the click
+// gives the page a transient user activation
+// (nsContentUtils::IsCutCopyAllowed and Clipboard::Write, Firefox 159.0.1).
+// A failure is said on the chip and to a screen reader, never shown as a
+// copy.
+async function copyAddress(
+  button: HTMLElement,
+  address: string,
+  copy: CopyTexts,
+): Promise<void> {
+  const announce = element("announce");
+  announce.textContent = "";
+  let copied = true;
+  try {
+    await navigator.clipboard.writeText(address);
+  } catch (error: unknown) {
+    copied = false;
+    console.error(`Cloud Leak: address not copied: ${String(error)}`);
+  }
+  const chip = button.querySelector<HTMLElement>(".copied");
+  chip?.classList.toggle("failed", !copied);
+  const word = chip?.querySelector<HTMLElement>(".word");
+  if (word !== null && word !== undefined) {
+    word.textContent = copied ? copy.copied : copy.failed;
+  }
+  button.classList.add("done");
+  announce.textContent = copied ? copy.announced : copy.failed;
+  clearTimeout(chips.get(button));
+  chips.set(
+    button,
+    setTimeout(() => button.classList.remove("done"), COPIED_MS),
   );
-  for (const detail of line.details) {
+}
+
+function checkMark(): SVGSVGElement {
+  const image = svg("svg", {
+    viewBox: "0 0 10 10",
+    width: 10,
+    height: 10,
+    "aria-hidden": "true",
+  });
+  image.append(
+    svg("path", {
+      d: "M1.5 5.5L4 8L8.5 2.5",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": 1.6,
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round",
+    }),
+  );
+  return image;
+}
+
+// Whole, the scheme included, which says whether the request was encrypted,
+// and whole again in its tooltip and in the copy.
+function addressList(row: AddressRow, copy: CopyTexts): HTMLElement {
+  const list = html("ul", "addresses");
+  lists += 1;
+  list.id = `addresses-${lists}`;
+  for (const address of row.addresses) {
+    const button = html("button", "address");
+    button.type = "button";
+    button.title = address;
+    const chip = html("span", "copied");
+    chip.setAttribute("aria-hidden", "true");
+    chip.append(checkMark(), html("span", "word", copy.copied));
+    button.append(html("span", "text", address), chip);
+    button.addEventListener("click", () =>
+      report(copyAddress(button, address, copy)),
+    );
+    const item = html("li");
+    item.append(button);
+    list.append(item);
+  }
+  return list;
+}
+
+// The triangle of the lists that unfold in Firefox, to the right when the
+// row is folded and down when it is unfolded.
+function triangle(open: boolean): HTMLElement {
+  const image = svg("svg", {
+    viewBox: "0 0 8 8",
+    width: 8,
+    height: 8,
+    "aria-hidden": "true",
+  });
+  image.append(
+    svg("path", { d: open ? "M.5 2H7.5L4 6.5Z" : "M2 .5L6.5 4L2 7.5Z" }),
+  );
+  const mark = html("span", "mark");
+  mark.append(image);
+  return mark;
+}
+
+// A row with addresses kept unfolds in place, its button kept, so that the
+// focus stays on it and the other lists keep their scroll. Its list is drawn
+// only while it is unfolded. Gives the list drawn.
+function drawRow(
+  block: HTMLElement,
+  button: HTMLElement,
+  detail: DetailLine,
+  row: AddressRow,
+  copy: CopyTexts,
+  open: boolean,
+): HTMLElement | null {
+  button.setAttribute("aria-expanded", String(open));
+  button.replaceChildren(
+    triangle(open),
+    html("span", "", detail.kind),
+    html("span", "count", detail.count),
+  );
+  if (!open) {
+    button.removeAttribute("aria-controls");
+    block.replaceChildren(button);
+    return null;
+  }
+  const list = addressList(row, copy);
+  button.setAttribute("aria-controls", list.id);
+  block.replaceChildren(button, list, html("p", "addresses-note", row.note));
+  return list;
+}
+
+function detailOf(
+  detail: DetailLine,
+  copy: CopyTexts | null,
+  drawn: HTMLElement[],
+): HTMLElement {
+  const row = detail.addresses;
+  if (row === null || copy === null) {
     const part = html("div", "detail");
     part.append(
       html("span", "", detail.kind),
       html("span", "count", detail.count),
     );
-    row.append(part);
+    return part;
   }
+  const block = html("div", "kind-row");
+  const button = html("button", "kind");
+  button.type = "button";
+  button.addEventListener("click", () => {
+    const open = !unfolded.has(row.key);
+    if (open) {
+      unfolded.add(row.key);
+    } else {
+      unfolded.delete(row.key);
+    }
+    const list = drawRow(block, button, detail, row, copy, open);
+    if (list !== null) {
+      measure(list);
+    }
+  });
+  const list = drawRow(block, button, detail, row, copy, row.open);
+  if (list !== null) {
+    drawn.push(list);
+  }
+  return block;
+}
+
+function lineOf(
+  line: CategoryLine,
+  copy: CopyTexts | null,
+  drawn: HTMLElement[],
+): HTMLElement {
+  const row = html("div", "line");
+  row.append(
+    iconOf({ kind: "cloud", colour: line.colour }, 16),
+    labelOf(line.label, line.proof),
+    html("span", "count", line.count),
+    ...line.details.map((detail) => detailOf(detail, copy, drawn)),
+  );
   return row;
 }
 
@@ -539,7 +734,9 @@ function head(icon: Element | null, name: string): HTMLElement {
   return block;
 }
 
-function panelParts(panel: Panel): HTMLElement[] {
+// The lists of addresses drawn go into drawn, to be measured once in the
+// page.
+function panelParts(panel: Panel, drawn: HTMLElement[]): HTMLElement[] {
   switch (panel.kind) {
     case "overview":
       return [
@@ -568,7 +765,7 @@ function panelParts(panel: Panel): HTMLElement[] {
         ...(panel.note === null ? [] : [html("p", "panel-note", panel.note)]),
         ...panel.providers.flatMap((provider) => [
           choiceOf(provider.choice),
-          ...provider.lines.map(lineOf),
+          ...provider.lines.map((line) => lineOf(line, panel.copy, drawn)),
         ]),
       ];
     case "provider": {
@@ -579,7 +776,7 @@ function panelParts(panel: Panel): HTMLElement[] {
         ...panel.texts.map((text) => html("p", "panel-text", text)),
         html("p", "panel-note", panel.note),
         headingOf(panel.worst.heading),
-        ...panel.worst.lines.map(lineOf),
+        ...panel.worst.lines.map((line) => lineOf(line, null, drawn)),
         headingOf(panel.sites.heading),
         ...panel.sites.choices.map(choiceOf),
       ];
@@ -601,9 +798,36 @@ function renderPanel(): void {
     content.replaceChildren();
     return;
   }
-  const panel = panelOf(map, column, filters, selection);
+  const panel = panelOf(map, column, filters, selection, record, unfolded);
   element("back").hidden = panel.kind === "overview";
-  content.replaceChildren(...panelParts(panel));
+  const drawn: HTMLElement[] = [];
+  content.replaceChildren(...panelParts(panel, drawn));
+  for (const list of drawn) {
+    measure(list);
+  }
+}
+
+function selectedSite(): string | null {
+  return selection?.startsWith("s:") ? selection.slice(2) : null;
+}
+
+// Asked when the panel of a site opens, rather than with the counts of every
+// site, so that the map reads the addresses of the site looked at alone.
+// Never from a private window, where nothing is recorded.
+async function askAddresses(): Promise<void> {
+  const site = selectedSite();
+  if (privateWindow || site === null) {
+    return;
+  }
+  const [addresses, settings] = await Promise.all([
+    ask<SiteAddresses>({ kind: "siteAddresses", site, privateWindow }),
+    ask<Settings>({ kind: "settings" }),
+  ]);
+  if (selectedSite() !== site) {
+    return;
+  }
+  record = { site, addresses, limit: settings.recordLimit };
+  renderPanel();
 }
 
 // The panel follows a change of the limits, and a keystroke only when it
@@ -628,11 +852,18 @@ function clearFilters(): void {
   refresh(true);
 }
 
+// The rows unfolded and the addresses go with the panel they belong to.
 function choose(key: string | null): void {
-  selection = key === null ? null : selectionOf(key);
+  const next = key === null ? null : selectionOf(key);
+  if (next !== selection) {
+    record = null;
+    unfolded = new Set();
+  }
+  selection = next;
   renderPanel();
   element("panel").scrollTop = 0;
   renderHighlight();
+  report(askAddresses());
 }
 
 function render(resetScroll: boolean): void {
@@ -643,10 +874,13 @@ function render(resetScroll: boolean): void {
   renderHighlight();
 }
 
+// The addresses of the site whose panel is open are asked again with the
+// counts, since both grow while the map is open.
 async function load(resetScroll: boolean): Promise<void> {
   const data = await ask<MapData>({ kind: "map", privateWindow });
   map = prepare(data, table.providers, formats);
   render(resetScroll);
+  await askAddresses();
 }
 
 function askToPurge(asking: boolean): void {
@@ -660,6 +894,8 @@ async function purge(): Promise<void> {
   confirming = false;
   filters = NO_FILTER;
   selection = null;
+  record = null;
+  unfolded = new Set();
   (element("search") as HTMLInputElement).value = "";
   await load(true);
 }

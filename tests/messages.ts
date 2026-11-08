@@ -58,6 +58,19 @@ export const OPTIONS_MESSAGES: readonly string[] = [
   "optionsPreview",
   "optionsRefused",
   "optionsAlready",
+  "optionsRecord",
+  "optionsRecordText",
+  "optionsRecordNone",
+  "optionsRecordLevel4",
+  "optionsRecordLevel3and4",
+  "optionsRecordPrivate",
+  "optionsRecordQuestion",
+  "optionsPurge",
+  "optionsCancel",
+  "optionsRecordPurged",
+  "optionsLimit",
+  "optionsLimitHelp",
+  "optionsLimitError",
 ];
 
 // The messages of the map page, apart from those it shares with the popup.
@@ -163,6 +176,13 @@ export const MAP_MESSAGES: readonly string[] = [
   "mapTypeMedia",
   "mapTypeWebsocket",
   "mapTypeOther",
+  "mapAddressesOne",
+  "mapAddressesMany",
+  "mapAddressesLimitOne",
+  "mapAddressesLimitMany",
+  "mapAddressCopied",
+  "mapAddressCopyFailed",
+  "mapAddressCopiedAnnounced",
 ];
 
 export function messagesOf(locale: string): Record<string, Message> {

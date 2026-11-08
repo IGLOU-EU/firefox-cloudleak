@@ -106,8 +106,8 @@ function requestOf(message: unknown): PopupRequest | null {
   if (kind === "settings") {
     return { kind };
   }
-  // A level that is not one of the three is refused, and a limit out of its
-  // range brought to the nearest bound.
+  // A level that is not one of the three is refused, and so is a limit that
+  // is not an integer of at least 1.
   if (kind === "setSettings" && isRecordLevel(record)) {
     const limit = recordLimitOf(recordLimit);
     if (limit !== null) {

@@ -13,9 +13,6 @@ import type {
 // Off by default: no address is kept until the user asks for it.
 export const DEFAULT_SETTINGS: Settings = { record: "none", recordLimit: 100 };
 
-const RECORD_LIMIT_MIN = 1;
-const RECORD_LIMIT_MAX = 1000;
-
 const RECORD_LEVELS: readonly RecordLevel[] = ["none", "level4", "level3and4"];
 
 const WEB_SCHEMES = ["http:", "https:", "ws:", "wss:"];
@@ -80,16 +77,13 @@ export function recordsLevel(record: RecordLevel, level: LeakLevel): boolean {
   }
 }
 
-// An integer from 1 to 1000, the nearest one to the number given, or null for
-// what is no number.
+// The limit the user sets: an integer of at least 1, as large as the user
+// wants, since the user decides how much is kept. Anything else is refused
+// rather than brought to a near value, which the user did not ask for.
 export function recordLimitOf(value: unknown): number | null {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return null;
-  }
-  return Math.min(
-    RECORD_LIMIT_MAX,
-    Math.max(RECORD_LIMIT_MIN, Math.round(value)),
-  );
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1
+    ? value
+    : null;
 }
 
 // The settings as stored, each one that is not valid replaced by its

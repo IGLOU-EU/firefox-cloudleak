@@ -345,6 +345,58 @@
       }
     }
   },
+  "optionsRecord": {
+    "message": "Enregistrer les adresses",
+    "description": "Title of the section of the preferences, after the ignored sites, that turns on the recording of the reduced addresses of requests, and the name of that option."
+  },
+  "optionsRecordText": {
+    "message": "Les adresses des requêtes des niveaux choisis sont gardées sur cet ordinateur, sans les valeurs de leurs paramètres, et peuvent révéler ce que vous avez fait sur un site\u00a0: dans le doute, laissez sur «\u00a0Aucune\u00a0».",
+    "description": "Text under the title of the recording of addresses in the preferences: what is kept, where, what it can reveal, and the advice to keep the choice that records nothing, named as its radio button is."
+  },
+  "optionsRecordNone": {
+    "message": "Aucune",
+    "description": "Radio button of the preferences that records no address, the default. In French it agrees with « adresses »."
+  },
+  "optionsRecordLevel4": {
+    "message": "Niveau 4 seulement, données personnelles",
+    "description": "Radio button of the preferences that records the addresses of the requests of level 4 only, with the name of the level."
+  },
+  "optionsRecordLevel3and4": {
+    "message": "Niveaux 3 et 4, lecture et données personnelles",
+    "description": "Radio button of the preferences that records the addresses of the requests of levels 3 and 4, with the names of the levels."
+  },
+  "optionsRecordPrivate": {
+    "message": "Rien n'est enregistré en fenêtre privée.",
+    "description": "Line under the radio buttons of the recording of addresses: whatever the choice, no address of a request of a private window is kept."
+  },
+  "optionsRecordQuestion": {
+    "message": "Purger les adresses gardées\u00a0?",
+    "description": "Question the preferences ask, under the radio buttons, when the user goes back to recording no address, which clears every kept address. Nothing changes before the answer."
+  },
+  "optionsPurge": {
+    "message": "Purger",
+    "description": "Button of the preferences that confirms going back to recording no address, which clears every kept address."
+  },
+  "optionsCancel": {
+    "message": "Annuler",
+    "description": "Button of the preferences that gives up going back to recording no address, and keeps the choice and the addresses as they were."
+  },
+  "optionsRecordPurged": {
+    "message": "Les adresses gardées sont purgées.",
+    "description": "Line of the preferences once the user confirmed going back to recording no address and every kept address is cleared."
+  },
+  "optionsLimit": {
+    "message": "Limite par ligne",
+    "description": "Label of the field of the preferences that sets how many addresses are kept for each row, shown only while addresses are recorded."
+  },
+  "optionsLimitHelp": {
+    "message": "Le nombre d'adresses à conserver pour chaque site, par type de requête et par méthode rencontrée.",
+    "description": "Help under the field of the limit in the preferences: what the limit counts, for each site, request type and method."
+  },
+  "optionsLimitError": {
+    "message": "Saisissez un nombre entier d'au moins 1.",
+    "description": "Line under the field of the limit, in place of its help, when what is typed is not a whole number of at least 1: nothing is kept. The limit has no maximum."
+  },
   "mapTitle": {
     "message": "Cloud Leak, la carte",
     "description": "Title of the map, in its header and in the title of its tab."
@@ -1000,5 +1052,57 @@
   "mapTypeOther": {
     "message": "autre",
     "description": "Name of the request type other, after its method, in the panel of a site on the map."
+  },
+  "mapAddressesOne": {
+    "message": "$COUNT$ adresse gardée. Un clic la copie.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the singular, below the limit set in the preferences.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapAddressesMany": {
+    "message": "$COUNT$ adresses gardées. Un clic en copie une.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the plural, below the limit set in the preferences.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "mapAddressesLimitOne": {
+    "message": "$COUNT$ adresse gardée, la limite réglée dans les préférences. Un clic la copie.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the singular and has reached the limit set in the preferences, so that the list does not pass for complete.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapAddressesLimitMany": {
+    "message": "$COUNT$ adresses gardées, la limite réglée dans les préférences. Un clic en copie une.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the plural and has reached the limit set in the preferences, so that the list does not pass for complete.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "mapAddressCopied": {
+    "message": "Copiée",
+    "description": "Word of the chip shown for 1.5 seconds, after a check mark, on an address of the panel of a site once a click copied it. In French it agrees with « adresse »."
+  },
+  "mapAddressCopyFailed": {
+    "message": "Copie impossible",
+    "description": "Word of the chip shown for 1.5 seconds on an address of the panel of a site when a click could not copy it, and what a screen reader hears then."
+  },
+  "mapAddressCopiedAnnounced": {
+    "message": "Adresse copiée",
+    "description": "What a screen reader hears once a click on an address of the panel of a site copied it."
   }
 }

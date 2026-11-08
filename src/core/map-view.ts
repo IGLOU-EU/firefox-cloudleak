@@ -11,6 +11,7 @@ import type {
   CategoryCounts,
   MapData,
   RequestKindCounts,
+  SiteAddresses,
 } from "./popup-message.js";
 
 // The categories the classification gives, from the most serious: the order
@@ -987,10 +988,45 @@ export interface CategoryLine {
   readonly proof: string | null;
   readonly count: string;
   // By method and request type, the most requests first.
-  readonly details: readonly {
-    readonly kind: string;
-    readonly count: string;
-  }[];
+  readonly details: readonly DetailLine[];
+}
+
+export interface DetailLine {
+  readonly kind: string;
+  readonly count: string;
+  // The addresses kept of the requests of the row, or null for a row that
+  // has none, which unfolds nothing.
+  readonly addresses: AddressRow | null;
+}
+
+export interface AddressRow {
+  // Names the row in the panel of its site, by its provider, its category,
+  // its method and its request type, so that it stays unfolded while the
+  // panel is drawn again.
+  readonly key: string;
+  readonly open: boolean;
+  // In alphabetical order, which says nothing of when each was seen.
+  readonly addresses: readonly string[];
+  // How many are kept, and at the limit, that it is the limit set in the
+  // preferences, so that the list does not pass for complete.
+  readonly note: string;
+}
+
+// The addresses the event page keeps of a site, for the panel of that site,
+// with the limit of each row.
+export interface SiteRecord {
+  readonly site: string;
+  readonly addresses: SiteAddresses;
+  readonly limit: number;
+}
+
+// What a click on an address says: on its chip once copied, on its chip
+// and to a screen reader when the copy fails, and to a screen reader once
+// copied.
+export interface CopyTexts {
+  readonly copied: string;
+  readonly failed: string;
+  readonly announced: string;
 }
 
 export type Panel =
@@ -1018,6 +1054,7 @@ export type Panel =
         readonly choice: Choice;
         readonly lines: readonly CategoryLine[];
       }[];
+      readonly copy: CopyTexts;
     }
   | {
       readonly kind: "provider";
@@ -1084,11 +1121,44 @@ function levelLine(formats: MapFormats, category: MapCategory) {
   };
 }
 
+// The rows of the addresses kept of a provider and a category, by method
+// and request type, with the rows the user unfolded.
+interface RowAddresses {
+  readonly prefix: string;
+  readonly kinds: { readonly [methodAndType: string]: readonly string[] };
+  readonly limit: number;
+  readonly unfolded: ReadonlySet<string>;
+}
+
+function addressRow(
+  formats: MapFormats,
+  rows: RowAddresses | null,
+  kind: string,
+): AddressRow | null {
+  const kept = rows?.kinds[kind];
+  if (rows === null || kept === undefined || kept.length === 0) {
+    return null;
+  }
+  const key = `${rows.prefix}|${kind}`;
+  const count = kept.length;
+  const limit = count >= rows.limit ? "Limit" : "";
+  return {
+    key,
+    open: rows.unfolded.has(key),
+    addresses: [...kept].sort(),
+    note: formats.message(
+      `mapAddresses${limit}${formats.singular(count) ? "One" : "Many"}`,
+      [formats.number(count)],
+    ),
+  };
+}
+
 function categoryLine(
   formats: MapFormats,
   category: MapCategory,
   count: number,
   kinds: RequestKindCounts | null,
+  rows: RowAddresses | null = null,
 ): CategoryLine {
   return {
     ...levelLine(formats, category),
@@ -1102,6 +1172,7 @@ function categoryLine(
             .map(([kind, value]) => ({
               kind: kindText(formats, kind),
               count: formats.number(value),
+              addresses: addressRow(formats, rows, kind),
             })),
   };
 }
@@ -1275,8 +1346,19 @@ function sincePanel(map: PreparedMap): string {
     : formats.message("mapSince", [formats.date(map.since)]);
 }
 
-function sitePanel(map: PreparedMap, site: MapSite): Panel {
+// The addresses go only into the panel of the site they were asked for, and
+// never into one of a private window, where nothing is recorded.
+function sitePanel(
+  map: PreparedMap,
+  site: MapSite,
+  record: SiteRecord | null,
+  unfolded: ReadonlySet<string>,
+): Panel {
   const { formats } = map;
+  const kept =
+    record !== null && record.site === site.site && !map.privateWindow
+      ? record
+      : null;
   const own = !map.privateWindow && site.since !== null;
   const title = map.privateWindow
     ? formats.message("popupSitePrivate", [])
@@ -1305,12 +1387,33 @@ function sitePanel(map: PreparedMap, site: MapSite): Panel {
             : providerChoice(provider, formats.number(link.total)),
         lines: CATEGORIES.flatMap((category) => {
           const kinds = link.categories[category];
+          const recorded = kept?.addresses[link.provider]?.[category];
           return kinds === undefined
             ? []
-            : [categoryLine(formats, category, sumOf(kinds), kinds)];
+            : [
+                categoryLine(
+                  formats,
+                  category,
+                  sumOf(kinds),
+                  kinds,
+                  kept === null || recorded === undefined
+                    ? null
+                    : {
+                        prefix: `${link.provider}|${category}`,
+                        kinds: recorded,
+                        limit: kept.limit,
+                        unfolded,
+                      },
+                ),
+              ];
         }),
       };
     }),
+    copy: {
+      copied: formats.message("mapAddressCopied", []),
+      failed: formats.message("mapAddressCopyFailed", []),
+      announced: formats.message("mapAddressCopiedAnnounced", []),
+    },
   };
 }
 
@@ -1404,12 +1507,16 @@ function othersPanel(map: PreparedMap, others: readonly MapProvider[]): Panel {
 }
 
 // The panel of what is selected, or the overview without a selection and for
-// a selection the map no longer shows.
+// a selection the map no longer shows. The panel of a site lists the
+// addresses kept of its rows, those the event page gave for it, and unfolds
+// the rows named.
 export function panelOf(
   map: PreparedMap,
   column: Column,
   filters: Filters,
   selection: string | null,
+  record: SiteRecord | null = null,
+  unfolded: ReadonlySet<string> = new Set(),
 ): Panel {
   if (selection === OTHERS) {
     const others = othersOf(map, column);
@@ -1423,7 +1530,7 @@ export function panelOf(
     if (kind === "s") {
       const site = map.site.get(rest);
       if (site !== undefined) {
-        return sitePanel(map, site);
+        return sitePanel(map, site, record, unfolded);
       }
     } else if (kind === "f") {
       const provider = map.provider.get(rest);

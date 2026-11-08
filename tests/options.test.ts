@@ -7,7 +7,11 @@
 
 import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
-import type { IgnoredData, PopupRequest } from "../src/core/popup-message.js";
+import type {
+  IgnoredData,
+  PopupRequest,
+  Settings,
+} from "../src/core/popup-message.js";
 import { importModule } from "./built-extension.js";
 import { type Element, find, htmlOf, installPage, settled } from "./dom.js";
 import { OPTIONS_MESSAGES } from "./messages.js";
@@ -36,7 +40,14 @@ interface Options {
   // Whether the event page names no site for any text.
   readonly refuse?: boolean;
   readonly failing?: Error;
+  // The settings the event page keeps.
+  readonly settings?: Settings;
+  // Whether the event page fails to change the settings.
+  readonly settingsFail?: boolean;
 }
+
+// What the page asks the event page as it opens.
+const LOADED: PopupRequest[] = [{ kind: "ignoredSites" }, { kind: "settings" }];
 
 interface Opened {
   readonly sent: PopupRequest[];
@@ -47,6 +58,19 @@ interface Opened {
   type(text: string): void;
   // How many times the page kept the form from being sent.
   submit(): number;
+  // The user chooses a level with its radio button.
+  pick(id: string): void;
+  // The user types a limit, then leaves the field.
+  typeLimit(text: string): void;
+  leaveLimit(): void;
+  // Which radio button is checked, and what of the section is in view.
+  record(): {
+    checked: string[];
+    question: boolean;
+    limit: boolean;
+    purged: boolean;
+    error: boolean;
+  };
 }
 
 let opened = 0;
@@ -55,10 +79,16 @@ async function open(options: Options = {}): Promise<Opened> {
   const sent: PopupRequest[] = [];
   const root = installPage(HTML);
   let held = [...(options.sites ?? [])].sort();
+  let settings: Settings = options.settings ?? {
+    record: "none",
+    recordLimit: 100,
+  };
   (globalThis as Record<string, unknown>)["browser"] = {
     runtime: {
       // The event page reduces the text as the page does, by the same code.
-      sendMessage: async (request: PopupRequest): Promise<IgnoredData> => {
+      sendMessage: async (
+        request: PopupRequest,
+      ): Promise<IgnoredData | Settings> => {
         sent.push(request);
         if (options.failing !== undefined) {
           throw options.failing;
@@ -77,6 +107,17 @@ async function open(options: Options = {}): Promise<Opened> {
             return { sites: held, site: request.site };
           case "ignoredSites":
             return { sites: held, site: null };
+          case "settings":
+            return settings;
+          case "setSettings":
+            if (options.settingsFail) {
+              throw new Error("storage failed");
+            }
+            settings = {
+              record: request.record,
+              recordLimit: request.recordLimit,
+            };
+            return settings;
           default:
             throw new Error(`unexpected ${request.kind}`);
         }
@@ -116,8 +157,28 @@ async function open(options: Options = {}): Promise<Opened> {
       });
       return kept;
     },
+    pick: (id) => {
+      for (const radio of RADIOS) {
+        element(radio).checked = radio === id;
+      }
+      element(id).dispatch("change");
+    },
+    typeLimit: (text) => {
+      element("limit").value = text;
+      element("limit").dispatch("input");
+    },
+    leaveLimit: () => element("limit").dispatch("change"),
+    record: () => ({
+      checked: RADIOS.filter((radio) => element(radio).checked),
+      question: !element("record-question").hidden,
+      limit: !element("record-limit").hidden,
+      purged: !element("record-purged").hidden,
+      error: !element("limit-error").hidden,
+    }),
   };
 }
+
+const RADIOS = ["record-none", "record-level4", "record-level3and4"];
 
 // Which of the help, the preview and the error the line under the field
 // shows, and what it says: of the preview, the site after its fixed label.
@@ -136,7 +197,7 @@ describe("the preferences page", () => {
     const page = await open({
       sites: ["twitch.tv", "xn--bcher-kva.de", "youtube.com"],
     });
-    assert.deepEqual(page.sent, [{ kind: "ignoredSites" }]);
+    assert.deepEqual(page.sent, LOADED);
     assert.equal(page.root.lang, "fr");
     assert.equal(page.element("sites").hidden, false);
     assert.equal(page.element("empty").hidden, true);
@@ -172,7 +233,7 @@ describe("the preferences page", () => {
     const page = await open({ sites: ["twitch.tv", "xn--bcher-kva.de"] });
     page.element("sites").children[0]?.children[1]?.click();
     await settled();
-    assert.deepEqual(page.sent.slice(1), [
+    assert.deepEqual(page.sent.slice(LOADED.length), [
       { kind: "unignoreSite", site: "xn--bcher-kva.de" },
     ]);
     assert.deepEqual(page.rows(), [
@@ -193,7 +254,7 @@ describe("the preferences page", () => {
     assert.deepEqual(note(page), ["preview", "twitch.tv"]);
     page.type("");
     assert.deepEqual(note(page), ["help", "optionsHelp"]);
-    assert.deepEqual(page.sent, [{ kind: "ignoredSites" }]);
+    assert.deepEqual(page.sent, LOADED);
   });
 
   it("adds the site of the text on the event page's word, empties the field, and lists the answer", async () => {
@@ -201,7 +262,7 @@ describe("the preferences page", () => {
     page.type("https://www.twitch.tv/directory");
     assert.equal(page.submit(), 1);
     await settled();
-    assert.deepEqual(page.sent.slice(1), [
+    assert.deepEqual(page.sent.slice(LOADED.length), [
       { kind: "ignoreSite", host: "https://www.twitch.tv/directory" },
     ]);
     assert.deepEqual(page.rows(), [
@@ -219,7 +280,7 @@ describe("the preferences page", () => {
     assert.equal(page.element("typed").attributes.get("aria-invalid"), "true");
     assert.equal(page.submit(), 1);
     await settled();
-    assert.deepEqual(page.sent, [{ kind: "ignoredSites" }]);
+    assert.deepEqual(page.sent, LOADED);
     assert.equal(page.element("typed").value, "twitch tv");
     assert.deepEqual(note(page), ["error", "optionsRefused twitch tv"]);
   });
@@ -230,7 +291,7 @@ describe("the preferences page", () => {
     assert.deepEqual(note(page), ["preview", "twitch.tv"]);
     page.submit();
     await settled();
-    assert.deepEqual(page.sent.slice(1), [
+    assert.deepEqual(page.sent.slice(LOADED.length), [
       { kind: "ignoreSite", host: "twitch.tv" },
     ]);
     assert.equal(page.element("typed").value, "twitch.tv");
@@ -243,7 +304,7 @@ describe("the preferences page", () => {
     page.type("   ");
     page.submit();
     await settled();
-    assert.deepEqual(page.sent, [{ kind: "ignoredSites" }]);
+    assert.deepEqual(page.sent, LOADED);
     assert.deepEqual(note(page), ["help", "optionsHelp"]);
     assert.equal(page.element("typed").attributes.get("aria-invalid"), "false");
   });
@@ -264,16 +325,221 @@ describe("the preferences page", () => {
       const page = await open({
         failing: new Error("Receiving end does not exist"),
       });
-      assert.equal(errors.mock.callCount(), 1);
-      assert.match(
-        String(errors.mock.calls[0]?.arguments[0]),
-        /^Cloud Leak: .*Receiving end/,
-      );
+      assert.equal(errors.mock.callCount(), 2);
+      for (const call of errors.mock.calls) {
+        assert.match(String(call.arguments[0]), /^Cloud Leak: .*Receiving end/);
+      }
+      assert.equal(page.element("record").hidden, true);
       page.type("twitch.tv");
       page.submit();
       await settled();
-      assert.equal(errors.mock.callCount(), 2);
+      assert.equal(errors.mock.callCount(), 3);
       assert.equal(page.element("typed").value, "twitch.tv");
+    } finally {
+      errors.mock.restore();
+    }
+  });
+});
+
+describe("the recording of addresses in the preferences", () => {
+  it("shows the level the event page keeps, records nothing by default, and hides the limit until something is recorded", async () => {
+    const page = await open();
+    assert.equal(page.element("record").hidden, false);
+    assert.deepEqual(page.record(), {
+      checked: ["record-none"],
+      question: false,
+      limit: false,
+      purged: false,
+      error: false,
+    });
+    assert.equal(page.element("limit").value, "100");
+  });
+
+  it("applies a level at once, with the limit kept, and shows the limit", async () => {
+    const page = await open();
+    page.pick("record-level4");
+    await settled();
+    assert.deepEqual(page.sent.slice(LOADED.length), [
+      { kind: "setSettings", record: "level4", recordLimit: 100 },
+    ]);
+    assert.deepEqual(page.record(), {
+      checked: ["record-level4"],
+      question: false,
+      limit: true,
+      purged: false,
+      error: false,
+    });
+    page.pick("record-level3and4");
+    await settled();
+    assert.deepEqual(page.sent.slice(LOADED.length + 1), [
+      { kind: "setSettings", record: "level3and4", recordLimit: 100 },
+    ]);
+    assert.deepEqual(page.record().checked, ["record-level3and4"]);
+  });
+
+  it("asks before going back to none, hides the limit meanwhile, and changes nothing before the answer", async () => {
+    const page = await open({
+      settings: { record: "level3and4", recordLimit: 40 },
+    });
+    assert.deepEqual(page.record().checked, ["record-level3and4"]);
+    assert.equal(page.element("limit").value, "40");
+    page.pick("record-none");
+    await settled();
+    assert.deepEqual(page.sent, LOADED);
+    assert.deepEqual(page.record(), {
+      checked: ["record-none"],
+      question: true,
+      limit: false,
+      purged: false,
+      error: false,
+    });
+  });
+
+  it("goes back to the level kept when the question is cancelled, and sends nothing", async () => {
+    const page = await open({
+      settings: { record: "level4", recordLimit: 100 },
+    });
+    page.pick("record-none");
+    page.element("record-cancel").click();
+    await settled();
+    assert.deepEqual(page.sent, LOADED);
+    assert.deepEqual(page.record(), {
+      checked: ["record-level4"],
+      question: false,
+      limit: true,
+      purged: false,
+      error: false,
+    });
+  });
+
+  it("goes back to none once the user confirms, and says the addresses are cleared until the next choice", async () => {
+    const page = await open({
+      settings: { record: "level4", recordLimit: 30 },
+    });
+    page.pick("record-none");
+    page.element("record-purge").click();
+    await settled();
+    assert.deepEqual(page.sent.slice(LOADED.length), [
+      { kind: "setSettings", record: "none", recordLimit: 30 },
+    ]);
+    assert.deepEqual(page.record(), {
+      checked: ["record-none"],
+      question: false,
+      limit: false,
+      purged: true,
+      error: false,
+    });
+    page.pick("record-level4");
+    await settled();
+    assert.equal(page.record().purged, false);
+  });
+
+  it("drops the question when the level kept is chosen again, without sending it", async () => {
+    const page = await open({
+      settings: { record: "level4", recordLimit: 100 },
+    });
+    page.pick("record-none");
+    page.pick("record-level4");
+    await settled();
+    assert.deepEqual(page.sent, LOADED);
+    assert.deepEqual(page.record(), {
+      checked: ["record-level4"],
+      question: false,
+      limit: true,
+      purged: false,
+      error: false,
+    });
+  });
+
+  it("asks nothing when the recording is already off", async () => {
+    const page = await open();
+    page.pick("record-level4");
+    await settled();
+    page.pick("record-none");
+    await settled();
+    assert.equal(page.record().question, true);
+    page.element("record-purge").click();
+    await settled();
+    page.pick("record-none");
+    await settled();
+    assert.deepEqual(page.sent.slice(LOADED.length), [
+      { kind: "setSettings", record: "level4", recordLimit: 100 },
+      { kind: "setSettings", record: "none", recordLimit: 100 },
+    ]);
+    assert.equal(page.record().question, false);
+  });
+
+  it("keeps a limit with no maximum once the user leaves the field, not at each keystroke", async () => {
+    const page = await open({
+      settings: { record: "level4", recordLimit: 100 },
+    });
+    for (const typed of ["2", "25", "250000"]) {
+      page.typeLimit(typed);
+      assert.equal(page.record().error, false, typed);
+    }
+    await settled();
+    assert.deepEqual(page.sent, LOADED);
+    page.leaveLimit();
+    await settled();
+    assert.deepEqual(page.sent.slice(LOADED.length), [
+      { kind: "setSettings", record: "level4", recordLimit: 250_000 },
+    ]);
+    assert.equal(page.element("limit-help").hidden, false);
+    assert.equal(page.element("limit").attributes.get("aria-invalid"), "false");
+    page.leaveLimit();
+    await settled();
+    assert.equal(page.sent.length, LOADED.length + 1);
+  });
+
+  it("refuses a limit that is not an integer of at least 1, says so in place of the help, and keeps nothing", async () => {
+    const page = await open({
+      settings: { record: "level4", recordLimit: 100 },
+    });
+    for (const typed of ["", "0", "-4", "2.5", "1e3", "abc"]) {
+      page.typeLimit(typed);
+      assert.equal(page.record().error, true, typed);
+      assert.equal(page.element("limit-help").hidden, true, typed);
+      assert.equal(
+        page.element("limit").attributes.get("aria-invalid"),
+        "true",
+        typed,
+      );
+      page.leaveLimit();
+    }
+    await settled();
+    assert.deepEqual(page.sent, LOADED);
+    page.typeLimit("1");
+    assert.equal(page.record().error, false);
+  });
+
+  it("shows again what the event page keeps when a change fails, and reports it", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      const page = await open({
+        settings: { record: "level4", recordLimit: 100 },
+        settingsFail: true,
+      });
+      page.pick("record-level3and4");
+      await settled();
+      assert.deepEqual(page.record().checked, ["record-level4"]);
+      page.typeLimit("7");
+      page.leaveLimit();
+      await settled();
+      assert.equal(page.element("limit").value, "100");
+      page.pick("record-none");
+      page.element("record-purge").click();
+      await settled();
+      assert.deepEqual(page.record(), {
+        checked: ["record-level4"],
+        question: false,
+        limit: true,
+        purged: false,
+        error: false,
+      });
+      assert.equal(errors.mock.callCount(), 3);
+      for (const call of errors.mock.calls) {
+        assert.match(String(call.arguments[0]), /^Cloud Leak: .*storage/);
+      }
     } finally {
       errors.mock.restore();
     }
