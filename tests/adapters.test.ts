@@ -12,6 +12,7 @@ import { dayOf } from "../src/core/counts.js";
 import type {
   ClearedData,
   IgnoredData,
+  MapData,
   PopupData,
   SiteCounts,
 } from "../src/core/popup-message.js";
@@ -22,7 +23,7 @@ import { importModule, writeTable } from "./built-extension.js";
 interface Answer {
   answer(
     message: unknown,
-  ): Promise<PopupData | ClearedData | IgnoredData> | undefined;
+  ): Promise<PopupData | ClearedData | IgnoredData | MapData> | undefined;
 }
 
 interface Site {
@@ -2073,5 +2074,193 @@ describe("a site the user ignores", () => {
     assert.equal(answer({ kind: "unignoreSite", site: "" }), undefined);
     assert.equal(answer({ kind: "unignoreSite", site: 1 }), undefined);
     assert.equal(answer({ kind: "ignored" }), undefined);
+  });
+});
+
+// Last, since purging every site leaves nothing of what the tests above
+// counted.
+describe("the map", () => {
+  async function map(privateWindow: boolean): Promise<MapData> {
+    return (await answer({ kind: "map", privateWindow })) as MapData;
+  }
+
+  async function popup(tab: number, privateWindow = false): Promise<PopupData> {
+    return (await answer({
+      kind: "popup",
+      tabId: tab,
+      privateWindow,
+    })) as PopupData;
+  }
+
+  function storedSites(): string[] {
+    return [...local.keys()].filter(
+      (key) => key.startsWith("site:") || key.startsWith("since:"),
+    );
+  }
+
+  it("is answered with the kept counts of every site, their start and the start of each site cleared alone", async () => {
+    const tab = 1700;
+    const site = "t1700.example";
+    await commit(tab, "doc-1700", 1000, [], `https://${site}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await answer({
+      kind: "clearSite",
+      site: "t1701.example",
+      privateWindow: false,
+    });
+    const data = await map(false);
+    assert.equal(data.privateWindow, false);
+    assert.equal(data.since, local.get("since"));
+    assert.deepEqual(data.sites[site], { edge: { blue2: { "GET image": 1 } } });
+    assert.equal(
+      data.siteSince["t1701.example"],
+      local.get("since:t1701.example"),
+    );
+    assert.equal(data.siteSince[site], undefined);
+    for (const ignored of counts.ignoredSites()) {
+      assert.equal(data.sites[ignored], undefined, ignored);
+    }
+  });
+
+  it("is answered in a private window with the counts of the private session only, without a date", async () => {
+    const tab = 1710;
+    const site = "t1710.example";
+    await commit(tab, "doc-1710", 1000, [], `https://${site}/`);
+    await privateExchange(tab, "private-1710", 1100);
+    const data = await map(true);
+    assert.equal(data.privateWindow, true);
+    assert.equal(data.since, 0);
+    assert.deepEqual(data.siteSince, {});
+    assert.deepEqual(data.sites[site], { edge: { blue2: { "GET image": 1 } } });
+    assert.equal(data.sites["t1700.example"], undefined);
+    assert.equal((await map(false)).sites[site], undefined);
+  });
+
+  it("purges in a private window the counts of the private session only, and nothing of the kept counts", async () => {
+    const tab = 1720;
+    await commit(tab, "doc-1720", 1000, [], "https://t1720.example/");
+    await privateExchange(tab, "private-1720", 1100);
+    mock.timers.runAll();
+    assert.ok(Object.keys((await map(true)).sites).length > 0);
+    const keptBefore = JSON.stringify([...local.entries()]);
+    const writes = localWrites.length;
+    const ignoredBefore = counts.ignoredSites();
+    const purged = (await answer({
+      kind: "purgeAll",
+      privateWindow: true,
+    })) as ClearedData;
+    assert.equal(purged.since, 0);
+    assert.deepEqual((await map(true)).sites, {});
+    assert.equal(session.has("privateCounts"), false);
+    mock.timers.runAll();
+    assert.equal(localWrites.length, writes);
+    assert.equal(JSON.stringify([...local.entries()]), keptBefore);
+    assert.deepEqual(counts.ignoredSites(), ignoredBefore);
+    assert.ok(Object.keys((await map(false)).sites).length > 0);
+    // The private session counts again at once.
+    await privateExchange(tab, "private-1720-b", 1200);
+    assert.deepEqual((await map(true)).sites["t1720.example"], {
+      edge: { blue2: { "GET image": 1 } },
+    });
+  });
+
+  it("purges every kept count, written or not, and the start of each site cleared alone, and starts again that day for every site", async () => {
+    const written = 1730;
+    const pending = 1731;
+    const privateTab = 1732;
+    await commit(written, "doc-1730", 1000, [], "https://t1730.example/");
+    await commit(pending, "doc-1731", 1000, [], "https://t1731.example/");
+    await commit(privateTab, "doc-1732", 1000, [], "https://t1732.example/");
+    await exchange(written, "image", 1100, EDGE_IP);
+    await privateExchange(privateTab, "private-1732", 1100);
+    await answer({
+      kind: "clearSite",
+      site: "t1733.example",
+      privateWindow: false,
+    });
+    // Two days later, with a count not yet written.
+    mock.timers.tick(2 * 86_400_000);
+    await exchange(pending, "image", 1200, EDGE_IP);
+    assert.ok(storedSites().includes("site:t1730.example"));
+    assert.ok(storedSites().includes("since:t1733.example"));
+    assert.equal(local.has("site:t1731.example"), false);
+    // A site stored and no longer in memory, as when the read at the wake-up
+    // failed.
+    local.set("site:t1734.example", { edge: { blue2: { "GET image": 3 } } });
+    local.set("since:t1735.example", INSTALLED_AT);
+    const ignoredBefore = local.get("ignored");
+    assert.ok(Array.isArray(ignoredBefore) && ignoredBefore.length > 0);
+    const privateBefore = JSON.stringify(session.get("privateCounts"));
+    const today = dayOf(Date.now());
+    assert.notEqual(today, local.get("since"));
+    const writes = localWrites.length;
+
+    const purged = (await answer({
+      kind: "purgeAll",
+      privateWindow: false,
+    })) as ClearedData;
+    assert.equal(purged.since, today);
+    assert.equal(local.get("since"), today);
+    assert.deepEqual(storedSites(), []);
+    assert.deepEqual(local.get("ignored"), ignoredBefore);
+    assert.deepEqual(counts.ignoredSites(), ignoredBefore);
+    // The new start and the emptied counts in one transaction.
+    const write = localWrites[writes] ?? {};
+    assert.equal(localWrites.length, writes + 1);
+    assert.equal(write["since"], today);
+    assert.deepEqual(write["site:t1730.example"], {});
+    assert.deepEqual(write["site:t1731.example"], {});
+    assert.deepEqual(write["site:t1734.example"], {});
+    assert.equal(write["since:t1733.example"], today);
+    assert.equal(write["since:t1735.example"], today);
+    assert.equal(write["ignored"], undefined);
+    assert.equal(JSON.stringify(session.get("privateCounts")), privateBefore);
+
+    const data = await map(false);
+    assert.deepEqual(data, {
+      privateWindow: false,
+      since: today,
+      siteSince: {},
+      sites: {},
+    });
+    assert.ok(Object.keys((await map(true)).sites).includes("t1732.example"));
+    const shown = await popup(written);
+    assert.equal(shown.since, today);
+    assert.deepEqual(shown.totals, {});
+    // The write pending since before the purge brings nothing back.
+    mock.timers.runAll();
+    assert.deepEqual(storedSites(), []);
+    // A request counted after the purge is kept, from the new start.
+    await exchange(written, "image", 1300, EDGE_IP);
+    mock.timers.runAll();
+    assert.deepEqual(local.get("site:t1730.example"), {
+      edge: { blue2: { "GET image": 1 } },
+    });
+    assert.equal((await popup(written)).since, today);
+  });
+
+  it("starts at a wake-up from the start the purge wrote", async () => {
+    const privateBefore = session.get("privateCounts");
+    try {
+      const woken = await importModule<Counts>("counts.js?purged");
+      await woken.ready;
+      assert.equal(woken.since("t1730.example", false), local.get("since"));
+      assert.equal(woken.since("t1733.example", false), local.get("since"));
+      assert.equal(woken.since(null, false), local.get("since"));
+    } finally {
+      if (privateBefore !== undefined) {
+        session.set("privateCounts", privateBefore);
+      }
+    }
+  });
+
+  it("answers no map or purge of another shape", () => {
+    assert.equal(answer({ kind: "map" }), undefined);
+    assert.equal(answer({ kind: "map", privateWindow: "no" }), undefined);
+    assert.equal(answer({ kind: "map", privateWindow: 0 }), undefined);
+    assert.equal(answer({ kind: "purgeAll" }), undefined);
+    assert.equal(answer({ kind: "purgeAll", privateWindow: null }), undefined);
+    assert.equal(answer({ kind: "purge", privateWindow: false }), undefined);
+    assert.equal(answer({ kind: "clearAll", privateWindow: false }), undefined);
   });
 });

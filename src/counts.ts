@@ -13,7 +13,7 @@ import {
   sinceOf,
   totalsOf,
 } from "./core/counts.js";
-import type { SiteCounts } from "./core/popup-message.js";
+import type { MapData, SiteCounts } from "./core/popup-message.js";
 import { report } from "./toolbar.js";
 
 // storage.local holds the kept counts and the sites the user ignores, and
@@ -206,6 +206,65 @@ export async function clear(
     [`${SITE_SINCE_PREFIX}${site}`]: at,
     [`${SITE_PREFIX}${site}`]: {},
   });
+  return at;
+}
+
+// Every site, for the map: the kept counts, or in a private window those of
+// the private session, which have no start.
+export function mapData(privateWindow: boolean): MapData {
+  if (privateWindow) {
+    return {
+      privateWindow,
+      since: 0,
+      siteSince: {},
+      sites: privateSession.sites,
+    };
+  }
+  return {
+    privateWindow,
+    since: kept.since,
+    siteSince: kept.siteSince,
+    sites: kept.sites,
+  };
+}
+
+// The counts of every site go, written or not. In a private window, those of
+// the private session, and nothing of the kept counts: a private write still
+// pending takes what is counted when it runs. Outside, every kept count and
+// the start of each site cleared alone go, and the counts start again now,
+// for every site, while the ignored sites stay. The keys stored go with those
+// in memory, should the read at the wake-up have failed, since their names
+// would keep which sites the user went to. The emptied counts and the new
+// starts go in the same transaction as the common start, since one without
+// the other would claim what was not observed. The keys go in a second one,
+// since a write cannot remove a key, asked in the same turn as the memory
+// empties, so that no count written after the purge comes before either. A
+// write still pending finds nothing of those sites to write.
+export async function purgeAll(privateWindow: boolean): Promise<number> {
+  if (privateWindow) {
+    await dropPrivate();
+    return 0;
+  }
+  const stored = Object.keys(await browser.storage.local.get(null));
+  const at = dayOf(Date.now());
+  const items: Record<string, unknown> = { [SINCE_KEY]: at };
+  for (const key of [
+    ...stored,
+    ...Object.keys(kept.sites).map((site) => `${SITE_PREFIX}${site}`),
+    ...Object.keys(kept.siteSince).map((site) => `${SITE_SINCE_PREFIX}${site}`),
+  ]) {
+    if (key.startsWith(SITE_PREFIX)) {
+      items[key] = {};
+    } else if (key.startsWith(SITE_SINCE_PREFIX)) {
+      items[key] = at;
+    }
+  }
+  kept = emptyCounts(at);
+  const written = browser.storage.local.set(items);
+  const removed = browser.storage.local.remove(
+    Object.keys(items).filter((key) => key !== SINCE_KEY),
+  );
+  await Promise.all([written, removed]);
   return at;
 }
 

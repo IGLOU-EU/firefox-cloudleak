@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-// What the popup, the preferences page and the event page exchange through
-// runtime.sendMessage: the pages ask, the event page answers. The pages thus
-// never read the layout of the storage, and the event page stays the only
-// writer of the counts and of the ignored sites.
+// What the popup, the preferences page, the map and the event page exchange
+// through runtime.sendMessage: the pages ask, the event page answers. The
+// pages thus never read the layout of the storage, and the event page stays
+// the only writer of the counts and of the ignored sites.
 
 import type { Colour, LeakLevel } from "./classify.js";
 import type { Page } from "./tab-record.js";
@@ -54,7 +54,16 @@ export type PopupRequest =
   // Watch a site again: its counts start from nothing.
   | { readonly kind: "unignoreSite"; readonly site: string }
   // The ignored sites, for the preferences page.
-  | { readonly kind: "ignoredSites" };
+  | { readonly kind: "ignoredSites" }
+  // The counts of every site, for the map: the kept counts, or in a private
+  // window those of the private session only.
+  | { readonly kind: "map"; readonly privateWindow: boolean }
+  // Clear the counts of every site, those the map shows. Outside a private
+  // window, every kept count and the start of each site cleared alone, and
+  // the counts start again at once, for every site. In a private window, the
+  // counts of the private session, and the kept counts are left alone. The
+  // ignored sites stay ignored.
+  | { readonly kind: "purgeAll"; readonly privateWindow: boolean };
 
 export interface PopupData {
   // Of the document the tab shows.
@@ -76,10 +85,26 @@ export interface PopupData {
   readonly ignored: boolean;
 }
 
-// The answer to a "clearSite" request.
+// The answer to a "clearSite" or a "purgeAll" request.
 export interface ClearedData {
-  // The new start of the counts of the site, zero in a private window.
+  // The new start of the counts of the site, or of every site, zero in a
+  // private window.
   readonly since: number;
+}
+
+// The answer to a "map" request.
+export interface MapData {
+  readonly privateWindow: boolean;
+  // When the counts started, in milliseconds since the epoch: at the first
+  // run of the extension or at the last purge of every site. Zero in a
+  // private window, whose counts live only for the private session.
+  readonly since: number;
+  // The start of each site cleared alone since, or watched again, which the
+  // common start would misdate. Empty in a private window.
+  readonly siteSince: { readonly [site: string]: number };
+  // By site, in punycode. A site may have an empty entry, as one cleared
+  // alone has until a request of it goes through a provider again.
+  readonly sites: { readonly [site: string]: SiteCounts };
 }
 
 // The answer to "ignoreSite", "unignoreSite" and "ignoredSites".
