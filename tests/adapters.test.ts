@@ -14,6 +14,8 @@ import type {
   IgnoredData,
   MapData,
   PopupData,
+  Settings,
+  SiteAddresses,
   SiteCounts,
 } from "../src/core/popup-message.js";
 import { viewOf } from "../src/core/popup-view.js";
@@ -23,7 +25,16 @@ import { importModule, writeTable } from "./built-extension.js";
 interface Answer {
   answer(
     message: unknown,
-  ): Promise<PopupData | ClearedData | IgnoredData | MapData> | undefined;
+  ):
+    | Promise<
+        | PopupData
+        | ClearedData
+        | IgnoredData
+        | MapData
+        | Settings
+        | SiteAddresses
+      >
+    | undefined;
 }
 
 interface Site {
@@ -53,6 +64,8 @@ interface Cname {
 
 interface Counts {
   readonly ready: Promise<void>;
+  currentSettings(): Settings;
+  siteAddresses(site: string, privateWindow: boolean): Promise<SiteAddresses>;
   totals(site: string | null, privateWindow: boolean): SiteCounts;
   since(site: string | null, privateWindow: boolean): number;
   onWindowRemoved(): Promise<void>;
@@ -92,6 +105,12 @@ const session = new Map<string, unknown>([
 const local = new Map<string, unknown>();
 // Each write to storage.local, as Firefox would get it.
 const localWrites: Record<string, unknown>[] = [];
+// Each read of storage.local: the keys asked for, null for every key, or
+// "getKeys" for the list of the keys.
+const localReads: (null | string | string[])[] = [];
+// While set, a read of storage.local answers with what storage held when it
+// was asked, once the gate opens, as Firefox answers a read that is slow.
+let localReadGate: Promise<void> | null = null;
 const resolved: string[] = [];
 let allSites = true;
 // The windows Firefox lists, those of private windows only when the
@@ -181,8 +200,17 @@ function event(name: string) {
       },
     },
     local: {
-      get: (keys: null | string | string[]) =>
-        Promise.resolve(read(local, keys)),
+      get: (keys: null | string | string[]) => {
+        localReads.push(keys);
+        const items = read(local, keys);
+        return localReadGate === null
+          ? Promise.resolve(items)
+          : localReadGate.then(() => items);
+      },
+      getKeys: () => {
+        localReads.push("getKeys");
+        return Promise.resolve([...local.keys()]);
+      },
       set: (items: Record<string, unknown>) => {
         localWrites.push(items);
         for (const [key, value] of Object.entries(items)) {
@@ -2262,5 +2290,647 @@ describe("the map", () => {
     assert.equal(answer({ kind: "purgeAll", privateWindow: null }), undefined);
     assert.equal(answer({ kind: "purge", privateWindow: false }), undefined);
     assert.equal(answer({ kind: "clearAll", privateWindow: false }), undefined);
+  });
+});
+
+describe("the recording of addresses", () => {
+  const SECRET = "s3cr3t-value";
+  let at = 2000;
+
+  // Every promise already settled has run its callbacks, such as a read of
+  // storage.local the stand-in answered at once.
+  function settled(): Promise<void> {
+    return new Promise((done) => setImmediate(done));
+  }
+
+  async function flush(): Promise<void> {
+    await settled();
+    mock.timers.runAll();
+    await settled();
+  }
+
+  async function settings(): Promise<Settings> {
+    return (await answer({ kind: "settings" })) as Settings;
+  }
+
+  async function setSettings(
+    record: string,
+    recordLimit: number,
+  ): Promise<Settings> {
+    return (await answer({
+      kind: "setSettings",
+      record,
+      recordLimit,
+    })) as Settings;
+  }
+
+  async function addressesOf(
+    site: string,
+    privateWindow = false,
+  ): Promise<SiteAddresses> {
+    return (await answer({
+      kind: "siteAddresses",
+      site,
+      privateWindow,
+    })) as SiteAddresses;
+  }
+
+  function stored(site: string): unknown {
+    return local.get(`addresses:${site}`);
+  }
+
+  function addressKeys(): string[] {
+    return [...local.keys()].filter((key) => key.startsWith("addresses:"));
+  }
+
+  // A tab that shows a page of the site, committed.
+  async function page(tab: number, site: string): Promise<void> {
+    await commit(tab, `doc-${tab}`, 1000, [], `https://${site}/`);
+  }
+
+  // A request of the page through the edge, which proves the decryption
+  // unless told otherwise: with a session cookie it is of level 4, and
+  // without one, an XMLHttpRequest is of level 3 and an image of level 2.
+  async function load(
+    tab: number,
+    url: string,
+    options: {
+      readonly type?: string;
+      readonly method?: string;
+      readonly cookie?: boolean;
+      readonly proven?: boolean;
+      readonly privateWindow?: boolean;
+    } = {},
+  ): Promise<void> {
+    const {
+      type = "xmlhttprequest",
+      method = "GET",
+      cookie = false,
+      proven = true,
+      privateWindow = false,
+    } = options;
+    const requestId = nextId();
+    at += 10;
+    const incognito = privateWindow ? { incognito: true } : {};
+    await requests.onSendHeaders({
+      tabId: tab,
+      requestId,
+      type,
+      timeStamp: at,
+      url,
+      method,
+      requestHeaders: cookie
+        ? [{ name: "Cookie", value: `sid=${SECRET}` }]
+        : [],
+      ...incognito,
+    });
+    await requests.onResponseStarted({
+      tabId: tab,
+      requestId,
+      type,
+      timeStamp: at + 1,
+      ip: EDGE_IP,
+      fromCache: false,
+      statusCode: 200,
+      responseHeaders: proven ? [{ name: "x-edge", value: "1" }] : [],
+      ...incognito,
+    });
+  }
+
+  function holdsNoSecret(): void {
+    const everything = JSON.stringify([
+      ...local.entries(),
+      ...session.entries(),
+    ]);
+    assert.equal(everything.includes(SECRET), false);
+    assert.equal(everything.includes("#"), false);
+  }
+
+  after(async () => {
+    await setSettings("none", 100);
+  });
+
+  it("records nothing by default, and keeps 100 addresses per row once on", async () => {
+    assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
+    const tab = 2300;
+    const site = "t2300.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me?token=${SECRET}`, { cookie: true });
+    await load(tab, `https://api.${site}/list`);
+    await flush();
+    assert.deepEqual(local.get(`site:${site}`), {
+      edge: {
+        red4: { "GET xmlhttprequest": 1 },
+        red3: { "GET xmlhttprequest": 1 },
+      },
+    });
+    assert.deepEqual(addressKeys(), []);
+    assert.equal(local.has("countKeys"), false);
+    assert.deepEqual(await addressesOf(site), {});
+    assert.equal(JSON.stringify(tabs.recordOf(tab)).includes("address"), false);
+    holdsNoSecret();
+  });
+
+  it("answers no settings request of another shape, and brings the limit into its range", async () => {
+    for (const message of [
+      { kind: "setSettings", record: "all", recordLimit: 10 },
+      { kind: "setSettings", record: "level 4", recordLimit: 10 },
+      { kind: "setSettings", recordLimit: 10 },
+      { kind: "setSettings", record: "level4" },
+      { kind: "setSettings", record: "level4", recordLimit: "10" },
+      { kind: "setSettings", record: "level4", recordLimit: Number.NaN },
+      { kind: "setSettings", record: "level4", recordLimit: null },
+      { kind: "setting" },
+      { kind: "siteAddresses", site: "t2300.example" },
+      { kind: "siteAddresses", site: "", privateWindow: false },
+      { kind: "siteAddresses", site: 2300, privateWindow: false },
+      { kind: "siteAddresses", site: "t2300.example", privateWindow: "no" },
+    ]) {
+      assert.equal(answer(message), undefined, JSON.stringify(message));
+    }
+    assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
+    for (const [limit, kept] of [
+      [0, 1],
+      [-3, 1],
+      [5000, 1000],
+      [2.5, 3],
+      [100, 100],
+    ] as const) {
+      assert.deepEqual(await setSettings("none", limit), {
+        record: "none",
+        recordLimit: kept,
+      });
+      assert.deepEqual(local.get("settings"), {
+        record: "none",
+        recordLimit: kept,
+      });
+    }
+    assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
+  });
+
+  it("records at level 4 the reduced address of each request of level 4, red or orange, once, the most recent first, and nothing of levels 3 and 2", async () => {
+    const writes = localWrites.length;
+    assert.deepEqual(await setSettings("level4", 100), {
+      record: "level4",
+      recordLimit: 100,
+    });
+    // The settings and the list of the keys of the counts in one write.
+    assert.equal(localWrites.length, writes + 1);
+    assert.deepEqual(Object.keys(localWrites[writes] ?? {}).sort(), [
+      "countKeys",
+      "settings",
+    ]);
+    const tab = 2310;
+    const site = "t2310.example";
+    await page(tab, site);
+    const me = `https://api.${site}/v1/me?token=${SECRET}#${SECRET}`;
+    await load(tab, me, { cookie: true });
+    await load(
+      tab,
+      `https://user:${SECRET}@api.${site}:8443/v1/save?id=${SECRET}&flag`,
+      { method: "POST", proven: false },
+    );
+    await load(tab, `https://api.${site}/v1/list?page=${SECRET}`);
+    await load(tab, `https://cdn.${site}/logo.png?v=${SECRET}`, {
+      type: "image",
+      cookie: false,
+    });
+    await load(tab, me, { cookie: true });
+    await load(tab, `https://api.${site}/v1/other`, { cookie: true });
+    await load(tab, me, { cookie: true });
+    const expected = {
+      edge: {
+        red4: {
+          "GET xmlhttprequest": [
+            `https://api.${site}/v1/me?token=…`,
+            `https://api.${site}/v1/other`,
+          ],
+        },
+        orange4: {
+          "POST xmlhttprequest": [`https://api.${site}:8443/v1/save?id=…&flag`],
+        },
+      },
+    };
+    assert.deepEqual(await addressesOf(site), expected);
+    await flush();
+    assert.deepEqual(stored(site), expected);
+    assert.deepEqual(local.get(`site:${site}`), {
+      edge: {
+        red4: { "GET xmlhttprequest": 4 },
+        orange4: { "POST xmlhttprequest": 1 },
+        red3: { "GET xmlhttprequest": 1 },
+        blue2: { "GET image": 1 },
+      },
+    });
+    holdsNoSecret();
+  });
+
+  it("records at levels 3 and 4 the addresses of both, and never those of level 2", async () => {
+    await setSettings("level3and4", 100);
+    const tab = 2320;
+    const site = "t2320.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/list?page=2`);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await load(tab, `https://cdn.${site}/logo.png`, { type: "image" });
+    await load(tab, `https://cdn.${site}/app.js`, { type: "script" });
+    await flush();
+    assert.deepEqual(stored(site), {
+      edge: {
+        red3: { "GET xmlhttprequest": [`https://api.${site}/list?page=…`] },
+        red4: { "GET xmlhttprequest": [`https://api.${site}/me`] },
+      },
+    });
+  });
+
+  it("writes the addresses under a key of their own, in the same write as the counts of the burst, and again only when they change", async () => {
+    await setSettings("level4", 100);
+    const tab = 2330;
+    const site = "t2330.example";
+    await page(tab, site);
+    await flush();
+    let writes = localWrites.length;
+    for (const path of ["/a", "/b", "/a"]) {
+      await load(tab, `https://api.${site}${path}`, { cookie: true });
+    }
+    await load(tab, `https://cdn.${site}/logo.png`, { type: "image" });
+    await settled();
+    assert.equal(localWrites.length, writes);
+    mock.timers.runAll();
+    assert.equal(localWrites.length, writes + 1);
+    const write = localWrites[writes] ?? {};
+    assert.deepEqual(write[`site:${site}`], {
+      edge: {
+        red4: { "GET xmlhttprequest": 3 },
+        blue2: { "GET image": 1 },
+      },
+    });
+    assert.deepEqual(write[`addresses:${site}`], {
+      edge: {
+        red4: {
+          "GET xmlhttprequest": [
+            `https://api.${site}/a`,
+            `https://api.${site}/b`,
+          ],
+        },
+      },
+    });
+    // The site is new to the counts, so the list of their keys goes with it.
+    assert.ok((write["countKeys"] as string[]).includes(`site:${site}`));
+    writes = localWrites.length;
+    await load(tab, `https://api.${site}/a`, { cookie: true });
+    await flush();
+    assert.equal(localWrites.length, writes + 1);
+    assert.deepEqual(Object.keys(localWrites[writes] ?? {}), [`site:${site}`]);
+  });
+
+  it("keeps at most the limit in each row, the oldest dropped, and trims every kept row at once when the limit falls", async () => {
+    await setSettings("level3and4", 3);
+    const tab = 2340;
+    const site = "t2340.example";
+    await page(tab, site);
+    for (const path of ["/1", "/2", "/3", "/4"]) {
+      await load(tab, `https://api.${site}${path}`, { cookie: true });
+    }
+    await load(tab, `https://api.${site}/list`);
+    await flush();
+    assert.deepEqual(stored(site), {
+      edge: {
+        red4: {
+          "GET xmlhttprequest": [
+            `https://api.${site}/4`,
+            `https://api.${site}/3`,
+            `https://api.${site}/2`,
+          ],
+        },
+        red3: { "GET xmlhttprequest": [`https://api.${site}/list`] },
+      },
+    });
+    // A site this run of the page has not read.
+    const unread = "t2341.example";
+    local.set(`addresses:${unread}`, {
+      edge: { orange4: { "POST xmlhttprequest": ["/c", "/b", "/a"] } },
+    });
+    const writes = localWrites.length;
+    assert.deepEqual(await setSettings("level3and4", 1), {
+      record: "level3and4",
+      recordLimit: 1,
+    });
+    assert.equal(localWrites.length, writes + 1);
+    const write = localWrites[writes] ?? {};
+    assert.deepEqual(write["settings"], {
+      record: "level3and4",
+      recordLimit: 1,
+    });
+    assert.deepEqual(write[`addresses:${site}`], {
+      edge: {
+        red4: { "GET xmlhttprequest": [`https://api.${site}/4`] },
+        red3: { "GET xmlhttprequest": [`https://api.${site}/list`] },
+      },
+    });
+    assert.deepEqual(write[`addresses:${unread}`], {
+      edge: { orange4: { "POST xmlhttprequest": ["/c"] } },
+    });
+    assert.deepEqual(stored(unread), write[`addresses:${unread}`]);
+    await load(tab, `https://api.${site}/5`, { cookie: true });
+    await flush();
+    assert.deepEqual(
+      (stored(site) as SiteAddresses)["edge"]?.red4?.["GET xmlhttprequest"],
+      [`https://api.${site}/5`],
+    );
+    // A higher limit drops nothing.
+    const before = JSON.stringify([...local.entries()]);
+    await setSettings("level3and4", 50);
+    assert.equal(
+      JSON.stringify(
+        [...local.entries()].filter(([key]) => key !== "settings"),
+      ),
+      JSON.stringify(
+        (JSON.parse(before) as [string, unknown][]).filter(
+          ([key]) => key !== "settings",
+        ),
+      ),
+    );
+  });
+
+  it("drops at once every kept address of level 3 when the recording narrows to level 4", async () => {
+    await setSettings("level3and4", 100);
+    const tab = 2350;
+    const site = "t2350.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/list`);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await flush();
+    const unread = "t2351.example";
+    local.set(`addresses:${unread}`, {
+      edge: { orange3: { "GET xmlhttprequest": ["/list"] } },
+    });
+    await setSettings("level4", 100);
+    assert.deepEqual(stored(site), {
+      edge: { red4: { "GET xmlhttprequest": [`https://api.${site}/me`] } },
+    });
+    assert.deepEqual(stored(unread), {});
+    for (const key of addressKeys()) {
+      const categories = Object.values(local.get(key) as SiteAddresses).flatMap(
+        (byCategory) => Object.keys(byCategory),
+      );
+      assert.equal(
+        categories.some((category) => category.endsWith("3")),
+        false,
+        key,
+      );
+    }
+    assert.deepEqual(await addressesOf(site), {
+      edge: { red4: { "GET xmlhttprequest": [`https://api.${site}/me`] } },
+    });
+    // A request of level 3 is no longer recorded.
+    await load(tab, `https://api.${site}/list`);
+    await flush();
+    assert.deepEqual(stored(site), {
+      edge: { red4: { "GET xmlhttprequest": [`https://api.${site}/me`] } },
+    });
+  });
+
+  it("never records a request of a private window, and answers no address there", async () => {
+    await setSettings("level3and4", 100);
+    const tab = 2360;
+    const site = "t2360.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me?token=${SECRET}`, {
+      cookie: true,
+      privateWindow: true,
+    });
+    await load(tab, `https://api.${site}/list`, { privateWindow: true });
+    await flush();
+    assert.equal(stored(site), undefined);
+    assert.equal(local.has(`site:${site}`), false);
+    assert.deepEqual(counts.totals(site, true), {
+      edge: {
+        red4: { "GET xmlhttprequest": 1 },
+        red3: { "GET xmlhttprequest": 1 },
+      },
+    });
+    assert.deepEqual(await addressesOf(site, true), {});
+    assert.deepEqual(await addressesOf("t2350.example", true), {});
+    assert.ok(Object.keys(await addressesOf("t2350.example")).length > 0);
+    holdsNoSecret();
+  });
+
+  it("purges the addresses of a site with its counts, in the same write, when the site is cleared, and leaves the other sites alone", async () => {
+    await setSettings("level4", 100);
+    const tab = 2370;
+    const site = "t2370.example";
+    const other = 2371;
+    const otherSite = "t2371.example";
+    await page(tab, site);
+    await page(other, otherSite);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await load(other, `https://api.${otherSite}/me`, { cookie: true });
+    await flush();
+    const otherBefore = JSON.stringify(stored(otherSite));
+    // Recorded, and not yet written.
+    await load(tab, `https://api.${site}/later`, { cookie: true });
+    const writes = localWrites.length;
+    await answer({ kind: "clearSite", site, privateWindow: false });
+    const write = localWrites[writes] ?? {};
+    assert.deepEqual(write[`site:${site}`], {});
+    assert.deepEqual(write[`addresses:${site}`], {});
+    assert.equal(local.has(`addresses:${site}`), false);
+    assert.deepEqual(await addressesOf(site), {});
+    await flush();
+    assert.equal(local.has(`addresses:${site}`), false);
+    assert.equal(JSON.stringify(stored(otherSite)), otherBefore);
+    // A clear in a private window leaves the kept addresses alone.
+    await answer({ kind: "clearSite", site: otherSite, privateWindow: true });
+    assert.equal(JSON.stringify(stored(otherSite)), otherBefore);
+    // The site records again from nothing.
+    await load(tab, `https://api.${site}/again`, { cookie: true });
+    await flush();
+    assert.deepEqual(stored(site), {
+      edge: { red4: { "GET xmlhttprequest": [`https://api.${site}/again`] } },
+    });
+  });
+
+  it("brings nothing back from a read of the addresses that a clear overtakes", async () => {
+    await setSettings("level4", 100);
+    const tab = 2375;
+    const site = "t2375.example";
+    await page(tab, site);
+    local.set(`addresses:${site}`, {
+      edge: { red4: { "GET xmlhttprequest": ["/before"] } },
+    });
+    let open = () => {};
+    localReadGate = new Promise<void>((done) => {
+      open = done;
+    });
+    try {
+      await load(tab, `https://api.${site}/during`, { cookie: true });
+      assert.ok(localReads.at(-1)?.includes(`addresses:${site}`));
+      await answer({ kind: "clearSite", site, privateWindow: false });
+    } finally {
+      localReadGate = null;
+      open();
+    }
+    await flush();
+    assert.equal(local.has(`addresses:${site}`), false);
+    assert.deepEqual(await addressesOf(site), {});
+  });
+
+  it("purges the addresses of a site the user ignores", async () => {
+    await setSettings("level4", 100);
+    const tab = 2380;
+    const site = "t2380.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await flush();
+    assert.notEqual(stored(site), undefined);
+    const writes = localWrites.length;
+    await answer({ kind: "ignoreSite", host: site });
+    assert.deepEqual(localWrites[writes]?.[`addresses:${site}`], {});
+    assert.equal(local.has(`addresses:${site}`), false);
+    assert.deepEqual(await addressesOf(site), {});
+    await answer({ kind: "unignoreSite", site });
+    assert.deepEqual(await addressesOf(site), {});
+  });
+
+  it("purges every kept address with every kept count, and none from a private window", async () => {
+    await setSettings("level4", 100);
+    const tab = 2390;
+    const site = "t2390.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await flush();
+    local.set("addresses:t2391.example", {
+      edge: { red4: { "GET xmlhttprequest": ["/x"] } },
+    });
+    const keysBefore = addressKeys();
+    assert.ok(keysBefore.length >= 2);
+    await answer({ kind: "purgeAll", privateWindow: true });
+    assert.deepEqual(addressKeys(), keysBefore);
+    const writes = localWrites.length;
+    const reads = localReads.length;
+    await answer({ kind: "purgeAll", privateWindow: false });
+    // Found without reading every value into the page.
+    assert.equal(localReads.slice(reads).includes(null), false);
+    const write = localWrites[writes] ?? {};
+    for (const key of keysBefore) {
+      assert.deepEqual(write[key], {}, key);
+    }
+    assert.deepEqual(addressKeys(), []);
+    assert.deepEqual(await addressesOf(site), {});
+    assert.deepEqual(local.get("countKeys"), []);
+    await load(tab, `https://api.${site}/after`, { cookie: true });
+    await flush();
+    assert.deepEqual(stored(site), {
+      edge: { red4: { "GET xmlhttprequest": [`https://api.${site}/after`] } },
+    });
+  });
+
+  it("lists the keys of the counts while recording, and reads at a wake-up those keys alone, never an address", async () => {
+    await setSettings("level4", 100);
+    const tab = 2400;
+    const site = "t2400.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await answer({
+      kind: "clearSite",
+      site: "t2401.example",
+      privateWindow: false,
+    });
+    await flush();
+    const counted = [...local.keys()].filter(
+      (key) => key.startsWith("site:") || key.startsWith("since:"),
+    );
+    assert.deepEqual(
+      [...(local.get("countKeys") as string[])].sort(),
+      counted.sort(),
+    );
+    assert.ok(addressKeys().length > 0);
+    const reads = localReads.length;
+    const woken = await importModule<Counts>("counts.js?recording");
+    await woken.ready;
+    const atWakeUp = localReads.slice(reads);
+    assert.equal(atWakeUp.includes(null), false);
+    assert.equal(atWakeUp.includes("getKeys"), false);
+    assert.equal(
+      atWakeUp.flat().some((key) => key?.startsWith("addresses:")),
+      false,
+    );
+    assert.deepEqual(woken.currentSettings(), {
+      record: "level4",
+      recordLimit: 100,
+    });
+    assert.deepEqual(woken.totals(site, false), local.get(`site:${site}`));
+    assert.equal(
+      woken.since("t2401.example", false),
+      local.get("since:t2401.example"),
+    );
+    // Read only when asked.
+    assert.deepEqual(await woken.siteAddresses(site, false), stored(site));
+    assert.deepEqual(localReads.at(-1), `addresses:${site}`);
+  });
+
+  it("reads everything at a wake-up while recording when the list of the keys of the counts is missing, and the counts are all there", async () => {
+    await setSettings("level4", 100);
+    const list = local.get("countKeys");
+    local.delete("countKeys");
+    try {
+      const reads = localReads.length;
+      const woken = await importModule<Counts>("counts.js?unlisted");
+      await woken.ready;
+      assert.ok(localReads.slice(reads).includes(null));
+      assert.deepEqual(
+        woken.totals("t2400.example", false),
+        local.get("site:t2400.example"),
+      );
+    } finally {
+      local.set("countKeys", list);
+    }
+  });
+
+  it("purges every kept address at once when the recording is turned off, then records nothing", async () => {
+    await setSettings("level3and4", 100);
+    const tab = 2410;
+    const site = "t2410.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await flush();
+    local.set("addresses:t2411.example", {
+      edge: { red4: { "GET xmlhttprequest": ["/x"] } },
+    });
+    // Recorded, and not yet written.
+    await load(tab, `https://api.${site}/pending`, { cookie: true });
+    const keysBefore = addressKeys();
+    assert.ok(keysBefore.length >= 2);
+    const writes = localWrites.length;
+    assert.deepEqual(await setSettings("none", 100), {
+      record: "none",
+      recordLimit: 100,
+    });
+    const write = localWrites[writes] ?? {};
+    assert.deepEqual(write["settings"], { record: "none", recordLimit: 100 });
+    for (const key of keysBefore) {
+      assert.deepEqual(write[key], {}, key);
+    }
+    assert.deepEqual(addressKeys(), []);
+    assert.equal(local.has("countKeys"), false);
+    await flush();
+    assert.deepEqual(addressKeys(), []);
+    assert.deepEqual(await addressesOf(site), {});
+    await load(tab, `https://api.${site}/off`, { cookie: true });
+    await flush();
+    assert.deepEqual(addressKeys(), []);
+    // The wake-up reads the whole storage again, where no address is left.
+    const reads = localReads.length;
+    const woken = await importModule<Counts>("counts.js?recording-off");
+    await woken.ready;
+    assert.deepEqual(localReads.slice(reads), [
+      ["settings", "countKeys"],
+      null,
+    ]);
+    assert.deepEqual(woken.currentSettings(), {
+      record: "none",
+      recordLimit: 100,
+    });
   });
 });

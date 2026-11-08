@@ -7,13 +7,15 @@ import type { Category, SiteCounts } from "./popup-message.js";
 // What the kept counts take of a request through a provider: its
 // classification, which gives the provider and the category, the method and
 // request type that key its count, and whether it belongs to a private
-// window, whose counts live only for the private session. Nothing of its URL.
+// window, whose counts live only for the private session. Of its URL, only
+// the reduced address (addresses.ts), and only when the recording takes it.
 export interface SeenRequest {
   readonly classification: Classification;
   readonly method: string;
   // The webRequest resource type, as Firefox gives it.
   readonly type: string;
   readonly privateWindow: boolean;
+  readonly address?: string;
 }
 
 // The counts of every site, and when they started, in milliseconds since the
