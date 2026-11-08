@@ -4,6 +4,7 @@
 import type {
   ClearedData,
   IgnoredData,
+  MapData,
   PopupData,
   PopupRequest,
 } from "./core/popup-message.js";
@@ -13,6 +14,8 @@ import {
   ignore,
   ignoredSites,
   isIgnored,
+  mapData,
+  purgeAll,
   since,
   totals,
   watch,
@@ -24,7 +27,7 @@ import { ignoreInTabs, learnedRecordOf, ready, watchInTabs } from "./tabs.js";
 // message of another shape, which is left to whoever it is for.
 export function answer(
   message: unknown,
-): Promise<PopupData | ClearedData | IgnoredData> | undefined {
+): Promise<PopupData | ClearedData | IgnoredData | MapData> | undefined {
   const request = requestOf(message);
   if (request === null) {
     return undefined;
@@ -40,6 +43,10 @@ export function answer(
       return watching(request.site);
     case "ignoredSites":
       return listed();
+    case "map":
+      return mapped(request.privateWindow);
+    case "purgeAll":
+      return purged(request.privateWindow);
   }
 }
 
@@ -75,6 +82,12 @@ function requestOf(message: unknown): PopupRequest | null {
   }
   if (kind === "ignoredSites") {
     return { kind };
+  }
+  if (
+    (kind === "map" || kind === "purgeAll") &&
+    typeof privateWindow === "boolean"
+  ) {
+    return { kind, privateWindow };
   }
   return null;
 }
@@ -135,4 +148,15 @@ async function watching(site: string): Promise<IgnoredData> {
 async function listed(): Promise<IgnoredData> {
   await ready;
   return { sites: ignoredSites(), site: null };
+}
+
+async function mapped(privateWindow: boolean): Promise<MapData> {
+  await ready;
+  return mapData(privateWindow);
+}
+
+// Not before the stored counts are read, which would bring them back.
+async function purged(privateWindow: boolean): Promise<ClearedData> {
+  await ready;
+  return { since: await purgeAll(privateWindow) };
 }

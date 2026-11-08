@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-// What the pages of the extension, the popup and the preferences, share:
-// their elements, their texts and the questions they ask the event page.
+// What the pages of the extension, the popup, the preferences and the map,
+// share: their elements, their texts and the questions they ask the event
+// page.
 
 import type { TitleLine } from "./core/display.js";
 import type { PopupRequest } from "./core/popup-message.js";

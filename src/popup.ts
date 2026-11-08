@@ -31,6 +31,8 @@ const numbers = new Intl.NumberFormat(language);
 // watched again.
 let tab: { readonly tabId: number; readonly privateWindow: boolean } | null =
   null;
+// The window of the popup, where the map opens.
+let windowId: number | undefined;
 let data: PopupData | null = null;
 let watchedAgain = false;
 
@@ -149,6 +151,7 @@ async function open(): Promise<void> {
     throw new Error("no active tab");
   }
   tab = { tabId: active.id, privateWindow: active.incognito };
+  windowId = active.windowId;
   await load();
 }
 
@@ -216,7 +219,21 @@ async function openPreferences(): Promise<void> {
   window.close();
 }
 
+// In the window of the popup, private or not, so that the map of a private
+// window shows the private session: without a window, Firefox takes the last
+// one focused (ext-tabs.js and ext-browser.js, Firefox 159.0.1). Selecting
+// the new tab hides no popup of an extension (Tabbrowser.sys.mjs), which
+// would stay open over the map it opened.
+async function openMap(): Promise<void> {
+  await browser.tabs.create({
+    url: browser.runtime.getURL("map/map.html"),
+    ...(windowId === undefined ? {} : { windowId }),
+  });
+  window.close();
+}
+
 writeLabels();
+element("map").addEventListener("click", () => report(openMap()));
 const gear = element("preferences");
 const preferences = browser.i18n.getMessage("popupPreferences");
 gear.setAttribute("aria-label", preferences);

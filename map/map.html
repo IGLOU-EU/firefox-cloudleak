@@ -1,0 +1,51 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<!-- Copyright (C) 2026 Adrien Kara -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title data-message="mapTitle"></title>
+<link rel="stylesheet" href="map.css">
+<script type="module" src="../map.js"></script>
+</head>
+<body>
+<header class="header">
+  <img src="/icons/neutral.svg" alt="" width="24" height="24">
+  <div class="title"><b data-message="mapTitle"></b><span id="subtitle"></span></div>
+  <div class="actions">
+    <!-- Hidden until the event page says something is kept, the only case it purges anything. -->
+    <button type="button" id="ask-purge" class="danger" data-message="mapPurgeAll" hidden></button>
+    <p id="purge-question" class="question" hidden></p>
+    <button type="button" id="purge" class="danger" data-message="mapPurge" hidden></button>
+    <button type="button" id="purge-cancel" data-message="mapCancel" hidden></button>
+  </div>
+</header>
+<div class="legend">
+  <span class="item"><svg width="28" height="10" aria-hidden="true"><line class="link red4" x1="0" y1="5" x2="28" y2="5"/></svg><span data-message="mapLegendRed4"></span></span>
+  <span class="item"><svg width="28" height="10" aria-hidden="true"><line class="link red3" x1="0" y1="5" x2="28" y2="5"/></svg><span data-message="mapLegendRed3"></span></span>
+  <span class="item"><svg width="28" height="10" aria-hidden="true"><line class="link orange4" x1="0" y1="5" x2="28" y2="5"/></svg><span data-message="mapLegendOrange4"></span></span>
+  <span class="item"><svg width="28" height="10" aria-hidden="true"><line class="link orange3" x1="0" y1="5" x2="28" y2="5"/></svg><span data-message="mapLegendOrange3"></span></span>
+  <span class="item"><svg width="28" height="10" aria-hidden="true"><line class="link blue2" x1="0" y1="5.5" x2="28" y2="5.5"/></svg><span data-message="mapLegendBlue2"></span></span>
+  <span class="item"><img src="/icons/red.svg" alt="" width="16" height="16"><img src="/icons/orange.svg" alt="" width="16" height="16"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle class="point" cx="8" cy="8" r="3.5"/></svg><span data-message="mapLegendSite"></span></span>
+  <!-- The flag of the United States, as an example of a flag. -->
+  <span class="item"><span>🇺🇸</span><span data-message="mapLegendProvider"></span></span>
+  <span id="scope" class="item"></span>
+</div>
+<div id="tools" class="tools" hidden>
+  <div class="search"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="6.75" cy="6.75" r="4.75" fill="none"/><path d="M10.25 10.25L14.5 14.5"/></svg><input type="search" id="search" autocomplete="off" spellcheck="false"></div>
+  <div id="chips" class="chips"></div>
+  <div id="shown-count" class="shown" hidden><span id="shown"></span><button type="button" id="clear-filters" class="text-link" data-message="mapClearFilters"></button></div>
+</div>
+<div class="body">
+  <div id="plan" class="plan">
+    <p id="empty" class="empty" hidden></p>
+    <div id="no-match" class="empty" hidden><p data-message="mapNoMatch"></p><button type="button" id="no-match-clear" data-message="mapClearFilters"></button></div>
+    <div id="drawing" class="drawing"></div>
+  </div>
+  <aside id="panel" class="panel">
+    <button type="button" id="back" class="back" data-message="mapBack" hidden></button>
+    <div id="panel-content"></div>
+  </aside>
+</div>
+</body>
+</html>

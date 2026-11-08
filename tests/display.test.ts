@@ -21,6 +21,7 @@ import {
 } from "../src/core/tab-state.js";
 import {
   getMessageOf,
+  MAP_MESSAGES,
   messagesOf,
   OPTIONS_MESSAGES,
   POPUP_MESSAGES,
@@ -384,6 +385,7 @@ describe("the tooltip messages", () => {
         ...used,
         ...POPUP_MESSAGES,
         ...OPTIONS_MESSAGES,
+        ...MAP_MESSAGES,
       ].sort(),
     );
     for (const { locale, messages } of locales) {

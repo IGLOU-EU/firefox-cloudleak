@@ -104,17 +104,22 @@ const BUCHER = (host: string) =>
   host === "xn--bcher-kva.example" ? "bücher.example" : null;
 
 interface Options {
-  readonly tab?: { id?: number; incognito: boolean } | undefined;
+  readonly tab?:
+    | { id?: number; incognito: boolean; windowId?: number }
+    | undefined;
   // What the event page answers to each "popup" request, in turn, the last
   // one again once they are all given.
   readonly answers?: readonly (PopupData | Error)[];
   readonly getDomain?: (host: string) => string | null;
   readonly openOptionsPage?: () => Promise<void>;
+  readonly createTab?: () => Promise<object>;
 }
 
 interface Opened {
   readonly sent: PopupRequest[];
   readonly queries: object[];
+  // The tabs the page asked Firefox to open.
+  readonly created: object[];
   readonly root: Element;
   // How many times the page opened the preferences, and closed itself.
   readonly preferences: { opened: number; closed: number };
@@ -128,9 +133,11 @@ let opened = 0;
 async function open(options: Options): Promise<Opened> {
   const sent: PopupRequest[] = [];
   const queries: object[] = [];
+  const created: object[] = [];
   const preferences = { opened: 0, closed: 0 };
   const root = installPage(HTML);
-  const tab = "tab" in options ? options.tab : { id: 7, incognito: false };
+  const tab =
+    "tab" in options ? options.tab : { id: 7, incognito: false, windowId: 3 };
   const answers = options.answers ?? [RED_SITE];
   let asked = 0;
   (globalThis as Record<string, unknown>)["window"] = {
@@ -144,8 +151,13 @@ async function open(options: Options): Promise<Opened> {
         queries.push(query);
         return Promise.resolve(tab === undefined ? [] : [tab]);
       },
+      create: (properties: object) => {
+        created.push(properties);
+        return options.createTab?.() ?? Promise.resolve({});
+      },
     },
     runtime: {
+      getURL: (path: string) => `moz-extension://uuid/${path}`,
       sendMessage: (request: PopupRequest) => {
         sent.push(request);
         switch (request.kind) {
@@ -192,6 +204,7 @@ async function open(options: Options): Promise<Opened> {
   return {
     sent,
     queries,
+    created,
     root,
     preferences,
     element,
@@ -284,6 +297,62 @@ describe("the popup", () => {
       assert.match(
         String(errors.mock.calls[0]?.arguments[0]),
         /^Cloud Leak: .*No options page/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
+  it("opens the map in a tab of its own window, then closes, since Firefox leaves it open over the map", async () => {
+    const page = await open({});
+    assert.equal(page.element("map").textContent, "popupMap");
+    assert.equal(page.element("map").hidden, false);
+    page.element("map").click();
+    await settled();
+    assert.deepEqual(page.created, [
+      { url: "moz-extension://uuid/map/map.html", windowId: 3 },
+    ]);
+    assert.equal(page.preferences.closed, 1);
+    assert.equal(page.sent.length, 1);
+  });
+
+  it("opens the map in the private window it belongs to, so that the map shows the private session", async () => {
+    const page = await open({ tab: { id: 8, incognito: true, windowId: 5 } });
+    page.element("map").click();
+    await settled();
+    assert.deepEqual(page.created, [
+      { url: "moz-extension://uuid/map/map.html", windowId: 5 },
+    ]);
+  });
+
+  it("opens the map in the window Firefox chooses when it gave no active tab", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      const page = await open({ tab: undefined });
+      page.element("map").click();
+      await settled();
+      assert.deepEqual(page.created, [
+        { url: "moz-extension://uuid/map/map.html" },
+      ]);
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
+  it("stays open and reports it when the map does not open", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      const page = await open({
+        createTab: () => Promise.reject(new Error("Not allowed")),
+      });
+      page.element("map").click();
+      await settled();
+      assert.equal(page.created.length, 1);
+      assert.equal(page.preferences.closed, 0);
+      assert.equal(errors.mock.callCount(), 1);
+      assert.match(
+        String(errors.mock.calls[0]?.arguments[0]),
+        /^Cloud Leak: .*Not allowed/,
       );
     } finally {
       errors.mock.restore();

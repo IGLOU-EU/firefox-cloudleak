@@ -1,0 +1,550 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+/* Copyright (C) 2026 Adrien Kara */
+
+/* The tints of the popup, so that the map reads as the same extension, with
+   the clouds, the points and the links in the tints of the icon on both
+   themes. The search field alone is new: white, and on the dark theme the
+   dark page of Firefox, so that it stands out from the tab. */
+:root {
+  --background: #ffffff;
+  --text: #15141a;
+  --muted: #5b5b66;
+  --rule: #e0e0e6;
+  --button: #f0f0f4;
+  --border: #8f8f9d;
+  --danger: #dc2c4c;
+  --danger-text: #ffffff;
+  --field: #ffffff;
+  --blue: #3478f6;
+  --orange: #d67200;
+  --red: #e03050;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #2b2a33;
+    --text: #fbfbfe;
+    --muted: #bfbfc9;
+    --rule: #52525e;
+    --button: #45444f;
+    --field: #1c1b22;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font:
+    13px / 1.4 system-ui,
+    sans-serif;
+  overflow: hidden;
+}
+
+p {
+  margin: 0;
+}
+
+button {
+  font: inherit;
+  color: var(--text);
+  background: var(--button);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* The colour is never the only sign: the name of the button and its question
+   say what it erases. */
+button.danger {
+  color: var(--danger-text);
+  background: var(--danger);
+  border-color: var(--danger);
+  font-weight: 600;
+}
+
+input:focus-visible,
+button:focus-visible,
+svg [data-k]:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 1px;
+}
+
+.header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.header > img {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+}
+
+.title b {
+  font-size: 15px;
+}
+
+.title span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.actions .question {
+  font-weight: 600;
+  text-align: right;
+}
+
+.actions button {
+  flex: none;
+}
+
+.legend {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend .item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend svg,
+.legend img {
+  flex: none;
+}
+
+/* The search and the limits. */
+.tools {
+  flex: none;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 8px 16px;
+  min-height: 46px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.search {
+  position: relative;
+  flex: none;
+}
+
+.search svg {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  margin-top: -7px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+
+.search input {
+  font: inherit;
+  width: 260px;
+  padding: 5px 8px 5px 28px;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.search input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+button.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+}
+
+.chip > img {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.chip .cross {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+}
+
+button.chip:hover .cross {
+  color: var(--text);
+  background: var(--background);
+}
+
+.shown {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+}
+
+button.text-link {
+  padding: 2px 6px;
+  background: transparent;
+  border-color: transparent;
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.plan {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.plan,
+.panel {
+  scrollbar-color: var(--border) var(--background);
+}
+
+.empty {
+  padding: 48px 32px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.empty button {
+  margin-top: 12px;
+}
+
+.panel {
+  flex: none;
+  width: 320px;
+  overflow: auto;
+  padding: 4px 14px 14px;
+  border-left: 1px solid var(--rule);
+}
+
+/* The providers stay in view while the sites scroll. */
+.drawing {
+  display: flex;
+  align-items: flex-start;
+}
+
+.drawing > svg {
+  display: block;
+  flex: none;
+}
+
+.drawing > .providers {
+  position: sticky;
+  top: 0;
+}
+
+.drawing text {
+  fill: var(--text);
+  font-family: system-ui, sans-serif;
+}
+
+.drawing .muted {
+  fill: var(--muted);
+}
+
+.drawing .heading {
+  text-transform: uppercase;
+}
+
+.drawing .match {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.drawing .pill {
+  fill: var(--button);
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.drawing [data-k] {
+  cursor: pointer;
+}
+
+.drawing .ground {
+  fill: transparent;
+}
+
+.drawing .chosen .ground {
+  fill: var(--button);
+}
+
+.drawing .chosen .pill {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+/* Under a selection, what it does not reach fades. */
+.drawing svg.selection .fades:not(.active) {
+  opacity: 0.15;
+}
+
+.point {
+  fill: var(--blue);
+}
+
+/* A link: the tint of its category, as thick as its level, and dashed when
+   the decryption is not proven. Blue depends on no proof, so it stays solid. */
+.link {
+  fill: none;
+  stroke-linecap: butt;
+}
+
+.link.red4 {
+  stroke: var(--red);
+  stroke-width: 4;
+}
+
+.link.red3 {
+  stroke: var(--red);
+  stroke-width: 2;
+}
+
+.link.orange4 {
+  stroke: var(--orange);
+  stroke-width: 4;
+  stroke-dasharray: 7 4;
+}
+
+.link.orange3 {
+  stroke: var(--orange);
+  stroke-width: 2;
+  stroke-dasharray: 5 3;
+}
+
+.link.blue2 {
+  stroke: var(--blue);
+  stroke-width: 1;
+}
+
+/* The panel, in the words and the shapes of the popup. */
+.panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin: 12px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.panel-heading .unit {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.flag {
+  width: 16px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.panel-head > img,
+.panel-head > svg {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.panel-head .flag {
+  width: auto;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.panel-head .name {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.panel-text {
+  margin-top: 6px;
+}
+
+.panel-note {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.line {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  column-gap: 8px;
+  align-items: start;
+  padding: 3px 0;
+}
+
+.line > img,
+.choice > img,
+.choice > svg {
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+}
+
+.proof {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.count {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.detail {
+  grid-column: 2 / 4;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+  padding: 0 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+button.choice {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  column-gap: 8px;
+  align-items: start;
+  padding: 3px 4px;
+  margin: 1px -4px;
+  width: calc(100% + 8px);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+button.choice:hover {
+  background: var(--button);
+}
+
+button.choice.bold {
+  font-weight: 600;
+}
+
+/* A row that would keep no site says so in grey, and no longer limits. */
+button.choice.zero {
+  color: var(--muted);
+}
+
+button.choice.zero > img,
+button.choice.zero > svg,
+button.choice.zero > .flag {
+  opacity: 0.4;
+}
+
+button.choice:disabled {
+  cursor: default;
+}
+
+button.choice:disabled:hover {
+  background: transparent;
+}
+
+button.choice[aria-pressed="true"] {
+  background: var(--button);
+  box-shadow: inset 0 0 0 2px var(--text);
+  font-weight: 600;
+}
+
+button.back {
+  margin-top: 10px;
+  padding: 2px 6px;
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+}
+
+/* Last, so that the attribute wins over every display set above. */
+[hidden] {
+  display: none;
+}
