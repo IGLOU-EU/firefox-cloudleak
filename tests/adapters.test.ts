@@ -2430,7 +2430,8 @@ describe("the recording of addresses", () => {
     holdsNoSecret();
   });
 
-  it("answers no settings request of another shape, and brings the limit into its range", async () => {
+  it("answers no settings request of another shape, refuses a limit that is not an integer of at least 1, and keeps any other, however large", async () => {
+    const writes = localWrites.length;
     for (const message of [
       { kind: "setSettings", record: "all", recordLimit: 10 },
       { kind: "setSettings", record: "level 4", recordLimit: 10 },
@@ -2439,6 +2440,19 @@ describe("the recording of addresses", () => {
       { kind: "setSettings", record: "level4", recordLimit: "10" },
       { kind: "setSettings", record: "level4", recordLimit: Number.NaN },
       { kind: "setSettings", record: "level4", recordLimit: null },
+      { kind: "setSettings", record: "level4", recordLimit: 0 },
+      { kind: "setSettings", record: "level4", recordLimit: -3 },
+      { kind: "setSettings", record: "level4", recordLimit: 2.5 },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: Number.POSITIVE_INFINITY,
+      },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: Number.MAX_SAFE_INTEGER + 1,
+      },
       { kind: "setting" },
       { kind: "siteAddresses", site: "t2300.example" },
       { kind: "siteAddresses", site: "", privateWindow: false },
@@ -2447,21 +2461,16 @@ describe("the recording of addresses", () => {
     ]) {
       assert.equal(answer(message), undefined, JSON.stringify(message));
     }
+    assert.equal(localWrites.length, writes);
     assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
-    for (const [limit, kept] of [
-      [0, 1],
-      [-3, 1],
-      [5000, 1000],
-      [2.5, 3],
-      [100, 100],
-    ] as const) {
+    for (const limit of [1, 1000, 1001, 5000, 1_000_000, 100]) {
       assert.deepEqual(await setSettings("none", limit), {
         record: "none",
-        recordLimit: kept,
+        recordLimit: limit,
       });
       assert.deepEqual(local.get("settings"), {
         record: "none",
-        recordLimit: kept,
+        recordLimit: limit,
       });
     }
     assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });

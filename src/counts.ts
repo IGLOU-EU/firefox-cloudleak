@@ -51,10 +51,10 @@ const SETTINGS_KEY = "settings";
 // alone. The wake-up reads the whole store at once and leaves them aside: a
 // list of keys would be read one key after another, about 80 ms for 1000
 // sites against 12 ms for the whole store, and 117 ms with 11 MB of
-// addresses, more than the limit of each row lets a user keep (the same
-// IndexedDB reads timed in a page of LibreWolf 159.0.1 on 2026-11-08). The
-// addresses of a site are read again when a request of the site is recorded
-// or a page asks for them.
+// addresses (the same IndexedDB reads timed in a page of LibreWolf 159.0.1
+// on 2026-11-08). The limit of each row has no maximum, so a user who keeps
+// many addresses makes each wake-up read longer. The addresses of a site are
+// read again when a request of the site is recorded or a page asks for them.
 const ADDRESSES_PREFIX = "addresses:";
 
 // The counts of private windows never reach the disk: they live in

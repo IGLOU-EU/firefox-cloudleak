@@ -37,7 +37,8 @@ export type RecordLevel = "none" | "level4" | "level3and4";
 // The preferences of the user, kept in storage.local.
 export interface Settings {
   readonly record: RecordLevel;
-  // How many addresses each row keeps, from 1 to 1000.
+  // How many addresses each row keeps: an integer of at least 1, as large as
+  // the user wants.
   readonly recordLimit: number;
 }
 
@@ -92,10 +93,10 @@ export type PopupRequest =
   | { readonly kind: "purgeAll"; readonly privateWindow: boolean }
   // The settings, answered with Settings.
   | { readonly kind: "settings" }
-  // Change the settings, answered with the Settings kept, the limit brought
-  // into its range. Turning the recording off, narrowing its levels or
-  // lowering its limit drops at once every kept address the new settings
-  // leave out.
+  // Change the settings, answered with the Settings kept. A limit that is
+  // not an integer of at least 1 is refused. Turning the recording off,
+  // narrowing its levels or lowering its limit drops at once every kept
+  // address the new settings leave out.
   | {
       readonly kind: "setSettings";
       readonly record: RecordLevel;
