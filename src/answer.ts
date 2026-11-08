@@ -1,22 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
+import { isRecordLevel, recordLimitOf } from "./core/addresses.js";
 import type {
   ClearedData,
   IgnoredData,
   MapData,
   PopupData,
   PopupRequest,
+  Settings,
+  SiteAddresses,
 } from "./core/popup-message.js";
 import { displayedDocument } from "./core/tab-record.js";
 import {
+  changeSettings,
   clear,
+  currentSettings,
   ignore,
   ignoredSites,
   isIgnored,
   mapData,
   purgeAll,
   since,
+  siteAddresses,
   totals,
   watch,
 } from "./counts.js";
@@ -27,7 +33,11 @@ import { ignoreInTabs, learnedRecordOf, ready, watchInTabs } from "./tabs.js";
 // message of another shape, which is left to whoever it is for.
 export function answer(
   message: unknown,
-): Promise<PopupData | ClearedData | IgnoredData | MapData> | undefined {
+):
+  | Promise<
+      PopupData | ClearedData | IgnoredData | MapData | Settings | SiteAddresses
+    >
+  | undefined {
   const request = requestOf(message);
   if (request === null) {
     return undefined;
@@ -47,6 +57,12 @@ export function answer(
       return mapped(request.privateWindow);
     case "purgeAll":
       return purged(request.privateWindow);
+    case "settings":
+      return settingsData();
+    case "setSettings":
+      return settingsChanged(request);
+    case "siteAddresses":
+      return addressesData(request);
   }
 }
 
@@ -54,10 +70,8 @@ function requestOf(message: unknown): PopupRequest | null {
   if (typeof message !== "object" || message === null) {
     return null;
   }
-  const { kind, tabId, site, privateWindow, host } = message as Record<
-    string,
-    unknown
-  >;
+  const { kind, tabId, site, privateWindow, host, record, recordLimit } =
+    message as Record<string, unknown>;
   if (
     kind === "clearSite" &&
     typeof site === "string" &&
@@ -88,6 +102,25 @@ function requestOf(message: unknown): PopupRequest | null {
     typeof privateWindow === "boolean"
   ) {
     return { kind, privateWindow };
+  }
+  if (kind === "settings") {
+    return { kind };
+  }
+  // A level that is not one of the three is refused, and a limit out of its
+  // range brought to the nearest bound.
+  if (kind === "setSettings" && isRecordLevel(record)) {
+    const limit = recordLimitOf(recordLimit);
+    if (limit !== null) {
+      return { kind, record, recordLimit: limit };
+    }
+  }
+  if (
+    kind === "siteAddresses" &&
+    typeof site === "string" &&
+    site !== "" &&
+    typeof privateWindow === "boolean"
+  ) {
+    return { kind, site, privateWindow };
   }
   return null;
 }
@@ -159,4 +192,26 @@ async function mapped(privateWindow: boolean): Promise<MapData> {
 async function purged(privateWindow: boolean): Promise<ClearedData> {
   await ready;
   return { since: await purgeAll(privateWindow) };
+}
+
+async function settingsData(): Promise<Settings> {
+  await ready;
+  return currentSettings();
+}
+
+// Not before the stored settings are read, which would bring them back.
+async function settingsChanged({
+  record,
+  recordLimit,
+}: Extract<PopupRequest, { kind: "setSettings" }>): Promise<Settings> {
+  await ready;
+  return changeSettings({ record, recordLimit });
+}
+
+async function addressesData({
+  site,
+  privateWindow,
+}: Extract<PopupRequest, { kind: "siteAddresses" }>): Promise<SiteAddresses> {
+  await ready;
+  return siteAddresses(site, privateWindow);
 }

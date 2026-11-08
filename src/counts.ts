@@ -3,6 +3,15 @@
 
 import { batch, WRITE_DELAY_MS } from "./batch.js";
 import {
+  addAddress,
+  DEFAULT_SETTINGS,
+  fitAddresses,
+  keepsFewer,
+  recordsLevel,
+  settingsOf,
+} from "./core/addresses.js";
+import type { LeakLevel } from "./core/classify.js";
+import {
   clearSite,
   countRequest,
   dayOf,
@@ -13,22 +22,40 @@ import {
   sinceOf,
   totalsOf,
 } from "./core/counts.js";
-import type { MapData, SiteCounts } from "./core/popup-message.js";
+import type {
+  MapData,
+  Settings,
+  SiteAddresses,
+  SiteCounts,
+} from "./core/popup-message.js";
 import { report } from "./toolbar.js";
 
-// storage.local holds the kept counts and the sites the user ignores, and
-// nothing else: when the counts started, and the counts of each site under
-// its own key, so that a burst of requests writes the sites it touched rather
-// than the whole history. A site cleared since has its own start under a key
-// of its own, rather than inside its counts, so that the counts stored before
-// any clear read as they are, without a migration, and a site without that
-// key starts with all the counts. The ignored sites are one sorted list,
-// written whole at each change the user makes. Never storage.sync, which
-// Firefox sends to Mozilla's servers.
+// storage.local holds the kept counts, the sites the user ignores, the
+// settings and the recorded addresses, and nothing else: when the counts
+// started, and the counts of each site under its own key, so that a burst of
+// requests writes the sites it touched rather than the whole history. A site
+// cleared since has its own start under a key of its own, rather than inside
+// its counts, so that the counts stored before any clear read as they are,
+// without a migration, and a site without that key starts with all the
+// counts. The ignored sites are one sorted list, written whole at each change
+// the user makes. Never storage.sync, which Firefox sends to Mozilla's
+// servers.
 const SINCE_KEY = "since";
 const SITE_PREFIX = "site:";
 const SITE_SINCE_PREFIX = "since:";
 const IGNORED_KEY = "ignored";
+const SETTINGS_KEY = "settings";
+
+// The recorded addresses of each site go under a key of their own, apart from
+// its counts, so that a burst writes the addresses of the sites it touched
+// alone. The wake-up reads the whole store at once and leaves them aside: a
+// list of keys would be read one key after another, about 80 ms for 1000
+// sites against 12 ms for the whole store, and 117 ms with 11 MB of
+// addresses, more than the limit of each row lets a user keep (the same
+// IndexedDB reads timed in a page of LibreWolf 159.0.1 on 2026-11-08). The
+// addresses of a site are read again when a request of the site is recorded
+// or a page asks for them.
+const ADDRESSES_PREFIX = "addresses:";
 
 // The counts of private windows never reach the disk: they live in
 // storage.session, beside the tabs, and go with the private session, which
@@ -42,6 +69,21 @@ let privateSession: KeptCounts = emptyCounts(0);
 // Read at each wake-up and kept in memory, so that a document is told ignored
 // with one lookup when its site becomes known.
 let ignored = new Set<string>();
+
+let settings: Settings = DEFAULT_SETTINGS;
+
+// The recorded addresses of the sites read during this run of the page, each
+// fitted to the settings, and those changed since their last write.
+const addresses = new Map<string, SiteAddresses>();
+const addressesToWrite = new Set<string>();
+
+// The sites whose addresses are being read, with the requests recorded
+// meanwhile, which wait for the read.
+interface Reading {
+  readonly waiting: SeenRequest[];
+  readonly done: Promise<void>;
+}
+const reading = new Map<string, Reading>();
 
 function sitesOf<T>(
   items: Record<string, unknown>,
@@ -61,6 +103,7 @@ function sitesOf<T>(
 async function readKept(): Promise<void> {
   try {
     const items = await browser.storage.local.get(null);
+    settings = settingsOf(items[SETTINGS_KEY]);
     ignored = new Set((items[IGNORED_KEY] as string[] | undefined) ?? []);
     const since = items[SINCE_KEY];
     const siteSince = sitesOf<number>(items, SITE_SINCE_PREFIX);
@@ -135,13 +178,18 @@ export async function onWindowRemoved(): Promise<void> {
   }
 }
 
+// The counts and the addresses a burst changed go in one write.
 const scheduleKeptWrite = batch<string>(WRITE_DELAY_MS, (sites) => {
-  const items: Record<string, SiteCounts> = {};
+  const items: Record<string, SiteCounts | SiteAddresses> = {};
   for (const site of sites) {
     const counts = kept.sites[site];
     // A site cleared since has nothing to write.
     if (counts !== undefined) {
       items[`${SITE_PREFIX}${site}`] = counts;
+    }
+    const recorded = addresses.get(site);
+    if (recorded !== undefined && addressesToWrite.delete(site)) {
+      items[`${ADDRESSES_PREFIX}${site}`] = recorded;
     }
   }
   if (Object.keys(items).length > 0) {
@@ -153,6 +201,105 @@ const schedulePrivateWrite = batch<string>(WRITE_DELAY_MS, () => {
   report(browser.storage.session.set({ [PRIVATE_KEY]: privateSession.sites }));
 });
 
+// Whether the address of a request may be recorded, which its level decides
+// once its response is classified. requests.ts keeps the address of a request
+// only then.
+export function recording(): boolean {
+  return settings.record !== "none";
+}
+
+export function recordsAddressOf(level: LeakLevel): boolean {
+  return recordsLevel(settings.record, level);
+}
+
+// What storage holds for the addresses of a site, which only this page
+// writes.
+function storedAddresses(value: unknown): SiteAddresses {
+  return typeof value === "object" && value !== null
+    ? (value as SiteAddresses)
+    : {};
+}
+
+// Reads the addresses of a site, once for this run of the page. The requests
+// recorded meanwhile wait for the read, and go after what it gives, as the
+// most recent. A clear, a purge or an ignore of the site meanwhile drops the
+// read, since what it read is gone: the next request starts another, which
+// Firefox makes after the write that emptied them (child/ext-storage.js and
+// ExtensionStorageIDB.sys.mjs, LibreWolf 159.0.1). The settings may change
+// meanwhile, so what is read is fitted to those of the moment it arrives.
+function readAddresses(site: string): Reading {
+  const current = reading.get(site);
+  if (current !== undefined) {
+    return current;
+  }
+  const key = `${ADDRESSES_PREFIX}${site}`;
+  const waiting: SeenRequest[] = [];
+  const done = browser.storage.local.get(key).then(
+    (items) => {
+      if (reading.get(site) !== entry) {
+        return;
+      }
+      reading.delete(site);
+      let recorded = fitAddresses(storedAddresses(items[key]), settings);
+      for (const request of waiting) {
+        if (recordsAddressOf(request.classification.leak.level)) {
+          recorded = addAddress(recorded, request, settings.recordLimit);
+        }
+      }
+      addresses.set(site, recorded);
+      if (waiting.length > 0) {
+        addressesToWrite.add(site);
+        scheduleKeptWrite(site);
+      }
+    },
+    (error: unknown) => {
+      if (reading.get(site) === entry) {
+        reading.delete(site);
+      }
+      throw error;
+    },
+  );
+  const entry: Reading = { waiting, done };
+  reading.set(site, entry);
+  report(done);
+  return entry;
+}
+
+// The address goes first in its row, once, written with the counts of the
+// burst. The settings decide again here, since they may have changed since
+// the response of the request.
+function recordAddress(site: string, request: SeenRequest): void {
+  if (
+    request.address === undefined ||
+    !recordsAddressOf(request.classification.leak.level)
+  ) {
+    return;
+  }
+  const known = addresses.get(site);
+  if (known === undefined) {
+    readAddresses(site).waiting.push(request);
+    return;
+  }
+  const recorded = addAddress(known, request, settings.recordLimit);
+  if (recorded !== known) {
+    addresses.set(site, recorded);
+    addressesToWrite.add(site);
+  }
+}
+
+function forgetAddresses(site: string): void {
+  addresses.delete(site);
+  addressesToWrite.delete(site);
+  reading.delete(site);
+}
+
+function forgetAllAddresses(): void {
+  addresses.clear();
+  addressesToWrite.clear();
+  reading.clear();
+}
+
+// A request of a private window records nothing, whatever the settings.
 export function count(site: string, request: SeenRequest): void {
   if (request.privateWindow) {
     privateSession = countRequest(privateSession, site, request);
@@ -160,6 +307,7 @@ export function count(site: string, request: SeenRequest): void {
     return;
   }
   kept = countRequest(kept, site, request);
+  recordAddress(site, request);
   scheduleKeptWrite(site);
 }
 
@@ -185,7 +333,10 @@ export function since(site: string | null, privateWindow: boolean): number {
 // ExtensionStorageIDB.sys.mjs, LibreWolf 159.0.1): a request counted after
 // the clear is written after it, and the counts written empty rather than
 // removed go in the same transaction as their new start, since one without
-// the other would claim what was not observed.
+// the other would claim what was not observed. Its recorded addresses go in
+// that same transaction, emptied, whatever the settings, then their key
+// goes, since a write cannot remove a key. In a private window, nothing is
+// recorded, and the addresses stay with the kept counts.
 export async function clear(
   site: string,
   privateWindow: boolean,
@@ -202,10 +353,15 @@ export async function clear(
   }
   const at = dayOf(Date.now());
   kept = clearSite(kept, site, at);
-  await browser.storage.local.set({
+  forgetAddresses(site);
+  const key = `${ADDRESSES_PREFIX}${site}`;
+  const written = browser.storage.local.set({
     [`${SITE_SINCE_PREFIX}${site}`]: at,
     [`${SITE_PREFIX}${site}`]: {},
+    [key]: {},
   });
+  const removed = browser.storage.local.remove(key);
+  await Promise.all([written, removed]);
   return at;
 }
 
@@ -239,27 +395,32 @@ export function mapData(privateWindow: boolean): MapData {
 // the other would claim what was not observed. The keys go in a second one,
 // since a write cannot remove a key, asked in the same turn as the memory
 // empties, so that no count written after the purge comes before either. A
-// write still pending finds nothing of those sites to write.
+// write still pending finds nothing of those sites to write. The recorded
+// addresses go the same way as the counts, in the same transactions. The
+// keys stored are listed with getKeys, which keeps their values out of the
+// page.
 export async function purgeAll(privateWindow: boolean): Promise<number> {
   if (privateWindow) {
     await dropPrivate();
     return 0;
   }
-  const stored = Object.keys(await browser.storage.local.get(null));
+  const stored = await browser.storage.local.getKeys();
   const at = dayOf(Date.now());
   const items: Record<string, unknown> = { [SINCE_KEY]: at };
   for (const key of [
     ...stored,
     ...Object.keys(kept.sites).map((site) => `${SITE_PREFIX}${site}`),
     ...Object.keys(kept.siteSince).map((site) => `${SITE_SINCE_PREFIX}${site}`),
+    ...[...addresses.keys()].map((site) => `${ADDRESSES_PREFIX}${site}`),
   ]) {
-    if (key.startsWith(SITE_PREFIX)) {
+    if (key.startsWith(SITE_PREFIX) || key.startsWith(ADDRESSES_PREFIX)) {
       items[key] = {};
     } else if (key.startsWith(SITE_SINCE_PREFIX)) {
       items[key] = at;
     }
   }
   kept = emptyCounts(at);
+  forgetAllAddresses();
   const written = browser.storage.local.set(items);
   const removed = browser.storage.local.remove(
     Object.keys(items).filter((key) => key !== SINCE_KEY),
@@ -277,15 +438,17 @@ export function ignoredSites(): string[] {
   return [...ignored].sort();
 }
 
-// Nothing of an ignored site is kept: its kept counts, its own start and its
-// counts of the private session go, written or not. The list and the emptied
-// counts go in one transaction, so that the counts never outlive an ignore
-// that reached the disk. The keys go in a second one, since a write cannot
-// remove a key, and a write still pending finds nothing of the site to write.
-// Asking again repeats it, so a failure can be made good.
+// Nothing of an ignored site is kept: its kept counts, its own start, its
+// recorded addresses and its counts of the private session go, written or
+// not. The list and the emptied counts and addresses go in one transaction,
+// so that neither outlives an ignore that reached the disk. The keys go in a
+// second one, since a write cannot remove a key, and a write still pending
+// finds nothing of the site to write. Asking again repeats it, so a failure
+// can be made good.
 export async function ignore(site: string): Promise<void> {
   ignored.add(site);
   kept = dropSite(kept, site);
+  forgetAddresses(site);
   if (privateSession.sites[site] !== undefined) {
     privateSession = dropSite(privateSession, site);
     schedulePrivateWrite(site);
@@ -293,10 +456,12 @@ export async function ignore(site: string): Promise<void> {
   await browser.storage.local.set({
     [IGNORED_KEY]: ignoredSites(),
     [`${SITE_PREFIX}${site}`]: {},
+    [`${ADDRESSES_PREFIX}${site}`]: {},
   });
   await browser.storage.local.remove([
     `${SITE_PREFIX}${site}`,
     `${SITE_SINCE_PREFIX}${site}`,
+    `${ADDRESSES_PREFIX}${site}`,
   ]);
 }
 
@@ -314,4 +479,94 @@ export async function watch(site: string): Promise<void> {
     [`${SITE_SINCE_PREFIX}${site}`]: at,
     [`${SITE_PREFIX}${site}`]: {},
   });
+}
+
+export function currentSettings(): Settings {
+  return settings;
+}
+
+// The keys of the recorded addresses that storage holds, listed without
+// bringing their values into the page.
+async function storedAddressKeys(): Promise<string[]> {
+  return (await browser.storage.local.getKeys()).filter((key) =>
+    key.startsWith(ADDRESSES_PREFIX),
+  );
+}
+
+// Nothing the new settings leave out stays on disk: turning the recording
+// off empties every recorded address in the same transaction as the
+// settings, then their keys go, since a write cannot remove a key. Narrowing the levels or lowering the limit
+// reads every site's addresses, as a request of the site would, and writes
+// them fitted in the same transaction as the settings. The memory changes
+// first, so that a request recorded meanwhile follows the new settings, and
+// a read under way is fitted when it ends. The settings written are those of
+// the moment of the write, should another change come meanwhile. A failure
+// brings the previous settings back, so that asking again drops what it
+// failed to drop.
+export async function changeSettings(next: Settings): Promise<Settings> {
+  const previous = settings;
+  settings = next;
+  try {
+    if (!keepsFewer(previous, next)) {
+      await browser.storage.local.set({ [SETTINGS_KEY]: settings });
+    } else if (next.record === "none") {
+      await dropAllAddresses();
+    } else {
+      await fitAllAddresses();
+    }
+  } catch (error: unknown) {
+    if (settings === next) {
+      settings = previous;
+    }
+    throw error;
+  }
+  return settings;
+}
+
+async function dropAllAddresses(): Promise<void> {
+  forgetAllAddresses();
+  const keys = await storedAddressKeys();
+  const written = browser.storage.local.set({
+    [SETTINGS_KEY]: settings,
+    ...Object.fromEntries(keys.map((key) => [key, {}])),
+  });
+  const removed = browser.storage.local.remove(keys);
+  await Promise.all([written, removed]);
+}
+
+async function fitAllAddresses(): Promise<void> {
+  for (const [site, recorded] of addresses) {
+    addresses.set(site, fitAddresses(recorded, settings));
+  }
+  const sites = (await storedAddressKeys()).map((key) =>
+    key.slice(ADDRESSES_PREFIX.length),
+  );
+  await Promise.all(
+    sites
+      .filter((site) => !addresses.has(site))
+      .map((site) => readAddresses(site).done),
+  );
+  const items: Record<string, unknown> = { [SETTINGS_KEY]: settings };
+  for (const [site, recorded] of addresses) {
+    const fitted = fitAddresses(recorded, settings);
+    addresses.set(site, fitted);
+    addressesToWrite.delete(site);
+    items[`${ADDRESSES_PREFIX}${site}`] = fitted;
+  }
+  await browser.storage.local.set(items);
+}
+
+// The recorded addresses of a site, read when first asked for, or none in a
+// private window, where nothing is recorded.
+export async function siteAddresses(
+  site: string,
+  privateWindow: boolean,
+): Promise<SiteAddresses> {
+  if (privateWindow || settings.record === "none") {
+    return {};
+  }
+  if (!addresses.has(site)) {
+    await readAddresses(site).done;
+  }
+  return addresses.get(site) ?? {};
 }

@@ -29,6 +29,30 @@ export type SiteCounts = {
   readonly [provider: string]: CategoryCounts;
 };
 
+// Which requests have their address recorded: none, those of level 4 only,
+// or those of levels 3 and 4. Never those of level 2, nor those of a private
+// window.
+export type RecordLevel = "none" | "level4" | "level3and4";
+
+// The preferences of the user, kept in storage.local.
+export interface Settings {
+  readonly record: RecordLevel;
+  // How many addresses each row keeps, from 1 to 1000.
+  readonly recordLimit: number;
+}
+
+// The recorded addresses of a site, laid out as its counts are: by provider
+// id, then by category, then by method and request type. Each row lists
+// distinct addresses, the most recently seen first, and nothing else: no
+// count and no time, which would tell when the user was on the site.
+export type SiteAddresses = {
+  readonly [provider: string]: {
+    readonly [category in Category]?: {
+      readonly [methodAndType: string]: readonly string[];
+    };
+  };
+};
+
 export type PopupRequest =
   // What the active tab shows, and what its site sent through providers.
   | {
@@ -38,8 +62,9 @@ export type PopupRequest =
     }
   // Clear the counts of the site the popup shows, the one PopupData.site
   // gave it, and of no other. Outside a private window, its kept counts,
-  // which start again at once. In a private window, its counts of the private
-  // session, those the popup shows there, and its kept counts are left alone.
+  // which start again at once, and its recorded addresses. In a private
+  // window, its counts of the private session, those the popup shows there,
+  // and its kept counts and addresses are left alone.
   | {
       readonly kind: "clearSite";
       readonly site: string;
@@ -47,9 +72,9 @@ export type PopupRequest =
     }
   // Ignore a site from now on. The host is a site, as PopupData.site gives
   // it, or what the user typed in the preferences, and the event page reduces
-  // it to its registrable domain. The kept counts of the site and its counts
-  // of the private session go, its requests are no longer looked at, and the
-  // tabs that show it turn to the ignored state.
+  // it to its registrable domain. The kept counts of the site, its recorded
+  // addresses and its counts of the private session go, its requests are no
+  // longer looked at, and the tabs that show it turn to the ignored state.
   | { readonly kind: "ignoreSite"; readonly host: string }
   // Watch a site again: its counts start from nothing.
   | { readonly kind: "unignoreSite"; readonly site: string }
@@ -62,8 +87,27 @@ export type PopupRequest =
   // window, every kept count and the start of each site cleared alone, and
   // the counts start again at once, for every site. In a private window, the
   // counts of the private session, and the kept counts are left alone. The
-  // ignored sites stay ignored.
-  | { readonly kind: "purgeAll"; readonly privateWindow: boolean };
+  // ignored sites stay ignored. The recorded addresses go with the kept
+  // counts.
+  | { readonly kind: "purgeAll"; readonly privateWindow: boolean }
+  // The settings, answered with Settings.
+  | { readonly kind: "settings" }
+  // Change the settings, answered with the Settings kept, the limit brought
+  // into its range. Turning the recording off, narrowing its levels or
+  // lowering its limit drops at once every kept address the new settings
+  // leave out.
+  | {
+      readonly kind: "setSettings";
+      readonly record: RecordLevel;
+      readonly recordLimit: number;
+    }
+  // The recorded addresses of a site, answered with SiteAddresses, always
+  // empty in a private window, where nothing is recorded.
+  | {
+      readonly kind: "siteAddresses";
+      readonly site: string;
+      readonly privateWindow: boolean;
+    };
 
 export interface PopupData {
   // Of the document the tab shows.

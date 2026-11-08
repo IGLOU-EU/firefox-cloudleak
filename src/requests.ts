@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Adrien Kara
 
 import { canonicalNameOf } from "./cname.js";
+import { addressOf } from "./core/addresses.js";
 import {
   classifyByCname,
   classifyRequest,
@@ -14,6 +15,7 @@ import {
   responseSideOf,
 } from "./core/request-facts.js";
 import { ignoredNavigation, navigationAt } from "./core/tab-record.js";
+import { recording, recordsAddressOf } from "./counts.js";
 import table from "./providers.js";
 import { fold, missRequest, navigate, ready, recordOf } from "./tabs.js";
 
@@ -28,6 +30,9 @@ interface Pending {
   // Firefox flags the requests of a private window (WebRequest.sys.mjs,
   // Firefox 159.0.1), whose counts are never kept.
   readonly privateWindow: boolean;
+  // The reduced address, while the recording is on and outside a private
+  // window, until the level of the request tells whether it is recorded.
+  readonly address: string | null;
 }
 
 const pending = new Map<string, Pending>();
@@ -58,6 +63,10 @@ export async function onSendHeaders(
   // ConduitsParent.sys.mjs, Firefox 159.0.1).
   const { tabId, requestId, type, timeStamp } = details;
   const privateWindow = details.incognito === true;
+  // The URL stops here too: only its reduced address goes further, and none
+  // for a private window, which records nothing. The settings are read with
+  // the counts, so whether the recording is on is known after the wait.
+  const address = privateWindow ? null : addressOf(details.url);
   await ready;
   if (type === "main_frame") {
     navigate(tabId, requestId, timeStamp);
@@ -70,6 +79,7 @@ export async function onSendHeaders(
         : navigationAt(recordOf(tabId), timeStamp),
     request,
     privateWindow,
+    address: recording() ? address : null,
   });
 }
 
@@ -135,18 +145,22 @@ async function settle(
     ...responseSideOf(details),
   };
   const classification = await classify(facts, details.timeStamp);
-  fold(
-    entry.tabId,
-    entry.navigation,
-    classification === null
-      ? null
-      : {
-          classification,
-          method: entry.request.method,
-          type: entry.request.type,
-          privateWindow: entry.privateWindow,
-        },
-  );
+  if (classification === null) {
+    fold(entry.tabId, entry.navigation, null);
+    return;
+  }
+  // The address waits with the request for the site of its document only
+  // when its level is recorded.
+  const { address } = entry;
+  fold(entry.tabId, entry.navigation, {
+    classification,
+    method: entry.request.method,
+    type: entry.request.type,
+    privateWindow: entry.privateWindow,
+    ...(address !== null && recordsAddressOf(classification.leak.level)
+      ? { address }
+      : {}),
+  });
 }
 
 export async function onErrorOccurred(
