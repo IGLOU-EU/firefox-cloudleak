@@ -544,6 +544,165 @@ button.back {
   text-decoration: underline;
 }
 
+/* A row of a method and a type that has addresses kept: a button at least
+   24 pixels high, the target size WCAG 2.2 asks, whose triangle takes the
+   10 pixels before its text, so that its text and its count stay where the
+   rows without addresses have theirs. Unfolded, it turns bold and takes the
+   colour of the text, so that its state does not rest on a colour. */
+.kind-row {
+  grid-column: 2 / 4;
+}
+
+button.kind {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  align-items: center;
+  min-height: 24px;
+  width: calc(100% + 8px);
+  margin: 0 -4px;
+  padding: 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+}
+
+button.kind:hover {
+  background: var(--button);
+}
+
+button.kind[aria-expanded="true"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.kind .count {
+  margin-left: 8px;
+}
+
+.kind .mark {
+  display: flex;
+  align-items: center;
+}
+
+button.kind .mark svg {
+  fill: currentColor;
+}
+
+/* Twelve addresses in view at most, so that the next providers stay within
+   reach: the list scrolls on its own beyond them. */
+.addresses {
+  list-style: none;
+  max-height: calc(12 * 24px + 6px);
+  overflow-y: auto;
+  margin: 2px 0 0;
+  padding: 2px 0;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  scrollbar-color: var(--border) var(--background);
+}
+
+.addresses li {
+  margin: 0;
+}
+
+button.address {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 24px;
+  margin: 0;
+  padding: 0 8px;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 24px;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+button.address:hover {
+  background: var(--button);
+}
+
+button.address:focus-visible {
+  outline-offset: -2px;
+}
+
+/* A cut address fades over its last 28 pixels rather than ending in "…",
+   which already stands for every value of the query. */
+.address .text {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.address.cut .text {
+  mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+}
+
+/* On hover and focus, a cut address scrolls to its end after 0.4 s, at the
+   speed the script sets, and comes back at once. Nothing moves when the
+   system asks for less motion: the tooltip gives the whole address. */
+@media (prefers-reduced-motion: no-preference) {
+  .address.cut:hover .text,
+  .address.cut:focus-visible .text {
+    width: max-content;
+    overflow: visible;
+    mask-image: none;
+    transform: translateX(var(--shift, 0));
+    transition: transform var(--duration, 1s) linear 0.4s;
+  }
+}
+
+/* The chip of a copy, shown only once the copy is done: a mark and a word,
+   not a colour, in the colours of the text reversed. */
+.address .copied {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  display: none;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  line-height: 18px;
+  color: var(--background);
+  background: var(--text);
+}
+
+.address.done .copied {
+  display: inline-flex;
+}
+
+.address .copied.failed svg {
+  display: none;
+}
+
+.addresses-note {
+  margin: 2px 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Read by a screen reader, out of sight. */
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* Last, so that the attribute wins over every display set above. */
 [hidden] {
   display: none;

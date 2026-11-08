@@ -345,6 +345,58 @@
       }
     }
   },
+  "optionsRecord": {
+    "message": "Record addresses",
+    "description": "Title of the section of the preferences, after the ignored sites, that turns on the recording of the reduced addresses of requests, and the name of that option."
+  },
+  "optionsRecordText": {
+    "message": "The addresses of the requests of the chosen levels are kept on this computer, without the values of their parameters, and can reveal what you did on a site: when in doubt, leave it on “None”.",
+    "description": "Text under the title of the recording of addresses in the preferences: what is kept, where, what it can reveal, and the advice to keep the choice that records nothing, named as its radio button is."
+  },
+  "optionsRecordNone": {
+    "message": "None",
+    "description": "Radio button of the preferences that records no address, the default. In French it agrees with « adresses »."
+  },
+  "optionsRecordLevel4": {
+    "message": "Level 4 only, personal data",
+    "description": "Radio button of the preferences that records the addresses of the requests of level 4 only, with the name of the level."
+  },
+  "optionsRecordLevel3and4": {
+    "message": "Levels 3 and 4, reading and personal data",
+    "description": "Radio button of the preferences that records the addresses of the requests of levels 3 and 4, with the names of the levels."
+  },
+  "optionsRecordPrivate": {
+    "message": "Nothing is recorded in a private window.",
+    "description": "Line under the radio buttons of the recording of addresses: whatever the choice, no address of a request of a private window is kept."
+  },
+  "optionsRecordQuestion": {
+    "message": "Clear the kept addresses?",
+    "description": "Question the preferences ask, under the radio buttons, when the user goes back to recording no address, which clears every kept address. Nothing changes before the answer."
+  },
+  "optionsPurge": {
+    "message": "Clear",
+    "description": "Button of the preferences that confirms going back to recording no address, which clears every kept address."
+  },
+  "optionsCancel": {
+    "message": "Cancel",
+    "description": "Button of the preferences that gives up going back to recording no address, and keeps the choice and the addresses as they were."
+  },
+  "optionsRecordPurged": {
+    "message": "The kept addresses are cleared.",
+    "description": "Line of the preferences once the user confirmed going back to recording no address and every kept address is cleared."
+  },
+  "optionsLimit": {
+    "message": "Limit per row",
+    "description": "Label of the field of the preferences that sets how many addresses are kept for each row, shown only while addresses are recorded."
+  },
+  "optionsLimitHelp": {
+    "message": "The number of addresses to keep for each site, by request type and by method seen.",
+    "description": "Help under the field of the limit in the preferences: what the limit counts, for each site, request type and method."
+  },
+  "optionsLimitError": {
+    "message": "Type a whole number of at least 1.",
+    "description": "Line under the field of the limit, in place of its help, when what is typed is not a whole number of at least 1: nothing is kept. The limit has no maximum."
+  },
   "mapTitle": {
     "message": "Cloud Leak, the map",
     "description": "Title of the map, in its header and in the title of its tab."
@@ -1000,5 +1052,57 @@
   "mapTypeOther": {
     "message": "other",
     "description": "Name of the request type other, after its method, in the panel of a site on the map."
+  },
+  "mapAddressesOne": {
+    "message": "$COUNT$ address kept. A click copies it.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the singular, below the limit set in the preferences.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapAddressesMany": {
+    "message": "$COUNT$ addresses kept. A click copies one.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the plural, below the limit set in the preferences.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "mapAddressesLimitOne": {
+    "message": "$COUNT$ address kept, the limit set in the preferences. A click copies it.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the singular and has reached the limit set in the preferences, so that the list does not pass for complete.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapAddressesLimitMany": {
+    "message": "$COUNT$ addresses kept, the limit set in the preferences. A click copies one.",
+    "description": "Line under the unfolded list of the kept addresses of a row of the panel of a site, when the list holds a number of addresses that takes the plural and has reached the limit set in the preferences, so that the list does not pass for complete.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "mapAddressCopied": {
+    "message": "Copied",
+    "description": "Word of the chip shown for 1.5 seconds, after a check mark, on an address of the panel of a site once a click copied it. In French it agrees with « adresse »."
+  },
+  "mapAddressCopyFailed": {
+    "message": "Copy failed",
+    "description": "Word of the chip shown for 1.5 seconds on an address of the panel of a site when a click could not copy it, and what a screen reader hears then."
+  },
+  "mapAddressCopiedAnnounced": {
+    "message": "Address copied",
+    "description": "What a screen reader hears once a click on an address of the panel of a site copied it."
   }
 }

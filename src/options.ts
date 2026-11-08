@@ -3,15 +3,22 @@
 
 // The preferences page, options.html, which Firefox shows in the tab of the
 // extension in about:addons. It asks the event page for the ignored sites and
-// puts them into the page through the view of core/options-view.ts.
+// the settings, and puts them into the page through the view of
+// core/options-view.ts.
 
 import {
   type FieldNote,
   type IgnoredRow,
+  limitOf,
   noteOf,
+  recordViewOf,
   rowsOf,
 } from "./core/options-view.js";
-import type { IgnoredData } from "./core/popup-message.js";
+import type {
+  IgnoredData,
+  RecordLevel,
+  Settings,
+} from "./core/popup-message.js";
 import { ask, element, text, writeLabels } from "./page.js";
 import { siteOfTyped, siteText } from "./site.js";
 import { report } from "./toolbar.js";
@@ -94,6 +101,108 @@ async function add(): Promise<void> {
   renderNote(typedNote());
 }
 
+// The radio button of each level.
+const LEVELS: readonly (readonly [RecordLevel, string])[] = [
+  ["none", "record-none"],
+  ["level4", "record-level4"],
+  ["level3and4", "record-level3and4"],
+];
+
+// As the event page last kept them, and the level the radio buttons show,
+// which is none while the question before a purge waits. Null until the
+// event page gives them.
+let kept: Settings | null = null;
+let chosen: RecordLevel = "none";
+
+function limitField(): HTMLInputElement {
+  return element("limit") as HTMLInputElement;
+}
+
+function renderRecord(settings: Settings, purged: boolean): void {
+  const view = recordViewOf(settings.record, chosen);
+  for (const [level, id] of LEVELS) {
+    (element(id) as HTMLInputElement).checked = level === chosen;
+  }
+  element("record-question").hidden = !view.asking;
+  element("record-limit").hidden = !view.limit;
+  element("record-purged").hidden = !purged;
+  element("record").hidden = false;
+}
+
+function renderLimit(): void {
+  const valid = limitOf(limitField().value) !== null;
+  element("limit-help").hidden = !valid;
+  element("limit-error").hidden = valid;
+  limitField().setAttribute("aria-invalid", String(!valid));
+}
+
+function show(settings: Settings, purged: boolean): void {
+  kept = settings;
+  chosen = settings.record;
+  renderRecord(settings, purged);
+}
+
+async function loadSettings(): Promise<void> {
+  const settings = await ask<Settings>({ kind: "settings" });
+  limitField().value = String(settings.recordLimit);
+  renderLimit();
+  show(settings, false);
+}
+
+// The page shows what the event page kept, and what it kept before when the
+// change fails, the limit included.
+async function keep(
+  previous: Settings,
+  next: Settings,
+  purging: boolean,
+): Promise<void> {
+  try {
+    show(await ask<Settings>({ kind: "setSettings", ...next }), purging);
+  } catch (error: unknown) {
+    limitField().value = String(previous.recordLimit);
+    renderLimit();
+    show(previous, false);
+    throw error;
+  }
+}
+
+// Going back to none purges the kept addresses, so the page asks first and
+// changes nothing before the answer. Any other choice applies at once.
+function choose(level: RecordLevel): void {
+  if (kept === null) {
+    return;
+  }
+  chosen = level;
+  if (level === kept.record || recordViewOf(kept.record, level).asking) {
+    renderRecord(kept, false);
+    return;
+  }
+  report(keep(kept, { ...kept, record: level }, false));
+}
+
+function purge(): void {
+  if (kept !== null) {
+    report(keep(kept, { ...kept, record: "none" }, true));
+  }
+}
+
+function cancel(): void {
+  if (kept !== null) {
+    show(kept, false);
+  }
+}
+
+// Kept once the user leaves the field or steps it, not at each keystroke:
+// typing 250 would pass through 2, and a lower limit drops at once the
+// addresses beyond it.
+function changeLimit(): void {
+  const limit = limitOf(limitField().value);
+  if (kept === null || limit === null || limit === kept.recordLimit) {
+    return;
+  }
+  report(keep(kept, { ...kept, recordLimit: limit }, false));
+}
+
 writeLabels();
 field().addEventListener("input", () => renderNote(typedNote()));
 // The page sends no form anywhere: Enter in the field adds, as the button does.
@@ -101,4 +210,12 @@ element("add").addEventListener("submit", (event) => {
   event.preventDefault();
   report(add());
 });
+for (const [level, id] of LEVELS) {
+  element(id).addEventListener("change", () => choose(level));
+}
+element("record-purge").addEventListener("click", purge);
+element("record-cancel").addEventListener("click", cancel);
+limitField().addEventListener("input", renderLimit);
+limitField().addEventListener("change", changeLimit);
 report(load());
+report(loadSettings());

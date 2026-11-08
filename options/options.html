@@ -25,5 +25,35 @@
   <p id="preview" class="preview" hidden><span data-message="optionsPreview"></span> <b id="preview-site"></b></p>
   <p id="error" class="error" role="alert" hidden></p>
 </form>
+<!-- Hidden until the event page gives the settings, so that no choice is shown that is not the one kept. -->
+<section id="record" class="record" hidden>
+  <!-- biome-ignore lint/a11y/useHeadingContent: the script writes the title from _locales. -->
+  <h2 id="record-title" data-message="optionsRecord"></h2>
+  <p class="intro" data-message="optionsRecordText"></p>
+  <div class="choices" role="radiogroup" aria-labelledby="record-title">
+    <!-- biome-ignore lint/a11y/noLabelWithoutControl: the script writes the label from _locales. -->
+    <label><input type="radio" id="record-none" name="record" value="none"><span data-message="optionsRecordNone"></span></label>
+    <!-- biome-ignore lint/a11y/noLabelWithoutControl: the script writes the label from _locales. -->
+    <label><input type="radio" id="record-level4" name="record" value="level4"><span data-message="optionsRecordLevel4"></span></label>
+    <!-- biome-ignore lint/a11y/noLabelWithoutControl: the script writes the label from _locales. -->
+    <label><input type="radio" id="record-level3and4" name="record" value="level3and4"><span data-message="optionsRecordLevel3and4"></span></label>
+  </div>
+  <p class="help" data-message="optionsRecordPrivate"></p>
+  <p id="record-purged" class="status" role="status" data-message="optionsRecordPurged" hidden></p>
+  <div id="record-question" class="confirm" hidden>
+    <p class="question" data-message="optionsRecordQuestion"></p>
+    <button type="button" id="record-purge" class="danger" data-message="optionsPurge"></button>
+    <button type="button" id="record-cancel" data-message="optionsCancel"></button>
+  </div>
+  <div id="record-limit" class="limit" hidden>
+    <!-- biome-ignore lint/a11y/noLabelWithoutControl: the script writes the label from _locales. -->
+    <label for="limit" data-message="optionsLimit"></label>
+    <div class="field">
+      <input type="number" id="limit" min="1" step="1" inputmode="numeric" aria-describedby="limit-help limit-error">
+    </div>
+    <p id="limit-help" class="help" data-message="optionsLimitHelp"></p>
+    <p id="limit-error" class="error" role="alert" data-message="optionsLimitError" hidden></p>
+  </div>
+</section>
 </body>
 </html>

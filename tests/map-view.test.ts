@@ -28,6 +28,7 @@ import {
   panelOf,
   placesOf,
   prepare,
+  type SiteRecord,
   type SiteRow,
   selectionOf,
   toggled,
@@ -867,6 +868,189 @@ describe("the panel of a site", () => {
   });
 });
 
+describe("the addresses of a row of the panel of a site", () => {
+  // vm.home.arpa of the mock-up: of Cloudflare, "GET style" of level 4 has
+  // seven addresses kept, and no row of level 2 has any.
+  const STYLES = [
+    "https://vm-tunnel.example.net/ui/css/dashboard.css?build=…",
+    "https://cdn.example.net/assets/print.css?v=…",
+    "https://static.example.com/build/2026-11-04/assets/vendor/codemirror/addon/fold/foldgutter.min.css?v=…&lang=…&token=…&session=…",
+    "https://cdn.example.net/assets/app.css?v=…&token=…",
+    "https://cdn.example.net/fonts/inter/inter.css",
+    "https://static.example.com/widgets/calendar/v3/calendar.min.css?locale=…&tz=…",
+    "https://cdn.example.net/assets/theme/dark.css?v=…&token=…",
+  ];
+  const VM = data({
+    "vm.home.arpa": {
+      cloudflare: {
+        red4: { "GET stylesheet": 7, "GET script": 2 },
+        blue2: { "GET font": 3, "GET image": 3, "GET stylesheet": 2 },
+      },
+      fastly: { blue2: { "GET image": 28 } },
+    },
+  });
+  const KEPT: SiteRecord = {
+    site: "vm.home.arpa",
+    addresses: { cloudflare: { red4: { "GET stylesheet": STYLES } } },
+    limit: 100,
+  };
+  const ROW = "cloudflare|red4|GET stylesheet";
+
+  function sitePanel(
+    prepared: PreparedMap,
+    record: SiteRecord | null,
+    unfolded: ReadonlySet<string> = new Set(),
+  ) {
+    const panel = panelOf(
+      prepared,
+      prepared.whole,
+      NO_FILTER,
+      "s:vm.home.arpa",
+      record,
+      unfolded,
+    );
+    assert.equal(panel.kind, "site");
+    return panel as Extract<Panel, { kind: "site" }>;
+  }
+
+  // Each row of the panel, with whether it unfolds.
+  function rows(panel: Extract<Panel, { kind: "site" }>): string[] {
+    return panel.providers.flatMap((provider) =>
+      provider.lines.flatMap((line) =>
+        line.details.map(
+          (detail) =>
+            `${line.colour} ${detail.kind} ${detail.count}${detail.addresses === null ? "" : " ▸"}`,
+        ),
+      ),
+    );
+  }
+
+  function row(panel: Extract<Panel, { kind: "site" }>, key = ROW) {
+    return panel.providers
+      .flatMap((provider) => provider.lines)
+      .flatMap((line) => line.details)
+      .find((detail) => detail.addresses?.key === key)?.addresses;
+  }
+
+  it("unfolds only the rows that have addresses kept, and leaves the others as they are", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    assert.deepEqual(rows(sitePanel(map, KEPT)), [
+      "red GET style 7 ▸",
+      "red GET script 2",
+      "blue GET police 3",
+      "blue GET image 3",
+      "blue GET style 2",
+      "blue GET image 28",
+    ]);
+  });
+
+  it("unfolds nothing before the event page gives the addresses, nor with the addresses of another site", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    for (const record of [null, { ...KEPT, site: "other.example" }]) {
+      assert.ok(
+        rows(sitePanel(map, record)).every((text) => !text.endsWith("▸")),
+      );
+    }
+  });
+
+  it("unfolds nothing in a private window, whatever it is given", () => {
+    const map = prepare(
+      { ...VM, privateWindow: true, since: 0 },
+      PROVIDERS,
+      FR,
+    );
+    assert.ok(rows(sitePanel(map, KEPT)).every((text) => !text.endsWith("▸")));
+  });
+
+  it("unfolds nothing for a row whose list is empty, or a row the counts do not have", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    const panel = sitePanel(map, {
+      ...KEPT,
+      addresses: {
+        cloudflare: {
+          red4: { "GET stylesheet": [], "POST xmlhttprequest": ["https://a/"] },
+        },
+        akamai: { red4: { "GET image": ["https://b/"] } },
+      },
+    });
+    assert.ok(rows(panel).every((text) => !text.endsWith("▸")));
+  });
+
+  it("is folded until the row is named unfolded, and folds again once it is not", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    assert.equal(row(sitePanel(map, KEPT))?.open, false);
+    assert.equal(row(sitePanel(map, KEPT, new Set([ROW])))?.open, true);
+    assert.equal(
+      row(sitePanel(map, KEPT, new Set(["cloudflare|blue2|GET stylesheet"])))
+        ?.open,
+      false,
+    );
+  });
+
+  it("lists the addresses in alphabetical order, whole, the scheme included", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    assert.deepEqual(row(sitePanel(map, KEPT))?.addresses, [
+      "https://cdn.example.net/assets/app.css?v=…&token=…",
+      "https://cdn.example.net/assets/print.css?v=…",
+      "https://cdn.example.net/assets/theme/dark.css?v=…&token=…",
+      "https://cdn.example.net/fonts/inter/inter.css",
+      "https://static.example.com/build/2026-11-04/assets/vendor/codemirror/addon/fold/foldgutter.min.css?v=…&lang=…&token=…&session=…",
+      "https://static.example.com/widgets/calendar/v3/calendar.min.css?locale=…&tz=…",
+      "https://vm-tunnel.example.net/ui/css/dashboard.css?build=…",
+    ]);
+    // The list the event page gave is left as it came.
+    assert.equal(
+      STYLES[0],
+      "https://vm-tunnel.example.net/ui/css/dashboard.css?build=…",
+    );
+  });
+
+  it("counts them under the list as the mock-up writes it, and names the limit once it is reached", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    const note = (kept: readonly string[], limit: number) =>
+      row(
+        sitePanel(map, {
+          ...KEPT,
+          addresses: { cloudflare: { red4: { "GET stylesheet": kept } } },
+          limit,
+        }),
+      )?.note;
+    assert.equal(
+      note(STYLES, 100),
+      "7 adresses gardées. Un clic en copie une.",
+    );
+    assert.equal(
+      note(STYLES.slice(0, 1), 100),
+      "1 adresse gardée. Un clic la copie.",
+    );
+    assert.equal(
+      note(STYLES, 7),
+      "7 adresses gardées, la limite réglée dans les préférences. Un clic en copie une.",
+    );
+    assert.equal(
+      note(STYLES.slice(0, 1), 1),
+      "1 adresse gardée, la limite réglée dans les préférences. Un clic la copie.",
+    );
+    const thousand = Array.from(
+      { length: 1000 },
+      (_, index) => `https://api.example.com/v2/listings/${index}/views`,
+    );
+    assert.equal(
+      note(thousand, 1000),
+      "1\u202f000 adresses gardées, la limite réglée dans les préférences. Un clic en copie une.",
+    );
+  });
+
+  it("says what a click on an address does", () => {
+    const map = prepare(VM, PROVIDERS, FR);
+    assert.deepEqual(sitePanel(map, KEPT).copy, {
+      copied: "Copiée",
+      failed: "Copie impossible",
+      announced: "Adresse copiée",
+    });
+  });
+});
+
 describe("the panel of a provider", () => {
   it("names its law, its parent company, and lists its sites from the most serious link", () => {
     const panel = panelOf(SMALL, SMALL.whole, NO_FILTER, "f:imperva");
@@ -1223,7 +1407,18 @@ describe("the map messages", () => {
       PROVIDERS,
       FR,
     );
-    panelOf(every, every.whole, NO_FILTER, "s:a.example");
+    for (const [kept, limit] of [
+      [["https://a.example/1"], 5],
+      [["https://a.example/1", "https://a.example/2"], 5],
+      [["https://a.example/1"], 1],
+      [["https://a.example/1", "https://a.example/2"], 2],
+    ] as const) {
+      panelOf(every, every.whole, NO_FILTER, "s:a.example", {
+        site: "a.example",
+        addresses: { cloudflare: { blue2: { "GET script": kept } } },
+        limit,
+      });
+    }
     for (const name of [...asked, ...labels]) {
       assert.ok(MAP_MESSAGES.includes(name) || shared.includes(name), name);
     }

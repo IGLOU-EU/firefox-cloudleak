@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-// What the preferences page shows: the ignored sites, and what the text the
-// user types to add one gives. Pure, so that it is tested without a browser,
-// and the page only puts it into the DOM.
+// What the preferences page shows: the ignored sites, what the text the user
+// types to add one gives, and the recording of addresses. Pure, so that it is
+// tested without a browser, and the page only puts it into the DOM.
 
+import { recordLimitOf } from "./addresses.js";
 import { line, type TitleLine } from "./display.js";
+import type { RecordLevel } from "./popup-message.js";
 
 export interface IgnoredRow {
   // In punycode, as the event page names it.
@@ -60,4 +62,32 @@ export function noteOf(
     return { kind: "already", line: line("optionsAlready", formatSite(site)) };
   }
   return { kind: "preview", site: formatSite(site) };
+}
+
+// What the section of the recording shows, from the level the event page
+// keeps and the one the radio buttons show. Going back to none purges the
+// kept addresses, so it is asked first: the radio buttons show none while
+// the question waits, and nothing changes before the user confirms. The
+// limit counts only while something is recorded.
+export interface RecordView {
+  readonly asking: boolean;
+  readonly limit: boolean;
+}
+
+export function recordViewOf(
+  kept: RecordLevel,
+  chosen: RecordLevel,
+): RecordView {
+  return {
+    asking: chosen === "none" && kept !== "none",
+    limit: chosen !== "none",
+  };
+}
+
+// The limit typed in its field: an integer of at least 1, written in digits,
+// as large as the user wants, or null for anything else, which the field
+// refuses and nothing keeps.
+export function limitOf(typed: string): number | null {
+  const text = typed.trim();
+  return /^[0-9]+$/.test(text) ? recordLimitOf(Number(text)) : null;
 }

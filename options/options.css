@@ -12,6 +12,8 @@
   --button: #f0f0f4;
   --border: #8f8f9d;
   --field: #ffffff;
+  --danger: #dc2c4c;
+  --danger-text: #ffffff;
   color-scheme: light dark;
 }
 
@@ -98,7 +100,8 @@ label {
   align-items: center;
 }
 
-input {
+/* The fields that are typed into, and not the radio buttons. */
+.field input {
   flex: 0 1 340px;
   min-width: 0;
   font: inherit;
@@ -120,6 +123,7 @@ button {
 
 .help,
 .preview,
+.status,
 .error {
   margin-top: 4px;
   font-size: 13px;
@@ -133,6 +137,73 @@ button {
    in the text, on either theme. */
 .error {
   font-weight: 600;
+}
+
+/* Set once, while the list of the ignored sites grows, so it comes after. */
+.record {
+  margin-top: 32px;
+}
+
+/* Every choice in view at once, since the choice touches privacy. The dot of
+   the chosen one takes the colour of the text, so that no tint of a level
+   shows in a setting. */
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.choices label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.choices input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--text);
+}
+
+/* The question before a purge, in the form of the one of the popup. */
+.confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.confirm .question {
+  font-weight: 600;
+  margin-right: auto;
+}
+
+/* The colour is never the only sign: the name of the button and its question
+   say what it erases. */
+button.danger {
+  color: var(--danger-text);
+  background: var(--danger);
+  border-color: var(--danger);
+  font-weight: 600;
+}
+
+.limit {
+  margin-top: 16px;
+}
+
+.limit .field input {
+  flex: none;
+  width: 96px;
 }
 
 /* Last, so that the attribute wins over every display set above. */
