@@ -2425,7 +2425,6 @@ describe("the recording of addresses", () => {
       },
     });
     assert.deepEqual(addressKeys(), []);
-    assert.equal(local.has("countKeys"), false);
     assert.deepEqual(await addressesOf(site), {});
     assert.equal(JSON.stringify(tabs.recordOf(tab)).includes("address"), false);
     holdsNoSecret();
@@ -2474,12 +2473,8 @@ describe("the recording of addresses", () => {
       record: "level4",
       recordLimit: 100,
     });
-    // The settings and the list of the keys of the counts in one write.
     assert.equal(localWrites.length, writes + 1);
-    assert.deepEqual(Object.keys(localWrites[writes] ?? {}).sort(), [
-      "countKeys",
-      "settings",
-    ]);
+    assert.deepEqual(Object.keys(localWrites[writes] ?? {}), ["settings"]);
     const tab = 2310;
     const site = "t2310.example";
     await page(tab, site);
@@ -2575,8 +2570,10 @@ describe("the recording of addresses", () => {
         },
       },
     });
-    // The site is new to the counts, so the list of their keys goes with it.
-    assert.ok((write["countKeys"] as string[]).includes(`site:${site}`));
+    assert.deepEqual(Object.keys(write).sort(), [
+      `addresses:${site}`,
+      `site:${site}`,
+    ]);
     writes = localWrites.length;
     await load(tab, `https://api.${site}/a`, { cookie: true });
     await flush();
@@ -2818,7 +2815,6 @@ describe("the recording of addresses", () => {
     }
     assert.deepEqual(addressKeys(), []);
     assert.deepEqual(await addressesOf(site), {});
-    assert.deepEqual(local.get("countKeys"), []);
     await load(tab, `https://api.${site}/after`, { cookie: true });
     await flush();
     assert.deepEqual(stored(site), {
@@ -2826,7 +2822,7 @@ describe("the recording of addresses", () => {
     });
   });
 
-  it("lists the keys of the counts while recording, and reads at a wake-up those keys alone, never an address", async () => {
+  it("reads at a wake-up the settings and every count at once, and the addresses of a site when they are asked", async () => {
     await setSettings("level4", 100);
     const tab = 2400;
     const site = "t2400.example";
@@ -2838,24 +2834,11 @@ describe("the recording of addresses", () => {
       privateWindow: false,
     });
     await flush();
-    const counted = [...local.keys()].filter(
-      (key) => key.startsWith("site:") || key.startsWith("since:"),
-    );
-    assert.deepEqual(
-      [...(local.get("countKeys") as string[])].sort(),
-      counted.sort(),
-    );
     assert.ok(addressKeys().length > 0);
     const reads = localReads.length;
     const woken = await importModule<Counts>("counts.js?recording");
     await woken.ready;
-    const atWakeUp = localReads.slice(reads);
-    assert.equal(atWakeUp.includes(null), false);
-    assert.equal(atWakeUp.includes("getKeys"), false);
-    assert.equal(
-      atWakeUp.flat().some((key) => key?.startsWith("addresses:")),
-      false,
-    );
+    assert.deepEqual(localReads.slice(reads), [null]);
     assert.deepEqual(woken.currentSettings(), {
       record: "level4",
       recordLimit: 100,
@@ -2865,27 +2848,8 @@ describe("the recording of addresses", () => {
       woken.since("t2401.example", false),
       local.get("since:t2401.example"),
     );
-    // Read only when asked.
     assert.deepEqual(await woken.siteAddresses(site, false), stored(site));
     assert.deepEqual(localReads.at(-1), `addresses:${site}`);
-  });
-
-  it("reads everything at a wake-up while recording when the list of the keys of the counts is missing, and the counts are all there", async () => {
-    await setSettings("level4", 100);
-    const list = local.get("countKeys");
-    local.delete("countKeys");
-    try {
-      const reads = localReads.length;
-      const woken = await importModule<Counts>("counts.js?unlisted");
-      await woken.ready;
-      assert.ok(localReads.slice(reads).includes(null));
-      assert.deepEqual(
-        woken.totals("t2400.example", false),
-        local.get("site:t2400.example"),
-      );
-    } finally {
-      local.set("countKeys", list);
-    }
   });
 
   it("purges every kept address at once when the recording is turned off, then records nothing", async () => {
@@ -2913,21 +2877,14 @@ describe("the recording of addresses", () => {
       assert.deepEqual(write[key], {}, key);
     }
     assert.deepEqual(addressKeys(), []);
-    assert.equal(local.has("countKeys"), false);
     await flush();
     assert.deepEqual(addressKeys(), []);
     assert.deepEqual(await addressesOf(site), {});
     await load(tab, `https://api.${site}/off`, { cookie: true });
     await flush();
     assert.deepEqual(addressKeys(), []);
-    // The wake-up reads the whole storage again, where no address is left.
-    const reads = localReads.length;
     const woken = await importModule<Counts>("counts.js?recording-off");
     await woken.ready;
-    assert.deepEqual(localReads.slice(reads), [
-      ["settings", "countKeys"],
-      null,
-    ]);
     assert.deepEqual(woken.currentSettings(), {
       record: "none",
       recordLimit: 100,
