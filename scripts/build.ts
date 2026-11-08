@@ -39,6 +39,7 @@ for (const path of [
   "icons",
   "popup",
   "options",
+  "map",
   "LICENSE",
 ]) {
   cpSync(`${root}${path}`, `${dist}${path}`, { recursive: true });

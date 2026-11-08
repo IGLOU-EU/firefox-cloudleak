@@ -63,12 +63,12 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 
 - `src/core/`: the pure core, with no browser API. It runs and is tested in Node, without Firefox.
 - `src/background.ts`: the background entry point of the extension, which only adds the listeners.
-- The other files of `src/`: the thin adapters between Firefox and the core (requests, tabs and their documents, the site of a document, the kept counts and the ignored sites, the answers to the pages of the extension, the popup page, the preferences page and what both pages share, toolbar icon, DNS, permissions). They hold no classification logic.
+- The other files of `src/`: the thin adapters between Firefox and the core (requests, tabs and their documents, the site of a document, the kept counts and the ignored sites, the answers to the pages of the extension, the popup page, the preferences page, the map and what the pages share, toolbar icon, DNS, permissions). They hold no classification logic.
 - `data/providers/`: one folder per provider (see "Provider data").
 - `data/consent-cookies.json`: the cookies of known consent and audience-measurement tools (see "Provider data").
 - `scripts/`: the build and the maintenance scripts, which run in Node on the development machine only.
 - `tests/`: the tests, run by the Node test runner.
-- `manifest.json`, `_locales/`, `icons/`, `popup/`, `options/`: copied into the extension as they are. The icons are the toolbar states of the validated mock-up, drawn as SVG. `popup/` holds the page and the style of the window the toolbar button opens, whose script is `src/popup.ts`. `options/` holds the page and the style of the preferences, which Firefox shows in the tab of the extension in the add-ons manager, whose script is `src/options.ts`.
+- `manifest.json`, `_locales/`, `icons/`, `popup/`, `options/`, `map/`: copied into the extension as they are. The icons are the toolbar states of the validated mock-up, drawn as SVG. `popup/` holds the page and the style of the window the toolbar button opens, whose script is `src/popup.ts`. `options/` holds the page and the style of the preferences, which Firefox shows in the tab of the extension in the add-ons manager, whose script is `src/options.ts`. `map/` holds the page and the style of the map, which the window opens in a tab, whose script is `src/map.ts` and whose view is `src/core/map-view.ts`.
 
 The build compiles `src/` with the WebExtension types only, and `scripts/` and `tests/` with the Node types only. The core compiles in both, so a Node API or a browser API in the core fails the build.
 
@@ -107,6 +107,8 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | `signatures.challengePaths` | No | Path prefixes of the challenge, compared to the path of the request URL: `prefix`, `source` |
 | `signatures.challengeHeaders` | No | Response headers of the challenge, such as its verification page: `name`, optional `value`, `source` |
 | `signatures.challengeQueryNames` | No | Names of the URL query parameters the challenge adds, compared to each parameter name of the request URL, never to a value: `name`, `source` |
+
+The map names a country by the name the browser gives its code, and shows its flag from the code itself. Its tooltips also need the forms of the country a sentence puts around it, "subject to the law of the United States" and "in the United States", which change from one country to another: a country new to the data, as `country` or as the country of a `parent`, comes with its two messages, `mapLawOf<code>` and `mapIn<code>`, in every locale, which a test checks.
 
 Every signature has a `source`: the URL of the provider's documentation, or where and when it was observed. A signature that is only observed says so, with the date and the site.
 
@@ -162,6 +164,8 @@ A list enters `ranges.txt` only if it covers the edge addresses browsers connect
 ## Checks
 
 `npm run check` runs everything required before a commit: the tests, Biome (formatting and lint), the build with its data checks, `web-ext lint` on the built extension, both held at zero warnings, and `npm audit` for known vulnerabilities in the dependencies. `npm run format` applies the formatting.
+
+`npm run measure-map` times the view of the map on the 900 sites of its validated mock-up, at each keystroke of the search and for each answer of the event page. It prints the times and judges none, since they depend on the machine: a keystroke of the whole page, drawing included, stays under 100 ms.
 
 `npm audit` runs with `--audit-level=moderate`, so a low-severity finding does not fail the check. The only finding is GHSA-gcqx-w48m-w2h4 (low) in `deepmerge`, pulled by `addons-linter` inside `web-ext`. It sits in a development tool that is never shipped in the package, no fixed version of `deepmerge` exists, and the only fix npm offers downgrades `web-ext` to 3.2.1. As soon as a `web-ext` release no longer depends on a vulnerable `deepmerge`, the threshold returns to the default.
 

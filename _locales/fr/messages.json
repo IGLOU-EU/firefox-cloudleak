@@ -153,7 +153,7 @@
   },
   "popupSite": {
     "message": "Ce site depuis le $DATE$",
-    "description": "Title of the popup section that shows the kept counts of the site, with the date they started: when the site was last cleared, or when the extension started counting for a site never cleared.",
+    "description": "Title of the popup section that shows the kept counts of the site, with the date they started: when the site was last cleared, or when the extension started counting for a site never cleared. Also the title of the counts of a site cleared alone in the panel of the map.",
     "placeholders": {
       "date": {
         "content": "$1",
@@ -163,7 +163,7 @@
   },
   "popupSitePrivate": {
     "message": "Ce site, cette session privée",
-    "description": "Title of the popup section that shows the counts of the site in a private window, which live only for the private session."
+    "description": "Title of the popup section that shows the counts of the site in a private window, which live only for the private session. Also the title of the counts of a site in the panel of the map opened from a private window."
   },
   "popupBrowserPage": {
     "message": "Page du navigateur",
@@ -265,23 +265,23 @@
   },
   "level2": {
     "message": "Niveau 2, usage",
-    "description": "Name of leak level 2 in a row of the popup."
+    "description": "Name of leak level 2 in a row of the popup and of the panel of the map."
   },
   "level3": {
     "message": "Niveau 3, lecture",
-    "description": "Name of leak level 3 in a row of the popup."
+    "description": "Name of leak level 3 in a row of the popup and of the panel of the map."
   },
   "level4": {
     "message": "Niveau 4, données personnelles",
-    "description": "Name of leak level 4 in a row of the popup."
+    "description": "Name of leak level 4 in a row of the popup and of the panel of the map."
   },
   "decryptionProven": {
     "message": "déchiffrement prouvé",
-    "description": "Proof line under a red row of the popup."
+    "description": "Proof line under a red row of the popup and of the panel of the map."
   },
   "decryptionUnproven": {
     "message": "déchiffrement non prouvé",
-    "description": "Proof line under an orange row of the popup."
+    "description": "Proof line under an orange row of the popup and of the panel of the map."
   },
   "optionsIgnoredSites": {
     "message": "Sites ignorés",
@@ -344,5 +344,661 @@
         "example": "twitch.tv"
       }
     }
+  },
+  "mapTitle": {
+    "message": "Cloud Leak, la carte",
+    "description": "Title of the map, in its header and in the title of its tab."
+  },
+  "mapKeptSince": {
+    "message": "Statistiques gardées depuis le $DATE$",
+    "description": "Subtitle of the map when nothing is kept, with the date the kept counts started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      }
+    }
+  },
+  "mapKeptSinceSummary": {
+    "message": "Statistiques gardées depuis le $DATE$, $SITES$, $PROVIDERS$",
+    "description": "Subtitle of the map, with the date the kept counts started, the number of sites and the number of providers, each as mapSitesOne or mapSitesMany and mapProvidersOne or mapProvidersMany give it.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      },
+      "sites": {
+        "content": "$2",
+        "example": "900 sites"
+      },
+      "providers": {
+        "content": "$3",
+        "example": "7 fournisseurs"
+      }
+    }
+  },
+  "mapPrivateSession": {
+    "message": "Statistiques de cette session privée",
+    "description": "Subtitle of the map opened from a private window when the private session counted nothing."
+  },
+  "mapPrivateSessionSummary": {
+    "message": "Statistiques de cette session privée, $SITES$, $PROVIDERS$",
+    "description": "Subtitle of the map opened from a private window, which shows the counts of the private session only, with the number of sites and of providers.",
+    "placeholders": {
+      "sites": {
+        "content": "$1",
+        "example": "36 sites"
+      },
+      "providers": {
+        "content": "$2",
+        "example": "4 fournisseurs"
+      }
+    }
+  },
+  "mapPurgeAll": {
+    "message": "Tout purger",
+    "description": "Button of the map that asks to clear the counts of every site: the kept counts, or from a private window those of the private session. Hidden when nothing is kept."
+  },
+  "mapPurgeAllQuestion": {
+    "message": "Purger toutes les statistiques gardées depuis le $DATE$\u00a0?",
+    "description": "Question the map asks before it clears every kept count, with the date they started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      }
+    }
+  },
+  "mapPurgeAllQuestionPrivate": {
+    "message": "Purger toutes les statistiques de cette session privée\u00a0?",
+    "description": "Question the map opened from a private window asks before it clears the counts of the private session, and nothing of the kept counts."
+  },
+  "mapPurge": {
+    "message": "Purger",
+    "description": "Button of the map that confirms the clearing of the counts of every site."
+  },
+  "mapCancel": {
+    "message": "Annuler",
+    "description": "Button of the map that gives up the clearing of the counts of every site."
+  },
+  "mapNothingKept": {
+    "message": "Aucune statistique gardée depuis le $DATE$.",
+    "description": "Shown in place of the map when no request went through a provider since the kept counts started, with that date.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "5 décembre 2026"
+      }
+    }
+  },
+  "mapNothingPrivate": {
+    "message": "Aucune statistique dans cette session privée.",
+    "description": "Shown in place of the map opened from a private window when the private session counted nothing."
+  },
+  "mapLegendRed4": {
+    "message": "niveau 4, prouvé",
+    "description": "Legend of the map: the link of level 4, decryption proven, red, thick and solid."
+  },
+  "mapLegendRed3": {
+    "message": "niveau 3, prouvé",
+    "description": "Legend of the map: the link of level 3, decryption proven, red and solid."
+  },
+  "mapLegendOrange4": {
+    "message": "niveau 4, non prouvé",
+    "description": "Legend of the map: the link of level 4, decryption not proven, orange, thick and dashed."
+  },
+  "mapLegendOrange3": {
+    "message": "niveau 3, non prouvé",
+    "description": "Legend of the map: the link of level 3, decryption not proven, orange and dashed."
+  },
+  "mapLegendBlue2": {
+    "message": "niveau 2",
+    "description": "Legend of the map: the link of level 2, blue, thin and solid."
+  },
+  "mapLegendSite": {
+    "message": "site, selon sa requête la plus grave",
+    "description": "Legend of the map, after a red cloud, an orange cloud and a blue point: how a site is drawn."
+  },
+  "mapLegendProvider": {
+    "message": "fournisseur, drapeau du droit applicable",
+    "description": "Legend of the map, after a flag: the flag of a provider is the country whose law the service is subject to."
+  },
+  "mapLegendScope": {
+    "message": "Sans les fenêtres privées ni les sites ignorés.",
+    "description": "End of the legend of the map: what its counts leave out."
+  },
+  "mapLegendScopePrivate": {
+    "message": "Cette session privée seulement, sans les sites ignorés.",
+    "description": "End of the legend of the map opened from a private window: what its counts hold and leave out."
+  },
+  "mapSearch": {
+    "message": "Chercher un site",
+    "description": "Placeholder and accessible name of the field of the map that keeps the sites whose name holds what is typed."
+  },
+  "mapCategoryRed4": {
+    "message": "Niveau 4, prouvé",
+    "description": "Name of the limit of the map to the links of level 4, decryption proven, on its chip."
+  },
+  "mapCategoryRed3": {
+    "message": "Niveau 3, prouvé",
+    "description": "Name of the limit of the map to the links of level 3, decryption proven, on its chip."
+  },
+  "mapCategoryOrange4": {
+    "message": "Niveau 4, non prouvé",
+    "description": "Name of the limit of the map to the links of level 4, decryption not proven, on its chip."
+  },
+  "mapCategoryOrange3": {
+    "message": "Niveau 3, non prouvé",
+    "description": "Name of the limit of the map to the links of level 3, decryption not proven, on its chip."
+  },
+  "mapCategoryBlue2": {
+    "message": "Niveau 2",
+    "description": "Name of the limit of the map to the links of level 2, on its chip."
+  },
+  "mapRemoveLimit": {
+    "message": "Retirer la limite $NAME$",
+    "description": "Accessible name of the cross of a chip of the map, which removes its limit, with the name the chip shows.",
+    "placeholders": {
+      "name": {
+        "content": "$1",
+        "example": "Cloudflare"
+      }
+    }
+  },
+  "mapClearFilters": {
+    "message": "Tout retirer",
+    "description": "Button of the map that empties the search field and removes every limit at once."
+  },
+  "mapNoMatch": {
+    "message": "Aucun site ne correspond.",
+    "description": "Shown in place of the column of the map when the search and the limits keep no site."
+  },
+  "mapSitesHeading": {
+    "message": "Sites, du plus grave au moins grave",
+    "description": "Heading of the column of the sites on the map."
+  },
+  "mapUnit": {
+    "message": "requêtes",
+    "description": "Unit at the right of a heading of the map whose numbers count requests."
+  },
+  "mapProvidersHeading": {
+    "message": "Fournisseurs",
+    "description": "Heading of the providers on the map, and of the list of the other providers in its panel."
+  },
+  "mapHeadingRed4": {
+    "message": "Niveau 4, déchiffrement prouvé",
+    "description": "Heading, shown in capitals, of the sites of the map whose most serious request is at level 4, decryption proven."
+  },
+  "mapHeadingRed3": {
+    "message": "Niveau 3, déchiffrement prouvé",
+    "description": "Heading, shown in capitals, of the sites of the map whose most serious request is at level 3, decryption proven."
+  },
+  "mapHeadingOrange4": {
+    "message": "Niveau 4, déchiffrement non prouvé",
+    "description": "Heading, shown in capitals, of the sites of the map whose most serious request is at level 4, decryption not proven."
+  },
+  "mapHeadingOrange3": {
+    "message": "Niveau 3, déchiffrement non prouvé",
+    "description": "Heading, shown in capitals, of the sites of the map whose most serious request is at level 3, decryption not proven."
+  },
+  "mapHeadingBlue2": {
+    "message": "Niveau 2",
+    "description": "Heading, shown in capitals, of the sites of the map whose most serious request is at level 2."
+  },
+  "mapGroupLevel": {
+    "message": ", niveau 2",
+    "description": "Shown in grey right after the number of sites of a row of the map that gathers the blue sites through the same providers, such as \"334 sites\"."
+  },
+  "mapLevelRed4": {
+    "message": "niveau 4, données personnelles, déchiffrement prouvé",
+    "description": "Category of a request in the tooltips of the map, after \"at\" or \"at most\"."
+  },
+  "mapLevelRed3": {
+    "message": "niveau 3, lecture, déchiffrement prouvé",
+    "description": "Category of a request in the tooltips of the map, after \"at\" or \"at most\"."
+  },
+  "mapLevelOrange4": {
+    "message": "niveau 4, données personnelles, déchiffrement non prouvé",
+    "description": "Category of a request in the tooltips of the map, after \"at\" or \"at most\"."
+  },
+  "mapLevelOrange3": {
+    "message": "niveau 3, lecture, déchiffrement non prouvé",
+    "description": "Category of a request in the tooltips of the map, after \"at\" or \"at most\"."
+  },
+  "mapLevelBlue2": {
+    "message": "niveau 2, usage",
+    "description": "Category of a request in the tooltips of the map, after \"at\" or \"at most\"."
+  },
+  "mapSiteTitle": {
+    "message": "$SITE$\u00a0: $REQUESTS$, la plus grave au $LEVEL$",
+    "description": "Tooltip of a site on the map, with the site, its number of requests and the category of its most serious request.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "legifrance.gouv.fr"
+      },
+      "requests": {
+        "content": "$2",
+        "example": "1 590 requêtes"
+      },
+      "level": {
+        "content": "$3",
+        "example": "niveau 4, données personnelles, déchiffrement prouvé"
+      }
+    }
+  },
+  "mapLinkTitle": {
+    "message": "$SITE$ par $PROVIDER$\u00a0: $REQUESTS$, au plus $LEVEL$",
+    "description": "Tooltip of the link between a site and a provider on the map, with the number of requests of the site through the provider and the category of the most serious one.",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "legifrance.gouv.fr"
+      },
+      "provider": {
+        "content": "$2",
+        "example": "Cloudflare"
+      },
+      "requests": {
+        "content": "$3",
+        "example": "1 590 requêtes"
+      },
+      "level": {
+        "content": "$4",
+        "example": "niveau 4, données personnelles, déchiffrement prouvé"
+      }
+    }
+  },
+  "mapGroupTitle": {
+    "message": "$SITES$ tout bleus, par $PROVIDERS$",
+    "description": "Tooltip of a row of the map that gathers the blue sites through the same providers, with the number of sites and the names of the providers.",
+    "placeholders": {
+      "sites": {
+        "content": "$1",
+        "example": "334 sites"
+      },
+      "providers": {
+        "content": "$2",
+        "example": "Cloudflare et Fastly"
+      }
+    }
+  },
+  "mapGroupLinkTitle": {
+    "message": "$SITES$ par $PROVIDER$, tous au niveau 2, usage",
+    "description": "Tooltip of the link between a row of gathered blue sites and one of their providers on the map.",
+    "placeholders": {
+      "sites": {
+        "content": "$1",
+        "example": "334 sites"
+      },
+      "provider": {
+        "content": "$2",
+        "example": "Cloudflare"
+      }
+    }
+  },
+  "mapProviderLaw": {
+    "message": "$PROVIDER$, soumis au droit $LAW$",
+    "description": "Tooltip of a provider on the map, with the country whose law the service is subject to, as mapLawOf followed by its code gives it.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare"
+      },
+      "law": {
+        "content": "$2",
+        "example": "des États-Unis"
+      }
+    }
+  },
+  "mapProviderLawParent": {
+    "message": "$PROVIDER$, soumis au droit $LAW$, maison mère $PARENT$, $PLACE$",
+    "description": "Tooltip of a provider on the map whose parent company is in another country, with the country of the law as mapLawOf gives it, and the country of the parent company as mapIn gives it.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "Imperva"
+      },
+      "law": {
+        "content": "$2",
+        "example": "des États-Unis"
+      },
+      "parent": {
+        "content": "$3",
+        "example": "Thales"
+      },
+      "place": {
+        "content": "$4",
+        "example": "en France"
+      }
+    }
+  },
+  "mapLawOfUS": {
+    "message": "des États-Unis",
+    "description": "The United States, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfFR": {
+    "message": "de la France",
+    "description": "France, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfIL": {
+    "message": "d'Israël",
+    "description": "Israel, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapInUS": {
+    "message": "aux États-Unis",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: the United States."
+  },
+  "mapInFR": {
+    "message": "en France",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: France."
+  },
+  "mapInIL": {
+    "message": "en Israël",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Israel."
+  },
+  "mapOthers": {
+    "message": "Autres fournisseurs ($COUNT$)",
+    "description": "Label at the foot of the providers of the map, and title of its panel, that gathers the providers left without a link under the search and the limits, with their number.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "6"
+      }
+    }
+  },
+  "mapOthersNote": {
+    "message": "sans site affiché",
+    "description": "Line under the label of the other providers on the map."
+  },
+  "mapOverview": {
+    "message": "Ensemble",
+    "description": "Title of the panel of the map without a selection, search or limit."
+  },
+  "mapShownSites": {
+    "message": "Sites affichés",
+    "description": "Title of the panel of the map without a selection, under a search or a limit."
+  },
+  "mapOverviewLine": {
+    "message": "$SITES$, $PROVIDERS$, $REQUESTS$.",
+    "description": "First line of the panel of the map without a selection: the sites shown, their providers and their requests.",
+    "placeholders": {
+      "sites": {
+        "content": "$1",
+        "example": "190 sites sur 900"
+      },
+      "providers": {
+        "content": "$2",
+        "example": "1 fournisseur"
+      },
+      "requests": {
+        "content": "$3",
+        "example": "7 497 requêtes"
+      }
+    }
+  },
+  "mapOverviewHelp": {
+    "message": "Un clic sur un site, un fournisseur ou un lien en donne le détail.",
+    "description": "Help of the panel of the map without a selection."
+  },
+  "mapLimitHelp": {
+    "message": "Un clic sur une ligne ci-dessous limite la carte à ses sites, un second clic retire la limite.",
+    "description": "Help of the panel of the map without a selection, about the rows of its three lists."
+  },
+  "mapByLinks": {
+    "message": "Selon les liens",
+    "description": "Title of the list of categories in the panel of the map, where a site counts in the category of each of its links."
+  },
+  "mapSitesUnit": {
+    "message": "sites",
+    "description": "Unit at the right of a heading of the panel of the map whose numbers count sites."
+  },
+  "mapByLinksNote": {
+    "message": "Un site compte dans la catégorie de chacun de ses liens, la somme dépasse donc le nombre de sites.",
+    "description": "Note under the list of categories in the panel of the map."
+  },
+  "mapByCountry": {
+    "message": "Par pays du droit",
+    "description": "Title of the list of countries in the panel of the map: the countries whose law the providers are subject to."
+  },
+  "mapByCountryNote": {
+    "message": "Un site compte dans le pays de chacun de ses fournisseurs.",
+    "description": "Note under the list of countries in the panel of the map."
+  },
+  "mapByProvider": {
+    "message": "Par fournisseur",
+    "description": "Title of the list of providers in the panel of the map."
+  },
+  "mapBack": {
+    "message": "Retour à l'ensemble",
+    "description": "Button of the panel of a site, a provider or a group of sites on the map, which shows the panel without a selection again."
+  },
+  "mapOthersText": {
+    "message": "Aucun de ces fournisseurs n'a de lien parmi les sites affichés.",
+    "description": "Text of the panel of the other providers on the map."
+  },
+  "mapSitesInAll": {
+    "message": "sites en tout",
+    "description": "Unit at the right of the list of the other providers in the panel of the map, whose numbers count all the sites of each."
+  },
+  "mapSince": {
+    "message": "Depuis le $DATE$",
+    "description": "Title of the counts of a site, or of a group of sites, in the panel of the map, with the date the kept counts started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      }
+    }
+  },
+  "mapOwnDate": {
+    "message": "Purgé seul, ce site a sa propre date.",
+    "description": "Note of the panel of a site on the map whose counts start at its own date, since it was cleared alone or watched again."
+  },
+  "mapSubjectTo": {
+    "message": "Soumis au droit\u00a0: $COUNTRY$ $FLAG$",
+    "description": "Line of the panel of a provider on the map, with the name and the flag of the country whose law the service is subject to.",
+    "placeholders": {
+      "country": {
+        "content": "$1",
+        "example": "États-Unis"
+      },
+      "flag": {
+        "content": "$2",
+        "example": "🇺🇸"
+      }
+    }
+  },
+  "mapParent": {
+    "message": "Maison mère\u00a0: $PARENT$, $COUNTRY$ $FLAG$",
+    "description": "Line of the panel of a provider on the map whose parent company is in another country, with its name and the name and flag of its country.",
+    "placeholders": {
+      "parent": {
+        "content": "$1",
+        "example": "Thales"
+      },
+      "country": {
+        "content": "$2",
+        "example": "France"
+      },
+      "flag": {
+        "content": "$3",
+        "example": "🇫🇷"
+      }
+    }
+  },
+  "mapProviderNote": {
+    "message": "Statistiques depuis le $DATE$.",
+    "description": "Note of the panel of a provider on the map, with the date the kept counts started.",
+    "placeholders": {
+      "date": {
+        "content": "$1",
+        "example": "7 novembre 2026"
+      }
+    }
+  },
+  "mapProviderNotePrivate": {
+    "message": "Statistiques de cette session privée.",
+    "description": "Note of the panel of a provider on the map opened from a private window."
+  },
+  "mapByWorst": {
+    "message": "Selon la requête la plus grave",
+    "description": "Title of the categories in the panel of a provider on the map, where each site counts in the category of its most serious request through the provider."
+  },
+  "mapItsSite": {
+    "message": "Son site",
+    "description": "Title of the list of sites in the panel of a provider on the map that has one site."
+  },
+  "mapItsSites": {
+    "message": "Ses $COUNT$ sites",
+    "description": "Title of the list of sites in the panel of a provider on the map that has several.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "511"
+      }
+    }
+  },
+  "mapGroupText": {
+    "message": "Tous en niveau 2, par $PROVIDERS$.",
+    "description": "Text of the panel of a group of blue sites on the map, with the names of their providers.",
+    "placeholders": {
+      "providers": {
+        "content": "$1",
+        "example": "Cloudflare et Fastly"
+      }
+    }
+  },
+  "mapThisPrivateSession": {
+    "message": "Cette session privée",
+    "description": "Title of the counts of a group of sites in the panel of the map opened from a private window."
+  },
+  "mapSitesOne": {
+    "message": "$COUNT$ site",
+    "description": "A number of sites that takes the singular, on the map.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapSitesMany": {
+    "message": "$COUNT$ sites",
+    "description": "A number of sites that takes the plural, on the map.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "900"
+      }
+    }
+  },
+  "mapSitesOfOne": {
+    "message": "$COUNT$ site sur $TOTAL$",
+    "description": "How many sites the search and the limits keep of a total, on the map, when the first number takes the singular.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "total": {
+        "content": "$2",
+        "example": "900"
+      }
+    }
+  },
+  "mapSitesOfMany": {
+    "message": "$COUNT$ sites sur $TOTAL$",
+    "description": "How many sites the search and the limits keep of a total, on the map, when the first number takes the plural.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "41"
+      },
+      "total": {
+        "content": "$2",
+        "example": "900"
+      }
+    }
+  },
+  "mapProvidersOne": {
+    "message": "$COUNT$ fournisseur",
+    "description": "A number of providers that takes the singular, on the map.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapProvidersMany": {
+    "message": "$COUNT$ fournisseurs",
+    "description": "A number of providers that takes the plural, on the map.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7"
+      }
+    }
+  },
+  "mapRequestsOne": {
+    "message": "$COUNT$ requête",
+    "description": "A number of requests that takes the singular, on the map.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      }
+    }
+  },
+  "mapRequestsMany": {
+    "message": "$COUNT$ requêtes",
+    "description": "A number of requests that takes the plural, on the map.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "7 497"
+      }
+    }
+  },
+  "mapTypeMainFrame": {
+    "message": "document",
+    "description": "Name of the request type main_frame, after its method, in the panel of a site on the map."
+  },
+  "mapTypeSubFrame": {
+    "message": "cadre",
+    "description": "Name of the request type sub_frame, after its method, in the panel of a site on the map."
+  },
+  "mapTypeXmlhttprequest": {
+    "message": "XHR",
+    "description": "Name of the request type xmlhttprequest, after its method, in the panel of a site on the map."
+  },
+  "mapTypeScript": {
+    "message": "script",
+    "description": "Name of the request type script, after its method, in the panel of a site on the map."
+  },
+  "mapTypeImage": {
+    "message": "image",
+    "description": "Name of the request type image, after its method, in the panel of a site on the map."
+  },
+  "mapTypeStylesheet": {
+    "message": "style",
+    "description": "Name of the request type stylesheet, after its method, in the panel of a site on the map."
+  },
+  "mapTypeFont": {
+    "message": "police",
+    "description": "Name of the request type font, after its method, in the panel of a site on the map."
+  },
+  "mapTypeMedia": {
+    "message": "média",
+    "description": "Name of the request type media, after its method, in the panel of a site on the map."
+  },
+  "mapTypeWebsocket": {
+    "message": "WebSocket",
+    "description": "Name of the request type websocket, after its method, in the panel of a site on the map."
+  },
+  "mapTypeOther": {
+    "message": "autre",
+    "description": "Name of the request type other, after its method, in the panel of a site on the map."
   }
 }
