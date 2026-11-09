@@ -2150,6 +2150,31 @@ describe("the map", () => {
     }
   });
 
+  it("is answered with the counts of the moment it asks, which the requests counted afterwards leave as they were", async () => {
+    const tab = 1705;
+    const site = "t1705.example";
+    const privateTab = 1706;
+    await commit(tab, "doc-1705", 1000, [], `https://${site}/`);
+    await commit(privateTab, "doc-1706", 1000, [], `https://${site}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await privateExchange(privateTab, "private-1706", 1100);
+    const kept = await map(false);
+    const privateData = await map(true);
+    const keptBefore = JSON.stringify(kept);
+    const privateBefore = JSON.stringify(privateData);
+    await exchange(tab, "image", 1200, EDGE_IP);
+    await exchange(tab, "script", 1300, EDGE_IP);
+    await privateExchange(privateTab, "private-1706-b", 1200);
+    assert.equal(JSON.stringify(kept), keptBefore);
+    assert.equal(JSON.stringify(privateData), privateBefore);
+    assert.deepEqual((await map(false)).sites[site], {
+      edge: { blue2: { "GET image": 2, "GET script": 1 } },
+    });
+    assert.deepEqual((await map(true)).sites[site], {
+      edge: { blue2: { "GET image": 2 } },
+    });
+  });
+
   it("is answered in a private window with the counts of the private session only, without a date", async () => {
     const tab = 1710;
     const site = "t1710.example";

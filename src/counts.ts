@@ -13,7 +13,7 @@ import {
 import type { LeakLevel } from "./core/classify.js";
 import {
   clearSite,
-  countRequest,
+  countInSite,
   dayOf,
   dropSite,
   emptyCounts,
@@ -299,14 +299,25 @@ function forgetAllAddresses(): void {
   reading.clear();
 }
 
+// The sites of the counts are an object this page alone holds, made anew at
+// each read, clear and purge, and which a page of the extension receives
+// only as a copy: a request changes the counts of its site in place, since a
+// copy of every site at each request would cost as much as the sites kept.
+function countIn(counts: KeptCounts, site: string, request: SeenRequest): void {
+  (counts.sites as Record<string, SiteCounts>)[site] = countInSite(
+    counts.sites[site],
+    request,
+  );
+}
+
 // A request of a private window records nothing, whatever the settings.
 export function count(site: string, request: SeenRequest): void {
   if (request.privateWindow) {
-    privateSession = countRequest(privateSession, site, request);
+    countIn(privateSession, site, request);
     schedulePrivateWrite(site);
     return;
   }
-  kept = countRequest(kept, site, request);
+  countIn(kept, site, request);
   recordAddress(site, request);
   scheduleKeptWrite(site);
 }
@@ -366,21 +377,22 @@ export async function clear(
 }
 
 // Every site, for the map: the kept counts, or in a private window those of
-// the private session, which have no start.
+// the private session, which have no start. A copy of the sites, which the
+// requests counted afterwards change in place.
 export function mapData(privateWindow: boolean): MapData {
   if (privateWindow) {
     return {
       privateWindow,
       since: 0,
       siteSince: {},
-      sites: privateSession.sites,
+      sites: { ...privateSession.sites },
     };
   }
   return {
     privateWindow,
     since: kept.since,
     siteSince: kept.siteSince,
-    sites: kept.sites,
+    sites: { ...kept.sites },
   };
 }
 

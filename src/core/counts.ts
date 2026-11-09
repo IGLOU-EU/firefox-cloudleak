@@ -45,30 +45,25 @@ export function requestKindOf(request: SeenRequest): string {
   return `${request.method} ${request.type}`;
 }
 
-// Counts one request of a site. The counts given are never changed: the new
-// ones share with them every site the request does not touch.
-export function countRequest(
-  counts: KeptCounts,
-  site: string,
+// Counts one request in the counts of its site alone, so that the cost of a
+// request does not grow with the number of sites kept. The counts given are
+// never changed: the new ones share with them every provider the request
+// does not touch.
+export function countInSite(
+  siteCounts: SiteCounts | undefined,
   request: SeenRequest,
-): KeptCounts {
+): SiteCounts {
   const { provider } = request.classification;
   const category = categoryOf(request.classification);
   const kind = requestKindOf(request);
-  const siteCounts = counts.sites[site] ?? {};
-  const providerCounts = siteCounts[provider] ?? {};
+  const counts = siteCounts ?? {};
+  const providerCounts = counts[provider] ?? {};
   const kinds = providerCounts[category] ?? {};
   return {
     ...counts,
-    sites: {
-      ...counts.sites,
-      [site]: {
-        ...siteCounts,
-        [provider]: {
-          ...providerCounts,
-          [category]: { ...kinds, [kind]: (kinds[kind] ?? 0) + 1 },
-        },
-      },
+    [provider]: {
+      ...providerCounts,
+      [category]: { ...kinds, [kind]: (kinds[kind] ?? 0) + 1 },
     },
   };
 }
