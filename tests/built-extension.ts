@@ -7,6 +7,8 @@
 // reader.
 
 import { renameSync, writeFileSync } from "node:fs";
+import { tableLiteral } from "../scripts/providers.js";
+import { rangesOf } from "../src/core/cidr.js";
 import type {
   ProviderEntry,
   ProviderTable,
@@ -17,7 +19,7 @@ export const EDGE: ProviderEntry = {
   name: "Edge",
   country: "US",
   parent: null,
-  ranges: ["192.0.2.0/24"],
+  ranges: rangesOf(["192.0.2.0/24"]),
   headers: [{ name: "x-edge", value: null }],
   cookies: [],
   siteConnectorCookies: [],
@@ -35,7 +37,7 @@ const extension = new URL("../extension/", import.meta.url);
 
 export function writeTable(): void {
   const staging = new URL(`providers.${process.pid}.js`, extension);
-  writeFileSync(staging, `export default ${JSON.stringify(TABLE)};\n`);
+  writeFileSync(staging, `export default ${tableLiteral(TABLE)};\n`);
   renameSync(staging, new URL("providers.js", extension));
 }
 

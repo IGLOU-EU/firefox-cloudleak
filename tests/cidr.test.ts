@@ -7,8 +7,11 @@ import {
   type Cidr,
   cidrContains,
   type IpAddress,
+  ipv4Of,
+  ipv4RangeContains,
   parseCidr,
   parseIp,
+  rangesOf,
 } from "../src/core/cidr.js";
 
 function ip(text: string): IpAddress {
@@ -27,6 +30,26 @@ function rejects(parse: (text: string) => { ok: boolean }, text: string) {
   assert.equal(parse(text).ok, false, `expected ${text} to be rejected`);
 }
 
+const NOT_IPV4 = [
+  "",
+  "1.2.3",
+  "1.2.3.4.5",
+  "256.0.0.0",
+  "1.2.3.-1",
+  "01.2.3.4",
+  "1.02.3.4",
+  "1.2.3.00",
+  "1.2.3.4 ",
+  " 1.2.3.4",
+  "1..3.4",
+  ".1.2.3",
+  "1.2.3.",
+  "a.b.c.d",
+  "1.2.3.4/32",
+  "1.2.3.1000",
+  "4294967295",
+];
+
 describe("parseIp, IPv4", () => {
   it("reads the four octets", () => {
     assert.deepEqual(ip("104.16.0.1"), { family: 4, value: 0x68100001n });
@@ -34,20 +57,23 @@ describe("parseIp, IPv4", () => {
     assert.deepEqual(ip("255.255.255.255"), { family: 4, value: 0xffffffffn });
   });
 
-  for (const text of [
-    "",
-    "1.2.3",
-    "1.2.3.4.5",
-    "256.0.0.0",
-    "1.2.3.-1",
-    "01.2.3.4",
-    "1.2.3.4 ",
-    " 1.2.3.4",
-    "1..3.4",
-    "a.b.c.d",
-    "1.2.3.4/32",
-  ]) {
+  for (const text of NOT_IPV4) {
     it(`rejects ${JSON.stringify(text)}`, () => rejects(parseIp, text));
+  }
+});
+
+describe("ipv4Of", () => {
+  it("reads the four octets as an unsigned 32-bit number", () => {
+    assert.equal(ipv4Of("104.16.0.1"), 0x68100001);
+    assert.equal(ipv4Of("0.0.0.0"), 0);
+    assert.equal(ipv4Of("255.255.255.255"), 0xffffffff);
+    assert.equal(ipv4Of("10.0.0.10"), 0x0a00000a);
+  });
+
+  for (const text of NOT_IPV4) {
+    it(`rejects ${JSON.stringify(text)}`, () => {
+      assert.equal(ipv4Of(text), undefined);
+    });
   }
 });
 
@@ -192,5 +218,57 @@ describe("cidrContains", () => {
     assert.equal(cidrContains(cidr("0.0.0.0/0"), ip("::")), false);
     assert.equal(cidrContains(cidr("::/0"), ip("0.0.0.0")), false);
     assert.equal(cidrContains(cidr("1.2.3.0/24"), ip("::ffff:1.2.3.4")), false);
+  });
+});
+
+describe("rangesOf", () => {
+  it("keeps an IPv4 range as its network and its mask, and an IPv6 range parsed", () => {
+    assert.deepEqual(rangesOf(["173.245.48.0/20", "2400:cb00::/32"]), {
+      ipv4: [{ network: 0xadf53000, mask: 0xfffff000 }],
+      ipv6: [cidr("2400:cb00::/32")],
+    });
+  });
+
+  it("masks nothing with a zero prefix, and every bit with the longest", () => {
+    assert.deepEqual(rangesOf(["0.0.0.0/0", "255.255.255.255/32"]).ipv4, [
+      { network: 0, mask: 0 },
+      { network: 0xffffffff, mask: 0xffffffff },
+    ]);
+  });
+
+  it("skips a range it cannot read and keeps the others", () => {
+    assert.deepEqual(
+      rangesOf(["not a range", "192.0.2.0/33", "192.0.2.0/24", "::/129"]),
+      { ipv4: [{ network: 0xc0000200, mask: 0xffffff00 }], ipv6: [] },
+    );
+  });
+});
+
+describe("ipv4RangeContains", () => {
+  const contains = (range: string, address: string) => {
+    const [parsed] = rangesOf([range]).ipv4;
+    const value = ipv4Of(address);
+    assert.ok(parsed !== undefined && value !== undefined);
+    return ipv4RangeContains(parsed, value);
+  };
+
+  it("includes both ends of a range and nothing past them", () => {
+    assert.equal(contains("173.245.48.0/20", "173.245.48.0"), true);
+    assert.equal(contains("173.245.48.0/20", "173.245.63.255"), true);
+    assert.equal(contains("173.245.48.0/20", "173.245.47.255"), false);
+    assert.equal(contains("173.245.48.0/20", "173.245.64.0"), false);
+  });
+
+  it("compares the addresses whose first bit is set as the others", () => {
+    assert.equal(contains("192.0.2.0/24", "192.0.2.255"), true);
+    assert.equal(contains("128.0.0.0/1", "255.255.255.255"), true);
+    assert.equal(contains("128.0.0.0/1", "127.255.255.255"), false);
+  });
+
+  it("matches a single address with the longest prefix, and every one with a zero prefix", () => {
+    assert.equal(contains("1.2.3.4/32", "1.2.3.4"), true);
+    assert.equal(contains("1.2.3.4/32", "1.2.3.5"), false);
+    assert.equal(contains("0.0.0.0/0", "255.255.255.255"), true);
+    assert.equal(contains("0.0.0.0/0", "0.0.0.0"), true);
   });
 });

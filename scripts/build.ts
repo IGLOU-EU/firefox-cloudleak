@@ -6,7 +6,7 @@
 
 import { cpSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { formatError, loadTable } from "./providers.js";
+import { formatError, loadTable, tableLiteral } from "./providers.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const dist = `${root}dist/`;
@@ -21,14 +21,15 @@ if (errors.length > 0) {
 }
 
 // A module rather than a JSON file, so the event page has the table as soon
-// as it runs, without waiting on a read at every wake-up.
+// as it runs, its ranges already parsed, without waiting on a read nor
+// parsing a range at every wake-up.
 writeFileSync(
   `${dist}providers.js`,
   [
     "// SPDX-License-Identifier: GPL-3.0-or-later",
     "// Copyright (C) 2026 Adrien Kara",
     "// Generated from data/ by the build. Do not edit.",
-    `export default ${JSON.stringify(table)};`,
+    `export default ${tableLiteral(table)};`,
     "",
   ].join("\n"),
 );

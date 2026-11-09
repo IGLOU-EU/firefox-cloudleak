@@ -3,6 +3,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { rangesOf } from "../src/core/cidr.js";
 import {
   type Classification,
   classifyByCname,
@@ -16,16 +17,21 @@ import type {
   ProviderTable,
 } from "../src/core/provider-table.js";
 
+// The ranges are given as ranges.txt writes them, and parsed as the build
+// parses them.
 function provider(
   id: string,
-  signatures: Partial<ProviderEntry> = {},
+  {
+    ranges = [],
+    ...signatures
+  }: Partial<Omit<ProviderEntry, "ranges">> & { ranges?: string[] } = {},
 ): ProviderEntry {
   return {
     id,
     name: id,
     country: "US",
     parent: null,
-    ranges: [],
+    ranges: rangesOf(ranges),
     headers: [],
     cookies: [],
     siteConnectorCookies: [],
@@ -906,47 +912,63 @@ describe("classifyRequest, the output", () => {
   });
 });
 
+describe("classifyRequest, the address ranges", () => {
+  it("compares an IPv4 address with both ends of a range and nothing past them", () => {
+    assert.equal(providerOf({ ip: "192.0.2.0" }), "alpha");
+    assert.equal(providerOf({ ip: "192.0.2.255" }), "alpha");
+    assert.equal(providerOf({ ip: "192.0.1.255" }), null);
+    assert.equal(providerOf({ ip: "192.0.3.0" }), null);
+  });
+
+  it("finds an address in a range of every IPv4 address, and in a range of one", () => {
+    const table: ProviderTable = {
+      providers: [
+        provider("one", { ranges: ["203.0.113.7/32"] }),
+        provider("all", { ranges: ["0.0.0.0/0"] }),
+      ],
+      consentCookies: [],
+    };
+    const providerAt = (ip: string) =>
+      classifyRequest(facts({ ip }), table)?.provider ?? null;
+    assert.equal(providerAt("203.0.113.7"), "one");
+    assert.equal(providerAt("203.0.113.8"), "all");
+    assert.equal(providerAt("255.255.255.255"), "all");
+    assert.equal(providerAt("0.0.0.0"), "all");
+    assert.equal(providerAt("::1"), null);
+  });
+
+  it("reads no address that a leading zero, a missing part or a part above 255 makes doubtful", () => {
+    for (const ip of [
+      "192.0.2.010",
+      "192.0.2.256",
+      "192.0.2",
+      "192.0.2.1.1",
+      "192.0..1",
+      "192.0.2.",
+      "192.0.2.1 ",
+    ]) {
+      assert.equal(providerOf({ ip }), null, ip);
+    }
+  });
+});
+
 // A provider whose ranges count how many times they are read, to tell a
-// lookup that parses them at each request from one that parses them once.
+// lookup that compares the address from one that does not.
 function countingRanges(ranges: string[]): {
   readonly entry: ProviderEntry;
   readonly reads: () => number;
 } {
   let reads = 0;
+  const parsed = rangesOf(ranges);
   const entry = {
     ...provider("counted", { cname: ["edge.counted.example"] }),
     get ranges() {
       reads += 1;
-      return ranges;
+      return parsed;
     },
   };
   return { entry, reads: () => reads };
 }
-
-describe("classifyRequest, the address ranges", () => {
-  it("parses the ranges of a provider once, however many requests it classifies", () => {
-    const { entry, reads } = countingRanges(["192.0.2.0/24", "2001:db8::/32"]);
-    const table: ProviderTable = { providers: [entry], consentCookies: [] };
-    for (const ip of [ALPHA_IP, UNKNOWN_IP, "2001:db8::1", UNKNOWN_IP]) {
-      classifyRequest(facts({ ip }), table);
-    }
-    assert.equal(reads(), 1);
-    assert.equal(
-      classifyRequest(facts({ ip: ALPHA_IP }), table)?.provider,
-      "counted",
-    );
-    assert.equal(classifyRequest(facts({ ip: UNKNOWN_IP }), table), null);
-  });
-
-  it("keeps skipping a range it cannot parse once the ranges are parsed", () => {
-    const table: ProviderTable = {
-      providers: [provider("broken", { ranges: ["192.0.2.0/33", "nope"] })],
-      consentCookies: [],
-    };
-    assert.equal(classifyRequest(facts({ ip: ALPHA_IP }), table), null);
-    assert.equal(classifyRequest(facts({ ip: ALPHA_IP }), table), null);
-  });
-});
 
 describe("classifyByCname", () => {
   it("names the provider of the canonical name as the CNAME step of classifyRequest does", () => {

@@ -27,8 +27,23 @@ export type ResponseSide = Pick<
   "ip" | "responseHeaders" | "setCookies"
 >;
 
-const TLS_SCHEMES = ["https:", "wss:"];
-const SCHEMES = ["http:", "ws:", ...TLS_SCHEMES];
+// The schemes that "*" covers in a match pattern, without their colon: those
+// of every request the event page listens to, and the only ones a site whose
+// access the user grants or withdraws can have.
+export const WEB_SCHEMES: ReadonlySet<string> = new Set([
+  "http",
+  "https",
+  "ws",
+  "wss",
+]);
+
+// Of the web schemes, those that run over TLS.
+const TLS_SCHEMES: ReadonlySet<string> = new Set(["https", "wss"]);
+
+// The scheme of a URL as WEB_SCHEMES writes it.
+export function schemeOf(url: URL): string {
+  return url.protocol.slice(0, -1);
+}
 
 // Firefox hands over the whole Cookie and Authorization headers, values
 // included. Only the names and the presence leave this function, so that no
@@ -45,14 +60,15 @@ export function requestSideOf(request: {
   } catch {
     return null;
   }
-  if (!SCHEMES.includes(url.protocol)) {
+  const scheme = schemeOf(url);
+  if (!WEB_SCHEMES.has(scheme)) {
     return null;
   }
   const headers = request.requestHeaders ?? [];
   return {
     method: request.method,
     type: request.type,
-    tls: TLS_SCHEMES.includes(url.protocol),
+    tls: TLS_SCHEMES.has(scheme),
     host: url.hostname,
     path: url.pathname,
     queryNames: queryNamesOf(url.search),

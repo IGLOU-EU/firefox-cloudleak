@@ -7,7 +7,7 @@ import type { Classification, Leak } from "../src/core/classify.js";
 import {
   categoryOf,
   clearSite,
-  countRequest,
+  countInSite,
   dayOf,
   dropSite,
   emptyCounts,
@@ -45,9 +45,22 @@ const DATA_SENT: Leak = { level: 4, case: "data-sent", challenge: false };
 
 const SITE = "legifrance.gouv.fr";
 
+// The kept counts with one more request of a site, without changing those
+// given, to build the counts the other functions take.
+function count(
+  counts: KeptCounts,
+  site: string,
+  entry: SeenRequest,
+): KeptCounts {
+  return {
+    ...counts,
+    sites: { ...counts.sites, [site]: countInSite(counts.sites[site], entry) },
+  };
+}
+
 function fold(requests: [string, SeenRequest][], since = 0): KeptCounts {
   return requests.reduce(
-    (counts, [site, entry]) => countRequest(counts, site, entry),
+    (counts, [site, entry]) => count(counts, site, entry),
     emptyCounts(since),
   );
 }
@@ -92,72 +105,53 @@ describe("requestKindOf", () => {
   });
 });
 
-describe("countRequest", () => {
-  it("counts a first request under its site, provider, category and kind", () => {
-    const counts = fold(
-      [[SITE, seen(request({ level: 3 }, true), "GET", "main_frame")]],
-      5,
+describe("countInSite", () => {
+  it("counts a first request under its provider, category and kind", () => {
+    assert.deepEqual(
+      countInSite(
+        undefined,
+        seen(request({ level: 3 }, true), "GET", "main_frame"),
+      ),
+      { cloudflare: { red3: { "GET main_frame": 1 } } },
     );
-    assert.deepEqual(counts, {
-      since: 5,
-      siteSince: {},
-      sites: {
-        [SITE]: { cloudflare: { red3: { "GET main_frame": 1 } } },
-      },
-    });
   });
 
   it("adds up the requests of the same kind, and keeps the others apart", () => {
     const image = seen(request({ level: 2 }, true));
-    const counts = fold([
-      [SITE, image],
-      [SITE, image],
-      [SITE, seen(request({ level: 2 }, false), "GET", "script")],
-      [SITE, seen(request(SESSION, true), "POST", "xmlhttprequest")],
-      [SITE, seen(request({ level: 2 }, true, "akamai"))],
-      ["leboncoin.fr", seen(request(DATA_SENT, false, "cloudfront"), "POST")],
-    ]);
-    assert.deepEqual(counts.sites, {
-      [SITE]: {
-        cloudflare: {
-          blue2: { "GET image": 2, "GET script": 1 },
-          red4: { "POST xmlhttprequest": 1 },
-        },
-        akamai: { blue2: { "GET image": 1 } },
+    const counts = [
+      image,
+      image,
+      seen(request({ level: 2 }, false), "GET", "script"),
+      seen(request(SESSION, true), "POST", "xmlhttprequest"),
+      seen(request({ level: 2 }, true, "akamai")),
+    ].reduce(
+      (siteCounts, entry) => countInSite(siteCounts, entry),
+      countInSite(undefined, seen(request(DATA_SENT, false, "cloudfront"))),
+    );
+    assert.deepEqual(counts, {
+      cloudfront: { orange4: { "GET image": 1 } },
+      cloudflare: {
+        blue2: { "GET image": 2, "GET script": 1 },
+        red4: { "POST xmlhttprequest": 1 },
       },
-      "leboncoin.fr": {
-        cloudfront: { orange4: { "POST image": 1 } },
-      },
+      akamai: { blue2: { "GET image": 1 } },
     });
   });
 
-  it("leaves the counts it is given as they were, and shares the sites it does not touch", () => {
-    const before = fold([
-      [SITE, seen(request({ level: 2 }, true))],
-      ["leboncoin.fr", seen(request({ level: 2 }, true))],
-    ]);
+  it("leaves the counts it is given as they were, and shares the providers it does not touch", () => {
+    const before = countInSite(
+      countInSite(undefined, seen(request({ level: 2 }, true))),
+      seen(request({ level: 2 }, true, "akamai")),
+    );
     const frozen = JSON.stringify(before);
-    const after = countRequest(before, SITE, seen(request({ level: 3 }, true)));
+    const after = countInSite(before, seen(request({ level: 3 }, true)));
     assert.equal(JSON.stringify(before), frozen);
-    assert.equal(after.sites["leboncoin.fr"], before.sites["leboncoin.fr"]);
-    assert.notEqual(after.sites[SITE], before.sites[SITE]);
-    assert.equal(after.since, before.since);
-    assert.equal(after.siteSince, before.siteSince);
-  });
-
-  it("counts a site of one label, an address and a punycode name like any other", () => {
-    const counts = fold([
-      ["localhost", seen(request({ level: 2 }, true))],
-      ["192.0.2.1", seen(request({ level: 2 }, true))],
-      ["[2001:db8::1]", seen(request({ level: 2 }, true))],
-      ["xn--mnchen-3ya.de", seen(request({ level: 2 }, true))],
-    ]);
-    assert.deepEqual(Object.keys(counts.sites), [
-      "localhost",
-      "192.0.2.1",
-      "[2001:db8::1]",
-      "xn--mnchen-3ya.de",
-    ]);
+    assert.equal(after["akamai"], before["akamai"]);
+    assert.notEqual(after["cloudflare"], before["cloudflare"]);
+    assert.deepEqual(after["cloudflare"], {
+      blue2: { "GET image": 1 },
+      red3: { "GET image": 1 },
+    });
   });
 });
 
@@ -218,7 +212,7 @@ describe("clearSite", () => {
   });
 
   it("lets a request counted after the clear count from zero, with the date of the clear", () => {
-    const after = countRequest(
+    const after = count(
       clearSite(before, SITE, 900),
       SITE,
       seen(request({ level: 2 }, true)),
@@ -247,7 +241,7 @@ describe("dropSite", () => {
     "example.org",
     800,
   );
-  const counted = countRequest(before, LEBONCOIN, seen(request(SESSION, true)));
+  const counted = count(before, LEBONCOIN, seen(request(SESSION, true)));
 
   it("keeps nothing of the site, neither its counts nor its own start, and leaves the others and the common start", () => {
     const after = dropSite(counted, LEBONCOIN);

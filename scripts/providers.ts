@@ -3,7 +3,7 @@
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { parseCidr } from "../src/core/cidr.js";
+import { parseCidr, rangesOf } from "../src/core/cidr.js";
 import type {
   ProviderEntry,
   ProviderTable,
@@ -674,7 +674,7 @@ export function loadProviders(dir: string): {
       rangesText === null ? null : parseRangesFile(rangesText, rangesPath);
     errors.push(...(ranges?.errors ?? []));
     if (provider !== null && (ranges === null || ranges.errors.length === 0)) {
-      table.push({ id, ...provider, ranges: ranges?.ranges ?? [] });
+      table.push({ id, ...provider, ranges: rangesOf(ranges?.ranges ?? []) });
     }
   }
   return { table, errors };
@@ -698,6 +698,25 @@ export function loadTable(dataDir: string): {
   const consent = parseConsentCookies(text, consentPath);
   errors.push(...consent.errors);
   return { table: { providers, consentCookies: consent.cookies }, errors };
+}
+
+// The table as the text of a JavaScript value, for the module the extension
+// loads: JSON, but for the networks of the IPv6 ranges, which are BigInts and
+// which JSON cannot write, so that every range arrives parsed.
+export function tableLiteral(value: unknown): string {
+  if (typeof value === "bigint") {
+    return `0x${value.toString(16)}n`;
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(tableLiteral).join(",")}]`;
+  }
+  if (typeof value === "object" && value !== null) {
+    const entries = Object.entries(value).map(
+      ([key, item]) => `${JSON.stringify(key)}:${tableLiteral(item)}`,
+    );
+    return `{${entries.join(",")}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export function formatError(error: DataError): string {

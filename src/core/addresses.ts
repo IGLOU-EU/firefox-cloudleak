@@ -9,13 +9,12 @@ import type {
   Settings,
   SiteAddresses,
 } from "./popup-message.js";
+import { schemeOf, WEB_SCHEMES } from "./request-facts.js";
 
 // Off by default: no address is kept until the user asks for it.
 export const DEFAULT_SETTINGS: Settings = { record: "none", recordLimit: 100 };
 
 const RECORD_LEVELS: readonly RecordLevel[] = ["none", "level4", "level3and4"];
-
-const WEB_SCHEMES = ["http:", "https:", "ws:", "wss:"];
 
 // Stands for a value of the query, which is never kept. A URL writes a
 // character outside ASCII percent-encoded in its query, so this one can
@@ -37,7 +36,7 @@ export function addressOf(url: string): string | null {
   } catch {
     return null;
   }
-  if (!WEB_SCHEMES.includes(parsed.protocol)) {
+  if (!WEB_SCHEMES.has(schemeOf(parsed))) {
     return null;
   }
   // Split by hand rather than with URLSearchParams, so that the values are

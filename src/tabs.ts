@@ -5,6 +5,7 @@ import { hasAllSites, readAccess } from "./access.js";
 import { batch, WRITE_DELAY_MS } from "./batch.js";
 import type { SeenRequest } from "./core/counts.js";
 import { displayOf } from "./core/display.js";
+import { WEB_SCHEMES } from "./core/request-facts.js";
 import {
   displayedDocument,
   EMPTY_RECORD,
@@ -25,7 +26,7 @@ import {
 } from "./core/tab-record.js";
 import { count, ready as countsReady, isIgnored } from "./counts.js";
 import table from "./providers.js";
-import { siteOfUrl, WEB_SCHEMES } from "./site.js";
+import { siteOfUrl } from "./site.js";
 import { forgetSent, render, report } from "./toolbar.js";
 
 // Firefox suspends the event page after 30 s without an event and its memory
@@ -50,8 +51,8 @@ const records = new Map<number, TabRecord>();
 const closed = new Set<number>();
 
 // Every change waits for this, so that the tabs read at the wake-up are not
-// overwritten by the first event that woke the page, and so that the counts
-// a change feeds are read too.
+// overwritten by the first event that woke the page, and so that the
+// settings and the ignored sites a change reads are read too.
 export const ready: Promise<void> = Promise.all([
   browser.storage.session.get(null).then(
     (items) => {
@@ -187,13 +188,20 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
 // A page Firefox loads in its own process, such as about:preferences, gets
 // no onCommitted, since the event needs a content process to report it, but
 // it gets onCompleted (WebNavigationContent.cpp and WebNavigation.sys.mjs,
-// Firefox 159.0.1).
+// Firefox 159.0.1), and such a page is a page of the browser. A website and
+// reader view commit in a content process: the completion of one whose
+// commit the extension did not see, since it started after it, as at the
+// start of the browser, says nothing of the requests the tab missed before,
+// which the tab keeps.
 export async function onCompleted(details: DocumentDetails): Promise<void> {
   if (details.frameId !== 0 || details.documentId === undefined) {
     return;
   }
   const { tabId, documentId, timeStamp } = details;
   const { page, site } = documentOf(details.url);
+  if (page !== "browser") {
+    return;
+  }
   await ready;
   update(tabId, (record) =>
     showCompletedDocument(
