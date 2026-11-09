@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
+import { WEB_SCHEMES } from "./core/request-facts.js";
+
 // The WebExtension types stop at Firefox 143, while Firefox gives the
 // registrable domain of a host from 153 on (browser-compat-data,
 // webextensions.api.publicSuffix), read from its own public suffix list,
@@ -42,10 +44,6 @@ export function siteOf(hostname: string): string {
     return hostname;
   }
 }
-
-// The schemes that "*" covers in a match pattern, the only ones a site whose
-// access the user grants or withdraws can have.
-export const WEB_SCHEMES = new Set(["http", "https", "ws", "wss"]);
 
 // The host as the URL gives it, in punycode, with the brackets of an IPv6
 // address, which Firefox's registrable domain accepts.

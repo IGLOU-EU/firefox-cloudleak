@@ -5,6 +5,7 @@ import { hasAllSites, readAccess } from "./access.js";
 import { batch, WRITE_DELAY_MS } from "./batch.js";
 import type { SeenRequest } from "./core/counts.js";
 import { displayOf } from "./core/display.js";
+import { WEB_SCHEMES } from "./core/request-facts.js";
 import {
   displayedDocument,
   EMPTY_RECORD,
@@ -25,7 +26,7 @@ import {
 } from "./core/tab-record.js";
 import { count, ready as countsReady, isIgnored } from "./counts.js";
 import table from "./providers.js";
-import { siteOfUrl, WEB_SCHEMES } from "./site.js";
+import { siteOfUrl } from "./site.js";
 import { forgetSent, render, report } from "./toolbar.js";
 
 // Firefox suspends the event page after 30 s without an event and its memory
