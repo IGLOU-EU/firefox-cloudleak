@@ -66,8 +66,10 @@ interface Counts {
   readonly ready: Promise<void>;
   currentSettings(): Settings;
   siteAddresses(site: string, privateWindow: boolean): Promise<SiteAddresses>;
-  totals(site: string | null, privateWindow: boolean): SiteCounts;
-  since(site: string | null, privateWindow: boolean): number;
+  totals(site: string | null, privateWindow: boolean): Promise<SiteCounts>;
+  since(site: string | null, privateWindow: boolean): Promise<number>;
+  count(site: string, request: object): void;
+  clear(site: string, privateWindow: boolean): Promise<number>;
   onWindowRemoved(): Promise<void>;
   isIgnored(site: string | null): boolean;
   ignoredSites(): string[];
@@ -111,6 +113,8 @@ const localReads: (null | string | string[])[] = [];
 // While set, a read of storage.local answers with what storage held when it
 // was asked, once the gate opens, as Firefox answers a read that is slow.
 let localReadGate: Promise<void> | null = null;
+// While set, a read of storage.local fails with it.
+let localReadError: Error | null = null;
 const resolved: string[] = [];
 let allSites = true;
 // The windows Firefox lists, those of private windows only when the
@@ -211,6 +215,9 @@ function event(name: string) {
     local: {
       get: (keys: null | string | string[]) => {
         localReads.push(keys);
+        if (localReadError !== null) {
+          return Promise.reject(localReadError);
+        }
         const items = read(local, keys);
         return localReadGate === null
           ? Promise.resolve(items)
@@ -1429,20 +1436,210 @@ describe("the kept counts", () => {
     try {
       const woken = await importModule<Counts>("counts.js?cleared-sites");
       await woken.ready;
-      assert.equal(woken.since("t1175.example", false), common);
-      assert.deepEqual(woken.totals("t1175.example", false), {
+      assert.equal(await woken.since("t1175.example", false), common);
+      assert.deepEqual(await woken.totals("t1175.example", false), {
         edge: { blue2: { "GET image": 2 } },
       });
-      assert.equal(woken.since("t1176.example", false), clearedAt);
-      assert.deepEqual(woken.totals("t1176.example", false), {});
-      assert.equal(woken.since("t1176.example", true), 0);
-      assert.equal(woken.since(null, false), common);
+      assert.equal(await woken.since("t1176.example", false), clearedAt);
+      assert.deepEqual(await woken.totals("t1176.example", false), {});
+      assert.equal(await woken.since("t1176.example", true), 0);
+      assert.equal(await woken.since(null, false), common);
       assert.equal(local.get("since"), common);
     } finally {
       if (privateBefore !== undefined) {
         session.set("privateCounts", privateBefore);
       }
     }
+  });
+});
+
+describe("the counts of a site, read when first needed", () => {
+  // An image through the edge, as the kept counts take it.
+  const IMAGE = {
+    classification: { provider: "edge", proven: true, leak: { level: 2 } },
+    method: "GET",
+    type: "image",
+    privateWindow: false,
+  };
+
+  function images(count: number): SiteCounts {
+    return { edge: { blue2: { "GET image": count } } };
+  }
+
+  async function popup(tab: number): Promise<PopupData> {
+    return (await answer({
+      kind: "popup",
+      tabId: tab,
+      privateWindow: false,
+    })) as PopupData;
+  }
+
+  // A new run of the event page, which reads storage as a wake-up does.
+  async function wake(
+    name: string,
+    check: (woken: Counts) => Promise<void>,
+  ): Promise<void> {
+    const privateBefore = session.get("privateCounts");
+    try {
+      const woken = await importModule<Counts>(`counts.js?${name}`);
+      await woken.ready;
+      await check(woken);
+    } finally {
+      localReadGate = null;
+      localReadError = null;
+      if (privateBefore !== undefined) {
+        session.set("privateCounts", privateBefore);
+      }
+    }
+  }
+
+  // Holds every read of storage.local until the returned function is called.
+  function slowReads(): () => Promise<void> {
+    let open = () => {};
+    localReadGate = new Promise<void>((done) => {
+      open = done;
+    });
+    return async () => {
+      localReadGate = null;
+      open();
+      await settled();
+    };
+  }
+
+  it("counts the requests of a burst that wakes the page after the counts stored before, reading them once", async () => {
+    const site = "t1270.example";
+    local.set(`site:${site}`, images(5));
+    await wake("burst", async (woken) => {
+      const reads = localReads.length;
+      const finishRead = slowReads();
+      woken.count(site, IMAGE);
+      woken.count(site, IMAGE);
+      assert.deepEqual(localReads.slice(reads), [
+        [`site:${site}`, `since:${site}`],
+      ]);
+      mock.timers.runAll();
+      assert.deepEqual(local.get(`site:${site}`), images(5));
+      await finishRead();
+      woken.count(site, IMAGE);
+      mock.timers.runAll();
+      assert.deepEqual(local.get(`site:${site}`), images(8));
+      assert.deepEqual(await woken.totals(site, false), images(8));
+      assert.equal(localReads.length, reads + 1);
+    });
+  });
+
+  it("counts from nothing two requests of a new site in the same burst", async () => {
+    const site = "t1271.example";
+    await wake("new-site", async (woken) => {
+      const finishRead = slowReads();
+      woken.count(site, IMAGE);
+      woken.count(site, IMAGE);
+      await finishRead();
+      mock.timers.runAll();
+      assert.deepEqual(local.get(`site:${site}`), images(2));
+      assert.equal(local.has(`since:${site}`), false);
+    });
+  });
+
+  it("drops the requests waiting for the read of a site the user clears meanwhile, and counts those after the clear from it", async () => {
+    const site = "t1272.example";
+    local.set(`site:${site}`, images(5));
+    await wake("cleared-while-read", async (woken) => {
+      const finishRead = slowReads();
+      woken.count(site, IMAGE);
+      const today = dayOf(Date.now());
+      assert.equal(await woken.clear(site, false), today);
+      woken.count(site, IMAGE);
+      await finishRead();
+      mock.timers.runAll();
+      assert.deepEqual(local.get(`site:${site}`), images(1));
+      assert.equal(local.get(`since:${site}`), today);
+      assert.equal(await woken.since(site, false), today);
+    });
+  });
+
+  it("drops the requests waiting for a read that fails, writes nothing over the stored counts, and reads again at the next request", async () => {
+    const site = "t1273.example";
+    local.set(`site:${site}`, images(3));
+    const errors = mock.method(console, "error", () => {});
+    try {
+      await wake("read-fails", async (woken) => {
+        const reads = localReads.length;
+        localReadError = new Error("read failed");
+        woken.count(site, IMAGE);
+        await settled();
+        localReadError = null;
+        mock.timers.runAll();
+        assert.deepEqual(local.get(`site:${site}`), images(3));
+        assert.equal(errors.mock.callCount(), 1);
+        assert.match(String(errors.mock.calls[0]?.arguments[0]), /read failed/);
+        woken.count(site, IMAGE);
+        await settled();
+        mock.timers.runAll();
+        assert.deepEqual(local.get(`site:${site}`), images(4));
+        assert.equal(localReads.length, reads + 2);
+      });
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
+  it("answers the popup with the counts and the start stored for its site, which this run of the page had not read", async () => {
+    const tab = 1274;
+    const site = "t1274.example";
+    const clearedAt = INSTALLED_AT + 7000;
+    local.set(`site:${site}`, images(4));
+    local.set(`since:${site}`, clearedAt);
+    await commit(tab, "doc-1274", 1000, [], `https://${site}/`);
+    const data = await popup(tab);
+    assert.deepEqual(data.totals, images(4));
+    assert.equal(data.since, clearedAt);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    assert.deepEqual((await popup(tab)).totals, images(5));
+    mock.timers.runAll();
+    assert.deepEqual(local.get(`site:${site}`), images(5));
+  });
+
+  it("answers the map with the sites stored that this run of the page had not read, and with the counts of the burst not yet written", async () => {
+    const stored = "t1275.example";
+    const tab = 1276;
+    const counted = "t1276.example";
+    local.set(`site:${stored}`, images(6));
+    local.set(`since:${stored}`, INSTALLED_AT + 9000);
+    await commit(tab, "doc-1276", 1000, [], `https://${counted}/`);
+    await exchange(tab, "image", 1100, EDGE_IP);
+    mock.timers.runAll();
+    await exchange(tab, "image", 1200, EDGE_IP);
+    const data = (await answer({
+      kind: "map",
+      privateWindow: false,
+    })) as MapData;
+    assert.deepEqual(data.sites[stored], images(6));
+    assert.equal(data.siteSince[stored], INSTALLED_AT + 9000);
+    assert.deepEqual(local.get(`site:${counted}`), images(1));
+    assert.deepEqual(data.sites[counted], images(2));
+  });
+
+  it("erases from storage a site this run of the page had not read when the user ignores or clears it", async () => {
+    const ignored = "t1277.example";
+    const cleared = "t1278.example";
+    for (const site of [ignored, cleared]) {
+      local.set(`site:${site}`, images(2));
+      local.set(`since:${site}`, INSTALLED_AT + 3000);
+      local.set(`addresses:${site}`, {
+        edge: { red4: { "GET xmlhttprequest": ["/x"] } },
+      });
+    }
+    await answer({ kind: "ignoreSite", host: ignored });
+    for (const prefix of ["site:", "since:", "addresses:"]) {
+      assert.equal(local.has(`${prefix}${ignored}`), false, prefix);
+    }
+    const today = dayOf(Date.now());
+    await answer({ kind: "clearSite", site: cleared, privateWindow: false });
+    assert.deepEqual(local.get(`site:${cleared}`), {});
+    assert.equal(local.get(`since:${cleared}`), today);
+    assert.equal(local.has(`addresses:${cleared}`), false);
+    await answer({ kind: "unignoreSite", site: ignored });
   });
 });
 
@@ -1658,7 +1855,7 @@ describe("the counts of a private session", () => {
     await commit(tab, `doc-${tab}`, 1000, [], `https://${site}/`);
     await privateExchange(tab, `private-${tab}`, 1100);
     mock.timers.runAll();
-    assert.deepEqual(counts.totals(site, true), {
+    assert.deepEqual(await counts.totals(site, true), {
       edge: { blue2: { "GET image": 1 } },
     });
     return site;
@@ -1685,15 +1882,15 @@ describe("the counts of a private session", () => {
     mock.timers.runAll();
     const keptBefore = JSON.stringify([...local.entries()]);
     await close(2);
-    assert.notDeepEqual(counts.totals(site, true), {});
+    assert.notDeepEqual(await counts.totals(site, true), {});
     assert.equal(session.has("privateCounts"), true);
     await close(3);
-    assert.deepEqual(counts.totals(site, true), {});
+    assert.deepEqual(await counts.totals(site, true), {});
     assert.equal(session.has("privateCounts"), false);
     mock.timers.runAll();
     assert.equal(session.has("privateCounts"), false);
     assert.equal(JSON.stringify([...local.entries()]), keptBefore);
-    assert.deepEqual(counts.totals("t1181.example", false), {
+    assert.deepEqual(await counts.totals("t1181.example", false), {
       edge: { blue2: { "GET image": 1 } },
     });
   });
@@ -1719,10 +1916,10 @@ describe("the counts of a private session", () => {
     } finally {
       errors.mock.restore();
     }
-    assert.notDeepEqual(counts.totals(site, true), {});
+    assert.notDeepEqual(await counts.totals(site, true), {});
     openWindows = [NORMAL];
     await counts.onWindowRemoved();
-    assert.deepEqual(counts.totals(site, true), {});
+    assert.deepEqual(await counts.totals(site, true), {});
   });
 
   it("are dropped by the event page through windows.onRemoved, which wakes it when suspended", async () => {
@@ -1733,7 +1930,7 @@ describe("the counts of a private session", () => {
     openWindows = [NORMAL];
     registered[0]?.(5);
     await new Promise((done) => setImmediate(done));
-    assert.deepEqual(counts.totals(site, true), {});
+    assert.deepEqual(await counts.totals(site, true), {});
   });
 
   // The page reads the counts at each wake-up, and the last private window
@@ -1760,7 +1957,7 @@ describe("the counts of a private session", () => {
           `counts.js?${encodeURIComponent(name)}`,
         );
         await woken.ready;
-        assert.deepEqual(woken.totals("t1190.example", true), expected);
+        assert.deepEqual(await woken.totals("t1190.example", true), expected);
         assert.equal(
           session.has("privateCounts"),
           Object.keys(expected).length > 0,
@@ -2121,11 +2318,11 @@ describe("a site the user ignores", () => {
       (session.get("privateCounts") as Record<string, SiteCounts>)[site],
       undefined,
     );
-    assert.deepEqual(counts.totals(site, false), {});
-    assert.deepEqual(counts.totals(site, true), {});
-    assert.equal(counts.since(site, false), local.get("since"));
+    assert.deepEqual(await counts.totals(site, false), {});
+    assert.deepEqual(await counts.totals(site, true), {});
+    assert.equal(await counts.since(site, false), local.get("since"));
     assert.equal(JSON.stringify(local.get(`site:${otherSite}`)), otherBefore);
-    assert.deepEqual(counts.totals(otherSite, false), {
+    assert.deepEqual(await counts.totals(otherSite, false), {
       edge: { blue2: { "GET image": 1 } },
     });
   });
@@ -2457,9 +2654,15 @@ describe("the map", () => {
     try {
       const woken = await importModule<Counts>("counts.js?purged");
       await woken.ready;
-      assert.equal(woken.since("t1730.example", false), local.get("since"));
-      assert.equal(woken.since("t1733.example", false), local.get("since"));
-      assert.equal(woken.since(null, false), local.get("since"));
+      assert.equal(
+        await woken.since("t1730.example", false),
+        local.get("since"),
+      );
+      assert.equal(
+        await woken.since("t1733.example", false),
+        local.get("since"),
+      );
+      assert.equal(await woken.since(null, false), local.get("since"));
     } finally {
       if (privateBefore !== undefined) {
         session.set("privateCounts", privateBefore);
@@ -2889,7 +3092,7 @@ describe("the recording of addresses", () => {
     await flush();
     assert.equal(stored(site), undefined);
     assert.equal(local.has(`site:${site}`), false);
-    assert.deepEqual(counts.totals(site, true), {
+    assert.deepEqual(await counts.totals(site, true), {
       edge: {
         red4: { "GET xmlhttprequest": 1 },
         red3: { "GET xmlhttprequest": 1 },
@@ -2944,13 +3147,16 @@ describe("the recording of addresses", () => {
     local.set(`addresses:${site}`, {
       edge: { red4: { "GET xmlhttprequest": ["/before"] } },
     });
+    // The counts of the site are read, and not its addresses.
+    await load(tab, `https://${site}/logo.png`, { type: "image" });
+    await flush();
     let open = () => {};
     localReadGate = new Promise<void>((done) => {
       open = done;
     });
     try {
       await load(tab, `https://api.${site}/during`, { cookie: true });
-      assert.ok(localReads.at(-1)?.includes(`addresses:${site}`));
+      assert.deepEqual(localReads.at(-1), [`addresses:${site}`]);
       await answer({ kind: "clearSite", site, privateWindow: false });
     } finally {
       localReadGate = null;
@@ -3010,7 +3216,7 @@ describe("the recording of addresses", () => {
     });
   });
 
-  it("reads at a wake-up the settings and every count at once, and the addresses of a site when they are asked", async () => {
+  it("reads at a wake-up the settings, the ignored sites and the common start alone, the counts of a site when first needed, and its addresses when they are asked", async () => {
     await setSettings("level4", 100);
     const tab = 2400;
     const site = "t2400.example";
@@ -3026,18 +3232,32 @@ describe("the recording of addresses", () => {
     const reads = localReads.length;
     const woken = await importModule<Counts>("counts.js?recording");
     await woken.ready;
-    assert.deepEqual(localReads.slice(reads), [null]);
+    assert.deepEqual(localReads.slice(reads), [
+      ["settings", "ignored", "since"],
+    ]);
     assert.deepEqual(woken.currentSettings(), {
       record: "level4",
       recordLimit: 100,
     });
-    assert.deepEqual(woken.totals(site, false), local.get(`site:${site}`));
+    assert.deepEqual(
+      await woken.totals(site, false),
+      local.get(`site:${site}`),
+    );
+    assert.deepEqual(localReads.at(-1), [`site:${site}`, `since:${site}`]);
+    // Read once for this run of the page.
+    assert.deepEqual(
+      await woken.totals(site, false),
+      local.get(`site:${site}`),
+    );
+    assert.equal(await woken.since(site, false), local.get("since"));
+    assert.equal(localReads.length, reads + 2);
     assert.equal(
-      woken.since("t2401.example", false),
+      await woken.since("t2401.example", false),
       local.get("since:t2401.example"),
     );
     assert.deepEqual(await woken.siteAddresses(site, false), stored(site));
-    assert.deepEqual(localReads.at(-1), `addresses:${site}`);
+    assert.deepEqual(localReads.at(-1), [`addresses:${site}`]);
+    assert.equal(localReads.slice(reads).includes(null), false);
   });
 
   it("purges every kept address at once when the recording is turned off, then records nothing", async () => {

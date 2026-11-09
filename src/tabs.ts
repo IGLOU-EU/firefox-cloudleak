@@ -51,8 +51,8 @@ const records = new Map<number, TabRecord>();
 const closed = new Set<number>();
 
 // Every change waits for this, so that the tabs read at the wake-up are not
-// overwritten by the first event that woke the page, and so that the counts
-// a change feeds are read too.
+// overwritten by the first event that woke the page, and so that the
+// settings and the ignored sites a change reads are read too.
 export const ready: Promise<void> = Promise.all([
   browser.storage.session.get(null).then(
     (items) => {

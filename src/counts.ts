@@ -40,6 +40,15 @@ import { report } from "./toolbar.js";
 // counts. The ignored sites are one sorted list, written whole at each change
 // the user makes. Never storage.sync, which Firefox sends to Mozilla's
 // servers.
+//
+// Each wake-up reads the settings, the ignored sites and the common start
+// alone, which every event may need: reading the whole store would make
+// Firefox read and copy every value, the recorded addresses included, at
+// each wake-up, 17 ms more in the extensions' process for 900 sites and
+// 155 ms more with 7.9 MB of addresses (LibreWolf 159.0.1, measured on
+// 2026-11-08). The keys of a site derive from its name, so its counts and
+// its own start are read the first time this run of the page needs them, as
+// its addresses are, and no list of keys is kept.
 const SINCE_KEY = "since";
 const SITE_PREFIX = "site:";
 const SITE_SINCE_PREFIX = "since:";
@@ -48,13 +57,9 @@ const SETTINGS_KEY = "settings";
 
 // The recorded addresses of each site go under a key of their own, apart from
 // its counts, so that a burst writes the addresses of the sites it touched
-// alone. The wake-up reads the whole store at once and leaves them aside: a
-// list of keys would be read one key after another, about 80 ms for 1000
-// sites against 12 ms for the whole store, and 117 ms with 11 MB of
-// addresses (the same IndexedDB reads timed in a page of LibreWolf 159.0.1
-// on 2026-11-08). The limit of each row has no maximum, so a user who keeps
-// many addresses makes each wake-up read longer. The addresses of a site are
-// read again when a request of the site is recorded or a page asks for them.
+// alone, and so that reading the counts of a site leaves them aside: the
+// limit of each row has no maximum. The addresses of a site are read when a
+// request of the site is recorded or a page asks for them.
 const ADDRESSES_PREFIX = "addresses:";
 
 // The counts of private windows never reach the disk: they live in
@@ -63,8 +68,15 @@ const ADDRESSES_PREFIX = "addresses:";
 // fit under one key.
 const PRIVATE_KEY = "privateCounts";
 
+// The common start, and the counts and own start of the sites read during
+// this run of the page.
 let kept: KeptCounts = emptyCounts(0);
 let privateSession: KeptCounts = emptyCounts(0);
+
+// The sites whose counts and own start are in memory, read during this run of
+// the page or emptied since by the user. What memory holds of them is what
+// storage holds, with the counts of the burst not yet written.
+const keptSites = new Set<string>();
 
 // Read at each wake-up and kept in memory, so that a document is told ignored
 // with one lookup when its site becomes known.
@@ -77,13 +89,14 @@ let settings: Settings = DEFAULT_SETTINGS;
 const addresses = new Map<string, SiteAddresses>();
 const addressesToWrite = new Set<string>();
 
-// The sites whose addresses are being read, with the requests recorded
-// meanwhile, which wait for the read.
+// The sites whose counts or addresses are being read, with the requests
+// counted or recorded meanwhile, which wait for the read.
 interface Reading {
   readonly waiting: SeenRequest[];
   readonly done: Promise<void>;
 }
-const reading = new Map<string, Reading>();
+const countReads = new Map<string, Reading>();
+const addressReads = new Map<string, Reading>();
 
 function sitesOf<T>(
   items: Record<string, unknown>,
@@ -102,17 +115,19 @@ function sitesOf<T>(
 // dates them from then rather than from the first request counted.
 async function readKept(): Promise<void> {
   try {
-    const items = await browser.storage.local.get(null);
+    const items = await browser.storage.local.get([
+      SETTINGS_KEY,
+      IGNORED_KEY,
+      SINCE_KEY,
+    ]);
     settings = settingsOf(items[SETTINGS_KEY]);
     ignored = new Set((items[IGNORED_KEY] as string[] | undefined) ?? []);
     const since = items[SINCE_KEY];
-    const siteSince = sitesOf<number>(items, SITE_SINCE_PREFIX);
-    const sites = sitesOf<SiteCounts>(items, SITE_PREFIX);
     if (typeof since === "number") {
-      kept = { since, siteSince, sites };
+      kept = emptyCounts(since);
       return;
     }
-    kept = { since: dayOf(Date.now()), siteSince, sites };
+    kept = emptyCounts(dayOf(Date.now()));
     await browser.storage.local.set({ [SINCE_KEY]: kept.since });
   } catch (error: unknown) {
     console.error(`Cloud Leak: kept counts not read: ${String(error)}`);
@@ -160,8 +175,8 @@ async function readPrivate(): Promise<void> {
   }
 }
 
-// Every count waits for this, so that the counts read at the wake-up are
-// not overwritten by the first request that woke the page.
+// Every event waits for this, so that the settings and the ignored sites read
+// at the wake-up are not overwritten by the first event that woke the page.
 export const ready: Promise<void> = Promise.all([
   readKept(),
   readPrivate(),
@@ -220,49 +235,95 @@ function storedAddresses(value: unknown): SiteAddresses {
     : {};
 }
 
-// Reads the addresses of a site, once for this run of the page. The requests
-// recorded meanwhile wait for the read, and go after what it gives, as the
-// most recent. A clear, a purge or an ignore of the site meanwhile drops the
-// read, since what it read is gone: the next request starts another, which
-// Firefox makes after the write that emptied them (child/ext-storage.js and
-// ExtensionStorageIDB.sys.mjs, LibreWolf 159.0.1). The settings may change
-// meanwhile, so what is read is fitted to those of the moment it arrives.
-function readAddresses(site: string): Reading {
-  const current = reading.get(site);
+// Reads keys of a site once for this run of the page, a single read however
+// many requests need it. The requests that arrive meanwhile wait for the
+// read, and go after what it gives, as the most recent. A clear, a purge or
+// an ignore of the site meanwhile drops the read, since what it read is gone:
+// the next request starts another, which Firefox makes after the write that
+// emptied them (child/ext-storage.js and ExtensionStorageIDB.sys.mjs,
+// LibreWolf 159.0.1). A read that fails drops the requests that waited for
+// it rather than write over what it could not read, and the next request
+// starts another.
+function readOnce(
+  reads: Map<string, Reading>,
+  site: string,
+  keys: string[],
+  arrive: (
+    items: Record<string, unknown>,
+    waiting: readonly SeenRequest[],
+  ) => void,
+): Reading {
+  const current = reads.get(site);
   if (current !== undefined) {
     return current;
   }
-  const key = `${ADDRESSES_PREFIX}${site}`;
   const waiting: SeenRequest[] = [];
-  const done = browser.storage.local.get(key).then(
+  const done = browser.storage.local.get(keys).then(
     (items) => {
-      if (reading.get(site) !== entry) {
-        return;
-      }
-      reading.delete(site);
-      let recorded = fitAddresses(storedAddresses(items[key]), settings);
-      for (const request of waiting) {
-        if (recordsAddressOf(request.classification.leak.level)) {
-          recorded = addAddress(recorded, request, settings.recordLimit);
-        }
-      }
-      addresses.set(site, recorded);
-      if (waiting.length > 0) {
-        addressesToWrite.add(site);
-        scheduleKeptWrite(site);
+      if (reads.get(site) === entry) {
+        reads.delete(site);
+        arrive(items, waiting);
       }
     },
     (error: unknown) => {
-      if (reading.get(site) === entry) {
-        reading.delete(site);
+      if (reads.get(site) === entry) {
+        reads.delete(site);
       }
       throw error;
     },
   );
   const entry: Reading = { waiting, done };
-  reading.set(site, entry);
+  reads.set(site, entry);
   report(done);
   return entry;
+}
+
+// The settings may change while the addresses are read, so what is read is
+// fitted to those of the moment it arrives.
+function readAddresses(site: string): Reading {
+  const key = `${ADDRESSES_PREFIX}${site}`;
+  return readOnce(addressReads, site, [key], (items, waiting) => {
+    let recorded = fitAddresses(storedAddresses(items[key]), settings);
+    for (const request of waiting) {
+      if (recordsAddressOf(request.classification.leak.level)) {
+        recorded = addAddress(recorded, request, settings.recordLimit);
+      }
+    }
+    addresses.set(site, recorded);
+    if (waiting.length > 0) {
+      addressesToWrite.add(site);
+      scheduleKeptWrite(site);
+    }
+  });
+}
+
+// The counts and the own start of a site, which only this page writes. The
+// requests counted while they are read are counted after what storage holds,
+// so that none is lost and none writes over the stored counts.
+function readCounts(site: string): Reading {
+  const countsKey = `${SITE_PREFIX}${site}`;
+  const sinceKey = `${SITE_SINCE_PREFIX}${site}`;
+  return readOnce(countReads, site, [countsKey, sinceKey], (items, waiting) => {
+    const counts = items[countsKey];
+    const own = items[sinceKey];
+    if (typeof counts === "object" && counts !== null) {
+      (kept.sites as Record<string, SiteCounts>)[site] = counts as SiteCounts;
+    }
+    if (typeof own === "number") {
+      (kept.siteSince as Record<string, number>)[site] = own;
+    }
+    keptSites.add(site);
+    for (const request of waiting) {
+      countKept(site, request);
+    }
+  });
+}
+
+// What a page asks of a site waits for its counts, read once.
+async function siteRead(site: string | null): Promise<void> {
+  if (site !== null && !keptSites.has(site)) {
+    await readCounts(site).done;
+  }
 }
 
 // The address goes first in its row, once, written with the counts of the
@@ -290,13 +351,13 @@ function recordAddress(site: string, request: SeenRequest): void {
 function forgetAddresses(site: string): void {
   addresses.delete(site);
   addressesToWrite.delete(site);
-  reading.delete(site);
+  addressReads.delete(site);
 }
 
 function forgetAllAddresses(): void {
   addresses.clear();
   addressesToWrite.clear();
-  reading.clear();
+  addressReads.clear();
 }
 
 // The sites of the counts are an object this page alone holds, made anew at
@@ -310,28 +371,48 @@ function countIn(counts: KeptCounts, site: string, request: SeenRequest): void {
   );
 }
 
-// A request of a private window records nothing, whatever the settings.
+function countKept(site: string, request: SeenRequest): void {
+  countIn(kept, site, request);
+  recordAddress(site, request);
+  scheduleKeptWrite(site);
+}
+
+// A request of a private window records nothing, whatever the settings. The
+// counts of the private session are read whole at the wake-up.
 export function count(site: string, request: SeenRequest): void {
   if (request.privateWindow) {
     countIn(privateSession, site, request);
     schedulePrivateWrite(site);
     return;
   }
-  countIn(kept, site, request);
-  recordAddress(site, request);
-  scheduleKeptWrite(site);
+  if (!keptSites.has(site)) {
+    readCounts(site).waiting.push(request);
+    return;
+  }
+  countKept(site, request);
 }
 
-export function totals(
+export async function totals(
   site: string | null,
   privateWindow: boolean,
-): SiteCounts {
-  return totalsOf(privateWindow ? privateSession : kept, site);
+): Promise<SiteCounts> {
+  if (privateWindow) {
+    return totalsOf(privateSession, site);
+  }
+  await siteRead(site);
+  return totalsOf(kept, site);
 }
 
 // Zero in a private window: its counts live only for the session.
-export function since(site: string | null, privateWindow: boolean): number {
-  return privateWindow ? 0 : sinceOf(kept, site);
+export async function since(
+  site: string | null,
+  privateWindow: boolean,
+): Promise<number> {
+  if (privateWindow) {
+    return 0;
+  }
+  await siteRead(site);
+  return sinceOf(kept, site);
 }
 
 // The counts of the site the popup of the window shows go, written or not,
@@ -364,6 +445,8 @@ export async function clear(
   }
   const at = dayOf(Date.now());
   kept = clearSite(kept, site, at);
+  keptSites.add(site);
+  countReads.delete(site);
   forgetAddresses(site);
   const key = `${ADDRESSES_PREFIX}${site}`;
   const written = browser.storage.local.set({
@@ -378,8 +461,12 @@ export async function clear(
 
 // Every site, for the map: the kept counts, or in a private window those of
 // the private session, which have no start. A copy of the sites, which the
-// requests counted afterwards change in place.
-export function mapData(privateWindow: boolean): MapData {
+// requests counted afterwards change in place. The map wants every site, so
+// each time it asks, while the user looks at it, the whole store is read,
+// and what memory holds of a site read during this run of the page wins,
+// since it holds the counts of the burst not yet written. The requests
+// counted before the map asked are counted first.
+export async function mapData(privateWindow: boolean): Promise<MapData> {
   if (privateWindow) {
     return {
       privateWindow,
@@ -388,29 +475,40 @@ export function mapData(privateWindow: boolean): MapData {
       sites: { ...privateSession.sites },
     };
   }
-  return {
-    privateWindow,
-    since: kept.since,
-    siteSince: kept.siteSince,
-    sites: { ...kept.sites },
-  };
+  await Promise.allSettled([...countReads.values()].map((read) => read.done));
+  const items = await browser.storage.local.get(null);
+  const sites = sitesOf<SiteCounts>(items, SITE_PREFIX);
+  const siteSince = sitesOf<number>(items, SITE_SINCE_PREFIX);
+  for (const site of keptSites) {
+    delete sites[site];
+    delete siteSince[site];
+    const counts = kept.sites[site];
+    const own = kept.siteSince[site];
+    if (counts !== undefined) {
+      sites[site] = counts;
+    }
+    if (own !== undefined) {
+      siteSince[site] = own;
+    }
+  }
+  return { privateWindow, since: kept.since, siteSince, sites };
 }
 
 // The counts of every site go, written or not. In a private window, those of
 // the private session, and nothing of the kept counts: a private write still
 // pending takes what is counted when it runs. Outside, every kept count and
 // the start of each site cleared alone go, and the counts start again now,
-// for every site, while the ignored sites stay. The keys stored go with those
-// in memory, should the read at the wake-up have failed, since their names
-// would keep which sites the user went to. The emptied counts and the new
-// starts go in the same transaction as the common start, since one without
-// the other would claim what was not observed. The keys go in a second one,
-// since a write cannot remove a key, asked in the same turn as the memory
-// empties, so that no count written after the purge comes before either. A
-// write still pending finds nothing of those sites to write. The recorded
-// addresses go the same way as the counts, in the same transactions. The
-// keys stored are listed with getKeys, which keeps their values out of the
-// page.
+// for every site, while the ignored sites stay. The keys stored go, those of
+// the sites this run of the page never read included, with those in memory
+// not yet written, since their names would keep which sites the user went
+// to. The emptied counts and the new starts go in the same transaction as
+// the common start, since one without the other would claim what was not
+// observed. The keys go in a second one, since a write cannot remove a key,
+// asked in the same turn as the memory empties, so that no count written
+// after the purge comes before either. A write still pending finds nothing
+// of those sites to write. The recorded addresses go the same way as the
+// counts, in the same transactions. The keys stored are listed with getKeys,
+// which keeps their values out of the page.
 export async function purgeAll(privateWindow: boolean): Promise<number> {
   if (privateWindow) {
     await dropPrivate();
@@ -432,6 +530,8 @@ export async function purgeAll(privateWindow: boolean): Promise<number> {
     }
   }
   kept = emptyCounts(at);
+  keptSites.clear();
+  countReads.clear();
   forgetAllAddresses();
   const written = browser.storage.local.set(items);
   const removed = browser.storage.local.remove(
@@ -460,6 +560,8 @@ export function ignoredSites(): string[] {
 export async function ignore(site: string): Promise<void> {
   ignored.add(site);
   kept = dropSite(kept, site);
+  keptSites.delete(site);
+  countReads.delete(site);
   forgetAddresses(site);
   if (privateSession.sites[site] !== undefined) {
     privateSession = dropSite(privateSession, site);
@@ -486,6 +588,8 @@ export async function watch(site: string): Promise<void> {
   }
   const at = dayOf(Date.now());
   kept = clearSite(kept, site, at);
+  keptSites.add(site);
+  countReads.delete(site);
   await browser.storage.local.set({
     [IGNORED_KEY]: ignoredSites(),
     [`${SITE_SINCE_PREFIX}${site}`]: at,

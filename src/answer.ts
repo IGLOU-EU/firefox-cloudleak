@@ -126,8 +126,8 @@ function requestOf(message: unknown): PopupRequest | null {
 }
 
 // Of the document the tab shows, and of its site, which Firefox gives for a
-// tab the extension never saw navigate. Without it, the site is unknown and
-// the totals are empty.
+// tab the extension never saw navigate, whose counts are read when first
+// asked. Without it, the site is unknown and the totals are empty.
 async function popupData({
   tabId,
   privateWindow,
@@ -139,8 +139,8 @@ async function popupData({
     page,
     site,
     privateWindow,
-    since: since(site, privateWindow),
-    totals: totals(site, privateWindow),
+    since: await since(site, privateWindow),
+    totals: await totals(site, privateWindow),
     ignored: isIgnored(site),
   };
 }
