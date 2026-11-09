@@ -73,12 +73,46 @@ const COPIED_MS = 1500;
 // window, the map shows the private session only.
 const privateWindow = browser.extension.inIncognitoContext === true;
 
+// Firefox checks, looks up and fills in a message at each call, 1 to 5 µs
+// (ExtensionCommon.sys.mjs, LibreWolf 159.0.1), and the map writes some
+// 4 000 for 900 sites at each answer of the event page, most of them the same
+// from one answer to the next. The messages of the last answer are kept
+// beside those of the current one, so that what is kept follows the counts
+// rather than grow with each of them.
+let messages = new Map<string, string>();
+let lastMessages = new Map<string, string>();
+
+function message(name: string, substitutions: readonly string[]): string {
+  const key = JSON.stringify([name, ...substitutions]);
+  let text = messages.get(key);
+  if (text === undefined) {
+    text =
+      lastMessages.get(key) ??
+      browser.i18n.getMessage(name, [...substitutions]);
+    messages.set(key, text);
+  }
+  return text;
+}
+
+// Firefox writes in Unicode only a label in punycode (idn.domainToDisplay
+// in child/ext-publicSuffix.js, LibreWolf 159.0.1), at 7 to 17 µs a call: any
+// other site, kept in lowercase ASCII as Firefox reduced it, shows as it is.
+const shownSites = new Map<string, string>();
+
+function shownSite(site: string): string {
+  if (!/(?:^|\.)xn--/i.test(site)) {
+    return site;
+  }
+  let shown = shownSites.get(site);
+  if (shown === undefined) {
+    shown = siteText(site);
+    shownSites.set(site, shown);
+  }
+  return shown;
+}
+
 const language = browser.i18n.getUILanguage();
-const formats = formatsOf(
-  language,
-  (name, substitutions) => browser.i18n.getMessage(name, [...substitutions]),
-  siteText,
-);
+const formats = formatsOf(language, message, shownSite);
 
 let map: PreparedMap | null = null;
 let filters: Filters = NO_FILTER;
@@ -504,7 +538,8 @@ function labelOf(text: string, proof: string | null): HTMLElement {
 
 // A cut address fades at its end, and scrolls on hover and focus as far as
 // it is cut, so each is measured once in the page: every width first, then
-// every change, so that the page is laid out once.
+// every change, so that the page is laid out once. A list is always drawn
+// anew, so only the cut addresses have anything to change.
 function measure(list: HTMLElement): void {
   const buttons = Array.from(list.querySelectorAll<HTMLElement>(".address"));
   const cuts = buttons.map((button) => {
@@ -513,9 +548,11 @@ function measure(list: HTMLElement): void {
   });
   buttons.forEach((button, index) => {
     const cut = cuts[index] ?? 0;
-    button.classList.toggle("cut", cut > 0);
-    button.style.setProperty("--shift", `${-cut}px`);
-    button.style.setProperty("--duration", `${cut / ADDRESS_SPEED}s`);
+    if (cut > 0) {
+      button.classList.add("cut");
+      button.style.setProperty("--shift", `${-cut}px`);
+      button.style.setProperty("--duration", `${cut / ADDRESS_SPEED}s`);
+    }
   });
 }
 
@@ -539,10 +576,10 @@ async function copyAddress(
     copied = false;
     console.error(`Cloud Leak: address not copied: ${String(error)}`);
   }
-  const chip = button.querySelector<HTMLElement>(".copied");
-  chip?.classList.toggle("failed", !copied);
-  const word = chip?.querySelector<HTMLElement>(".word");
-  if (word !== null && word !== undefined) {
+  const chip = chipOf(button);
+  chip.classList.toggle("failed", !copied);
+  const word = chip.querySelector<HTMLElement>(".word");
+  if (word !== null) {
     word.textContent = copied ? copy.copied : copy.failed;
   }
   button.classList.add("done");
@@ -574,6 +611,20 @@ function checkMark(): SVGSVGElement {
   return image;
 }
 
+// The chip of a copy is drawn at the first copy of its address, since a list
+// may hold thousands of addresses that are never copied.
+function chipOf(button: HTMLElement): HTMLElement {
+  const drawn = button.querySelector<HTMLElement>(".copied");
+  if (drawn !== null) {
+    return drawn;
+  }
+  const chip = html("span", "copied");
+  chip.setAttribute("aria-hidden", "true");
+  chip.append(checkMark(), html("span", "word"));
+  button.append(chip);
+  return chip;
+}
+
 // Whole, the scheme included, which says whether the request was encrypted,
 // and whole again in its tooltip and in the copy.
 function addressList(row: AddressRow, copy: CopyTexts): HTMLElement {
@@ -584,10 +635,7 @@ function addressList(row: AddressRow, copy: CopyTexts): HTMLElement {
     const button = html("button", "address");
     button.type = "button";
     button.title = address;
-    const chip = html("span", "copied");
-    chip.setAttribute("aria-hidden", "true");
-    chip.append(checkMark(), html("span", "word", copy.copied));
-    button.append(html("span", "text", address), chip);
+    button.append(html("span", "text", address));
     button.addEventListener("click", () =>
       report(copyAddress(button, address, copy)),
     );
@@ -826,7 +874,13 @@ async function askAddresses(): Promise<void> {
   if (selectedSite() !== site) {
     return;
   }
-  record = { site, addresses, limit: settings.recordLimit };
+  const next = { site, addresses, limit: settings.recordLimit };
+  // The panel already shows them when the map comes back into view or its
+  // site is chosen again, and a long list costs its drawing.
+  if (JSON.stringify(next) === JSON.stringify(record)) {
+    return;
+  }
+  record = next;
   renderPanel();
 }
 
@@ -878,6 +932,8 @@ function render(resetScroll: boolean): void {
 // counts, since both grow while the map is open.
 async function load(resetScroll: boolean): Promise<void> {
   const data = await ask<MapData>({ kind: "map", privateWindow });
+  lastMessages = messages;
+  messages = new Map();
   map = prepare(data, table.providers, formats);
   render(resetScroll);
   await askAddresses();
