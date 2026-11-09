@@ -65,8 +65,20 @@ ready.then(() => {
 browser.webNavigation.onCommitted.addListener((details) =>
   report(onCommitted(details)),
 );
-browser.webNavigation.onCompleted.addListener((details) =>
-  report(onCompleted(details)),
+
+// Only a page Firefox loads in its own process needs its completion, having
+// no commit: an about: page such as the settings, a chrome: page, and the
+// view-source: of either, which loads where the page it shows loads
+// (ProcessIsolation.cpp, Firefox 159.0.1). Firefox applies the filter before
+// sending anything (ext-webNavigation.js and MatchURLFilters.sys.mjs), so the
+// completion of each frame of each website neither reaches nor wakes the
+// page. A document with the system principal under a resource: or moz-src:
+// address, loaded from a tab already in that process, would stay there too
+// (same file), and would keep the state of the page before it: whether
+// Firefox has such a page was not checked.
+browser.webNavigation.onCompleted.addListener(
+  (details) => report(onCompleted(details)),
+  { url: [{ schemes: ["about", "chrome", "view-source"] }] },
 );
 
 browser.tabs.onUpdated.addListener(

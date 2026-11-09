@@ -322,15 +322,54 @@ function settled(): Promise<void> {
   return new Promise((done) => setImmediate(done));
 }
 
+// Firefox delivers a webNavigation event to a listener only when its URL
+// passes the filter the listener was added with (ext-webNavigation.js and
+// MatchURLFilters.sys.mjs, Firefox 159.0.1). Only the schemes are read here,
+// the only part the event page uses, and any other part fails the test.
+function passes(options: unknown[], details: unknown): boolean {
+  const filter = options[0] as { url: { schemes?: string[] }[] } | undefined;
+  if (filter === undefined) {
+    return true;
+  }
+  const { url } = details as { url: string };
+  const scheme = new URL(url).protocol.slice(0, -1);
+  return filter.url.some((part) => {
+    assert.deepEqual(Object.keys(part), ["schemes"]);
+    return part.schemes?.includes(scheme) === true;
+  });
+}
+
 // An event as Firefox delivers it, to every listener background.js added for
-// it, whose work goes on once they return.
+// it whose filter it passes, whose work goes on once they return.
 async function fire(name: string, ...args: unknown[]): Promise<void> {
   const registered = listeners.get(name) ?? [];
   assert.ok(registered.length > 0, `no listener for ${name}`);
-  for (const listener of registered) {
-    listener(...args);
+  const options = listenerOptions.get(name) ?? [];
+  for (const [index, listener] of registered.entries()) {
+    if (
+      !name.startsWith("webNavigation.") ||
+      passes(options[index] ?? [], args[0])
+    ) {
+      listener(...args);
+    }
   }
   await settled();
+}
+
+// The completion of the top document of a tab, as Firefox gives it.
+function completed(
+  tabId: number,
+  documentId: string,
+  timeStamp: number,
+  url: string,
+): Promise<void> {
+  return fire("webNavigation.onCompleted", {
+    tabId,
+    frameId: 0,
+    documentId,
+    timeStamp,
+    url,
+  });
 }
 
 let lastId = 0;
@@ -671,6 +710,52 @@ describe("a page whose start the extension did not see", () => {
   });
 });
 
+describe("a tab restored at the start of the browser", () => {
+  // Firefox restores the tab before it starts the event page, which then
+  // sees the end of the load alone: responses whose requests it missed, then
+  // the completion of a document whose commit it missed.
+  async function restored(tab: number, url: string): Promise<void> {
+    frameOf = (tabId) => Promise.resolve(tabId === tab ? { url } : null);
+    await requests.onResponseStarted(
+      response(tab, nextId(), "image", 1000, OTHER_IP),
+    );
+    await settled();
+    await exchange(tab, "image", 1100, EDGE_IP);
+    await status(tab);
+    mock.timers.runAll();
+  }
+
+  after(() => {
+    frameOf = NO_FRAME;
+  });
+
+  it("keeps saying a website missed requests once Firefox completes the page", async () => {
+    const tab = 320;
+    await restored(tab, "https://www.restored.example/");
+    assert.equal(tabs.recordOf(tab).site, "restored.example");
+    const before = { ...shown(tab) };
+    assert.equal(before.icon, "/icons/blue.svg");
+    assert.match(before.title ?? "", /titleMissed/);
+    await completed(tab, "doc-320", 1200, "https://www.restored.example/");
+    await status(tab);
+    mock.timers.runAll();
+    assert.deepEqual(shown(tab), before);
+    assert.equal(tabs.recordOf(tab).site, "restored.example");
+  });
+
+  it("keeps saying reader view missed requests once Firefox completes it, though its completion reaches the page", async () => {
+    const tab = 321;
+    const url = "about:reader?url=https%3A%2F%2Fsite.example%2F";
+    await restored(tab, url);
+    const before = { ...shown(tab) };
+    assert.match(before.title ?? "", /titleMissed/);
+    await completed(tab, "doc-321", 1200, url);
+    await status(tab);
+    mock.timers.runAll();
+    assert.deepEqual(shown(tab), before);
+  });
+});
+
 describe("the toolbar button", () => {
   it("sends again only the values that changed between two changes of the tab's status", async () => {
     const tab = 400;
@@ -819,21 +904,32 @@ describe("a page of the browser, without the access to all sites", () => {
     }
   });
 
-  it("shows the settings page neutral, which Firefox completes without a commit", async () => {
-    const tab = 710;
-    await redPage(tab, 1000);
-    await statusWithoutUrl(tab);
-    await tabs.onCompleted({
-      tabId: tab,
-      frameId: 0,
-      documentId: "doc-settings",
-      timeStamp: 2000,
-      url: "about:preferences",
+  // The pages Firefox loads in its own process (ProcessIsolation.cpp,
+  // Firefox 159.0.1).
+  const parentPages = [
+    "about:preferences",
+    "about:settings#privacy",
+    "chrome://browser/content/places/places.xhtml",
+    "view-source:about:preferences",
+  ];
+
+  for (const [index, url] of parentPages.entries()) {
+    it(`shows ${url} neutral, which Firefox completes without a commit`, async () => {
+      const tab = 750 + index;
+      await redPage(tab, 1000);
+      await statusWithoutUrl(tab);
+      await completed(tab, `doc-${tab}-settings`, 2000, url);
+      await statusWithoutUrl(tab);
+      mock.timers.runAll();
+      assert.deepEqual(iconOf(tab), NEUTRAL);
+      assert.equal(shown(tab).title, "titleNeutral");
     });
-    await statusWithoutUrl(tab);
-    mock.timers.runAll();
-    assert.deepEqual(iconOf(tab), NEUTRAL);
-    assert.equal(shown(tab).title, "titleNeutral");
+  }
+
+  it("asks Firefox for the completion of the pages of its own process alone", () => {
+    assert.deepEqual(listenerOptions.get("webNavigation.onCompleted"), [
+      [{ url: [{ schemes: ["about", "chrome", "view-source"] }] }],
+    ]);
   });
 
   for (const [index, url] of ["https://hidden.example/", ""].entries()) {
@@ -1039,24 +1135,13 @@ describe("the site of a document", () => {
     });
   }
 
-  it("is the one of the page completed without a commit, such as the settings", async () => {
+  it("is none for the page completed without a commit, such as the settings", async () => {
     const tab = 1020;
-    await tabs.onCompleted({
-      tabId: tab,
-      frameId: 0,
-      documentId: "doc-1020",
-      timeStamp: 1000,
-      url: "about:preferences",
-    });
-    assert.equal(tabs.recordOf(tab).site, null);
-    await tabs.onCompleted({
-      tabId: tab,
-      frameId: 0,
-      documentId: "doc-1020-site",
-      timeStamp: 2000,
-      url: "https://www.site.example/",
-    });
+    await commit(tab, "doc-1020-site", 1000, [], "https://www.site.example/");
     assert.equal(tabs.recordOf(tab).site, "site.example");
+    await completed(tab, "doc-1020", 2000, "about:preferences");
+    assert.equal(tabs.recordOf(tab).document, "doc-1020");
+    assert.equal(tabs.recordOf(tab).site, null);
   });
 });
 

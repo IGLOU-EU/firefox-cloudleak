@@ -187,13 +187,20 @@ export async function onCommitted(details: DocumentDetails): Promise<void> {
 // A page Firefox loads in its own process, such as about:preferences, gets
 // no onCommitted, since the event needs a content process to report it, but
 // it gets onCompleted (WebNavigationContent.cpp and WebNavigation.sys.mjs,
-// Firefox 159.0.1).
+// Firefox 159.0.1), and such a page is a page of the browser. A website and
+// reader view commit in a content process: the completion of one whose
+// commit the extension did not see, since it started after it, as at the
+// start of the browser, says nothing of the requests the tab missed before,
+// which the tab keeps.
 export async function onCompleted(details: DocumentDetails): Promise<void> {
   if (details.frameId !== 0 || details.documentId === undefined) {
     return;
   }
   const { tabId, documentId, timeStamp } = details;
   const { page, site } = documentOf(details.url);
+  if (page !== "browser") {
+    return;
+  }
   await ready;
   update(tabId, (record) =>
     showCompletedDocument(
