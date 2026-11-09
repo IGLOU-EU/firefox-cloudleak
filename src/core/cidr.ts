@@ -32,18 +32,47 @@ function fail(reason: string): { ok: false; reason: string } {
 }
 
 function parseIpv4(text: string): bigint | undefined {
-  const parts = text.split(".");
-  if (parts.length !== 4) {
-    return undefined;
-  }
-  let value = 0n;
-  for (const part of parts) {
-    if (!DECIMAL.test(part) || part.length > 3 || Number(part) > 255) {
+  const value = ipv4Of(text);
+  return value === undefined ? undefined : BigInt(value);
+}
+
+const DOT = ".".charCodeAt(0);
+const ZERO = "0".charCodeAt(0);
+const NINE = "9".charCodeAt(0);
+
+// An IPv4 address as a 32-bit number, read by hand: the address of every
+// response is read and compared with every range of the table, and a number
+// costs far less than a BigInt or a regular expression. Four decimal parts of
+// 0 to 255, without a leading zero.
+export function ipv4Of(text: string): number | undefined {
+  let value = 0;
+  let part = 0;
+  let digits = 0;
+  let dots = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code === DOT) {
+      if (digits === 0 || dots === 3) {
+        return undefined;
+      }
+      value = value * 256 + part;
+      dots += 1;
+      part = 0;
+      digits = 0;
+    } else if (code >= ZERO && code <= NINE) {
+      if (digits > 0 && part === 0) {
+        return undefined;
+      }
+      part = part * 10 + (code - ZERO);
+      digits += 1;
+      if (part > 255) {
+        return undefined;
+      }
+    } else {
       return undefined;
     }
-    value = (value << 8n) | BigInt(part);
   }
-  return value;
+  return dots === 3 && digits > 0 ? value * 256 + part : undefined;
 }
 
 function parseGroups(text: string): bigint[] | undefined {
@@ -141,4 +170,46 @@ export function cidrContains(range: Cidr, address: IpAddress): boolean {
   }
   const hostBits = BigInt(WIDTH[range.family] - range.prefixLength);
   return address.value >> hostBits === range.network >> hostBits;
+}
+
+// An IPv4 range as its network and its mask, unsigned 32-bit numbers, which
+// an address compares with in one step.
+export interface Ipv4Range {
+  readonly network: number;
+  readonly mask: number;
+}
+
+// The ranges of a provider, ready to compare with an address. The build
+// writes them so in the table the extension loads, which no wake-up then
+// parses again.
+export interface Ranges {
+  readonly ipv4: readonly Ipv4Range[];
+  readonly ipv6: readonly Cidr[];
+}
+
+// The build refuses an invalid range, and one that slips through is skipped.
+export function rangesOf(texts: readonly string[]): Ranges {
+  const ipv4: Ipv4Range[] = [];
+  const ipv6: Cidr[] = [];
+  for (const text of texts) {
+    const range = parseCidr(text);
+    if (!range.ok) {
+      continue;
+    }
+    const { family, network, prefixLength } = range.value;
+    if (family === 4) {
+      ipv4.push({
+        network: Number(network),
+        mask:
+          prefixLength === 0 ? 0 : (0xffffffff << (32 - prefixLength)) >>> 0,
+      });
+    } else {
+      ipv6.push(range.value);
+    }
+  }
+  return { ipv4, ipv6 };
+}
+
+export function ipv4RangeContains(range: Ipv4Range, address: number): boolean {
+  return (address & range.mask) >>> 0 === range.network;
 }

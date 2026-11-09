@@ -5,18 +5,20 @@
 // sources describe.
 
 import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
-import { loadTable } from "../scripts/providers.js";
+import { loadTable, parseRangesFile } from "../scripts/providers.js";
+import { parseCidr, parseIp } from "../src/core/cidr.js";
 import {
   classifyRequest,
   type Leak,
   type RequestFacts,
 } from "../src/core/classify.js";
 
-const { table, errors } = loadTable(
-  fileURLToPath(new URL("../../data", import.meta.url)),
-);
+const DATA = fileURLToPath(new URL("../../data", import.meta.url));
+const { table, errors } = loadTable(DATA);
 
 const CLOUDFLARE_IP = "104.16.0.1";
 
@@ -451,5 +453,140 @@ describe("the committed data", () => {
     ]) {
       assert.deepEqual(leakOf({ cookies: [name] }), SESSION_POSSIBLE, name);
     }
+  });
+});
+
+// Each provider's ranges as ranges.txt writes them.
+function rangeTexts(): [string, string[]][] {
+  return table.providers.map(({ id }) => {
+    const path = join(DATA, "providers", id, "ranges.txt");
+    return [
+      id,
+      existsSync(path)
+        ? parseRangesFile(readFileSync(path, "utf8"), path).ranges
+        : [],
+    ];
+  });
+}
+
+// An IPv4 address read as the classification read it before the build
+// parsed the ranges: split, each part checked by a regular expression, and
+// the whole a BigInt.
+function referenceIpv4(text: string): bigint | null {
+  const parts = text.split(".");
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !/^(0|[1-9][0-9]*)$/.test(part) || Number(part) > 255)
+  ) {
+    return null;
+  }
+  return parts.reduce((value, part) => (value << 8n) | BigInt(part), 0n);
+}
+
+// The provider of an address as the classification found it then: every
+// range read from its text, and the address compared with each as BigInts.
+function referenceProviderOf(
+  ip: string,
+  texts: readonly [string, string[]][],
+): string | null {
+  const family = ip.includes(":") ? 6 : 4;
+  const parsedIp = parseIp(ip);
+  const address =
+    family === 4
+      ? referenceIpv4(ip)
+      : parsedIp.ok
+        ? parsedIp.value.value
+        : null;
+  if (address === null) {
+    return null;
+  }
+  const width = family === 4 ? 32n : 128n;
+  for (const [id, ranges] of texts) {
+    for (const text of ranges) {
+      const [network = "", prefix = ""] = text.split("/");
+      if ((family === 4) === network.includes(":")) {
+        continue;
+      }
+      const range = parseCidr(text);
+      const start =
+        family === 4 ? referenceIpv4(network) : range.ok && range.value.network;
+      assert.ok(typeof start === "bigint", text);
+      const hostBits = width - BigInt(prefix);
+      if (address >> hostBits === start >> hostBits) {
+        return id;
+      }
+    }
+  }
+  return null;
+}
+
+function ipv4Text(value: bigint): string {
+  return [24n, 16n, 8n, 0n].map((shift) => (value >> shift) & 0xffn).join(".");
+}
+
+function ipv6Text(value: bigint): string {
+  return [7n, 6n, 5n, 4n, 3n, 2n, 1n, 0n]
+    .map((group) => ((value >> (group * 16n)) & 0xffffn).toString(16))
+    .join(":");
+}
+
+// Both ends of each range and the addresses just outside, the IPv4 ones also
+// as IPv4 addresses mapped in IPv6, addresses drawn across the IPv4 space,
+// and texts that are not addresses.
+function addressesToCompare(texts: readonly [string, string[]][]): string[] {
+  const addresses: string[] = [];
+  for (const [, ranges] of texts) {
+    for (const text of ranges) {
+      const range = parseCidr(text);
+      assert.ok(range.ok, text);
+      const { family, network, prefixLength } = range.value;
+      const width = family === 4 ? 32n : 128n;
+      const last = network + (1n << (width - BigInt(prefixLength))) - 1n;
+      const top = (1n << width) - 1n;
+      const ends = [network, network + 1n, last, network - 1n, last + 1n];
+      for (const value of ends.filter((end) => end >= 0n && end <= top)) {
+        if (family === 4) {
+          addresses.push(ipv4Text(value), `::ffff:${ipv4Text(value)}`);
+        } else {
+          addresses.push(ipv6Text(value));
+        }
+      }
+    }
+  }
+  let seed = 0x2f7b85f;
+  for (let drawn = 0; drawn < 2000; drawn += 1) {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    addresses.push(ipv4Text(BigInt(seed)));
+  }
+  addresses.push(
+    "",
+    "01.2.3.4",
+    "104.16.0.010",
+    "104.16.0",
+    "104.16.0.1.1",
+    "104.16..1",
+    "104.16.0.256",
+    " 104.16.0.1",
+    "104.16.0.1 ",
+    "2400:cb00::1%eth0",
+    "2400:cb00:::1",
+    "garbage",
+  );
+  return addresses;
+}
+
+describe("the address ranges of the committed data", () => {
+  it("give every address the provider that the ranges read from their text give it", () => {
+    const texts = rangeTexts();
+    const addresses = addressesToCompare(texts);
+    assert.ok(addresses.length > 4000, `${addresses.length} addresses`);
+    let found = 0;
+    for (const ip of addresses) {
+      const expected = referenceProviderOf(ip, texts);
+      assert.equal(classify({ ip })?.provider ?? null, expected, ip);
+      found += expected === null ? 0 : 1;
+    }
+    // Both outcomes are compared, not only addresses of no provider.
+    assert.ok(found > 1000, `${found} addresses of a provider`);
   });
 });

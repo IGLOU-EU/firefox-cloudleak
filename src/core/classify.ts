@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import { type Cidr, cidrContains, parseCidr, parseIp } from "./cidr.js";
+import { cidrContains, ipv4Of, ipv4RangeContains, parseIp } from "./cidr.js";
 import { matchesPattern } from "./pattern.js";
 import type { ProviderEntry, ProviderTable } from "./provider-table.js";
 
@@ -102,35 +102,32 @@ function endsWithSuffix(name: string, suffixes: readonly string[]): boolean {
   });
 }
 
+// An IPv4 address, the most common, is read and compared as a number. An
+// IPv4 address mapped in IPv6 is an IPv6 address, which no IPv4 range holds.
 function findByAddress(
   ip: string | null,
   providers: readonly ProviderEntry[],
 ): ProviderEntry | undefined {
-  const address = ip === null ? null : parseIp(ip);
-  if (address === null || !address.ok) {
+  if (ip === null) {
+    return undefined;
+  }
+  if (!ip.includes(":")) {
+    const address = ipv4Of(ip);
+    return address === undefined
+      ? undefined
+      : providers.find((provider) =>
+          provider.ranges.ipv4.some((range) =>
+            ipv4RangeContains(range, address),
+          ),
+        );
+  }
+  const address = parseIp(ip);
+  if (!address.ok) {
     return undefined;
   }
   return providers.find((provider) =>
-    rangesOf(provider).some((range) => cidrContains(range, address.value)),
+    provider.ranges.ipv6.some((range) => cidrContains(range, address.value)),
   );
-}
-
-// Parsing a range costs far more than comparing an address with it, and the
-// table does not change while the extension runs, so each provider's ranges
-// are parsed once per wake-up. The build refuses an invalid range, and one
-// that slips through is skipped.
-const parsedRanges = new WeakMap<ProviderEntry, readonly Cidr[]>();
-
-function rangesOf(provider: ProviderEntry): readonly Cidr[] {
-  let ranges = parsedRanges.get(provider);
-  if (ranges === undefined) {
-    ranges = provider.ranges.flatMap((text) => {
-      const range = parseCidr(text);
-      return range.ok ? [range.value] : [];
-    });
-    parsedRanges.set(provider, ranges);
-  }
-  return ranges;
 }
 
 function matchesAny(patterns: readonly string[], text: string): boolean {

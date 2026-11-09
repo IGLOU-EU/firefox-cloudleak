@@ -17,7 +17,9 @@ import {
   parsePublishedSource,
   parseRangesFile,
   readPublishedList,
+  tableLiteral,
 } from "../scripts/providers.js";
+import type { ProviderTable } from "../src/core/provider-table.js";
 
 const VALID_PROVIDER = `{
   "name": "Example CDN",
@@ -809,10 +811,14 @@ describe("loadProviders", () => {
     const { table, errors } = loadProviders(dir);
     assert.deepEqual(errors, []);
     assert.deepEqual(
-      table.map((entry) => [entry.id, entry.ranges.length]),
+      table.map((entry) => [
+        entry.id,
+        entry.ranges.ipv4.length,
+        entry.ranges.ipv6.length,
+      ]),
       [
-        ["alpha-cdn", 2],
-        ["zeta", 0],
+        ["alpha-cdn", 1, 1],
+        ["zeta", 0, 0],
       ],
     );
   });
@@ -891,7 +897,16 @@ describe("loadProviders", () => {
             name: "Example CDN",
             country: "US",
             parent: null,
-            ranges: ["192.0.2.0/24", "2001:db8::/32"],
+            ranges: {
+              ipv4: [{ network: 0xc0000200, mask: 0xffffff00 }],
+              ipv6: [
+                {
+                  family: 6,
+                  network: 0x20010db8000000000000000000000000n,
+                  prefixLength: 32,
+                },
+              ],
+            },
             headers: [],
             cookies: ["__ex"],
             siteConnectorCookies: ["__ex_bot"],
@@ -937,6 +952,51 @@ describe("loadProviders", () => {
         ],
       );
     });
+  });
+});
+
+describe("tableLiteral", () => {
+  // The module the build writes, loaded as the extension loads it.
+  async function load(table: ProviderTable): Promise<ProviderTable> {
+    const source = `export default ${tableLiteral(table)};`;
+    const url = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+    return ((await import(url)) as { default: ProviderTable }).default;
+  }
+
+  it("writes the table so that the module gives it back, every range parsed", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cloudleak-literal-"));
+    try {
+      mkdirSync(join(dir, "providers", "example"), { recursive: true });
+      writeFileSync(
+        join(dir, "providers", "example", "provider.json"),
+        VALID_PROVIDER,
+      );
+      writeFileSync(
+        join(dir, "providers", "example", "ranges.txt"),
+        VALID_RANGES,
+      );
+      writeFileSync(join(dir, "consent-cookies.json"), VALID_CONSENT);
+      const { table, errors } = loadTable(dir);
+      assert.deepEqual(errors, []);
+      const loaded = await load(table);
+      assert.deepEqual(loaded, table);
+      assert.equal(
+        typeof loaded.providers[0]?.ranges.ipv6[0]?.network,
+        "bigint",
+      );
+      assert.doesNotMatch(tableLiteral(table), /192\.0\.2\.0|2001:db8/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes a text as JSON writes it, quotes and line breaks included", async () => {
+    const odd = 'a "quoted" name\nand \\ a line, </script>';
+    const loaded = await load({
+      providers: [],
+      consentCookies: [odd, "_ga*"],
+    });
+    assert.deepEqual(loaded.consentCookies, [odd, "_ga*"]);
   });
 });
 

@@ -148,7 +148,7 @@ A list enters `ranges.txt` only if it covers the edge addresses browsers connect
 }
 ```
 
-`npm run build` reads every provider folder and `data/consent-cookies.json`, checks them and writes the table the extension loads, `dist/providers.js`, whose default export is `{ providers, consentCookies }`. Invalid data fails the build with the file, the place and the reason: the line in `ranges.txt`, the field path in a JSON file (such as `signatures.headers[2].name` or `cookies[3].name`), or the parser message when a JSON file is not valid JSON.
+`npm run build` reads every provider folder and `data/consent-cookies.json`, checks them and writes the table the extension loads, `dist/providers.js`, whose default export is `{ providers, consentCookies }`. The table holds the ranges already parsed, each IPv4 range as its network and its mask in 32-bit numbers and each IPv6 range with its network as a BigInt, so that no wake-up of the event page parses a range again. Invalid data fails the build with the file, the place and the reason: the line in `ranges.txt`, the field path in a JSON file (such as `signatures.headers[2].name` or `cookies[3].name`), or the parser message when a JSON file is not valid JSON.
 
 `npm run refresh-ranges` downloads again every list named by a `# Source:` HTTPS URL, checks each range and rewrites `ranges.txt` with the new date, keeping its comments. It runs on the development machine only, and the new ranges reach users with the next version. A `ranges.txt` with any other source is left for a person to update, and an HTTPS source written in neither form fails its refresh.
 

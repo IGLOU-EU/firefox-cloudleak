@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
+import type { Ranges } from "./cidr.js";
+
 // The table the build generates from data/ and the extension loads. The build
 // must produce exactly this shape, so the classification and the data agree.
 
@@ -14,7 +16,7 @@ export interface ProviderEntry {
   name: string;
   country: string;
   parent: { name: string; country: string } | null;
-  ranges: string[]; // CIDR
+  ranges: Ranges; // parsed by the build from the CIDR ranges of ranges.txt
   headers: { name: string; value: string | null }[]; // name pattern, value pattern or null (presence)
   cookies: string[]; // cookie name patterns set or used by the provider itself
   siteConnectorCookies: string[]; // cookie name patterns a connector installed at the site may also set
