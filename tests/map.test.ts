@@ -53,9 +53,13 @@ function settled(): Promise<void> {
 interface Options {
   readonly privateWindow?: boolean;
   readonly limit?: number;
+  // What the event page answers to "map", at each question.
+  readonly data?: () => MapData;
   // What the event page answers to "siteAddresses", once let through.
   readonly addresses?: () => Promise<SiteAddresses>;
   readonly writeText?: (text: string) => Promise<void>;
+  // How Firefox writes a site for display.
+  readonly display?: (site: string) => string;
 }
 
 interface Opened {
@@ -63,6 +67,10 @@ interface Opened {
   readonly sent: PopupRequest[];
   // What the page wrote to the clipboard.
   readonly copied: string[];
+  // Each message the page asked Firefox for, its name then its
+  // substitutions, and each site it asked Firefox to write.
+  readonly messages: string[][];
+  readonly domains: string[];
   element(id: string): Element;
   // The user clicks the row of the site in the column.
   chooseSite(): void;
@@ -72,6 +80,10 @@ interface Opened {
   listed(): string[];
   note(): string | null;
   addressButtons(): Element[];
+  // The names of the sites in the column, as they are shown.
+  shownSites(): string[];
+  // The tab of the map comes back into view.
+  comeBack(): Promise<void>;
 }
 
 let opened = 0;
@@ -79,6 +91,8 @@ let opened = 0;
 async function open(options: Options = {}): Promise<Opened> {
   const sent: PopupRequest[] = [];
   const copied: string[] = [];
+  const messages: string[][] = [];
+  const domains: string[] = [];
   const root = installPage(HTML);
   const privateWindow = options.privateWindow ?? false;
   Object.assign(globalThis, {
@@ -106,7 +120,7 @@ async function open(options: Options = {}): Promise<Opened> {
         sent.push(request);
         switch (request.kind) {
           case "map":
-            return { ...DATA, privateWindow };
+            return { ...(options.data?.() ?? DATA), privateWindow };
           case "siteAddresses":
             return request.privateWindow
               ? {}
@@ -119,11 +133,18 @@ async function open(options: Options = {}): Promise<Opened> {
       },
     },
     i18n: {
-      getMessage: (name: string, substitutions: string[] = []) =>
-        [name, ...substitutions].join(" "),
+      getMessage: (name: string, substitutions: string[] = []) => {
+        messages.push([name, ...substitutions]);
+        return [name, ...substitutions].join(" ");
+      },
       getUILanguage: () => "fr",
     },
-    publicSuffix: { getDomain: (host: string) => host },
+    publicSuffix: {
+      getDomain: (host: string) => {
+        domains.push(host);
+        return options.display?.(host) ?? host;
+      },
+    },
   };
   opened += 1;
   // A module runs once per URL, so each page gets its own.
@@ -136,6 +157,8 @@ async function open(options: Options = {}): Promise<Opened> {
     root,
     sent,
     copied,
+    messages,
+    domains,
     element,
     chooseSite: () => {
       const row = element("drawing")
@@ -151,6 +174,19 @@ async function open(options: Options = {}): Promise<Opened> {
         .map((text) => text.textContent),
     note: () => panel().querySelector(".addresses-note")?.textContent ?? null,
     addressButtons: () => panel().querySelectorAll("button.address"),
+    shownSites: () =>
+      element("drawing")
+        .querySelectorAll("[data-k]")
+        .filter((row) => row.dataset["k"]?.startsWith("s:"))
+        .map(
+          (row) =>
+            row.children.find((part) => part.tagName === "text")?.textContent ??
+            "",
+        ),
+    comeBack: async () => {
+      root.dispatch("visibilitychange");
+      await settled();
+    },
   };
 }
 
@@ -350,5 +386,69 @@ describe("the addresses of the panel of a site on the map", () => {
     } finally {
       errors.mock.restore();
     }
+  });
+});
+
+// The same counts, with one stylesheet more: 9 requests rather than 8.
+const ONE_MORE: MapData = {
+  ...DATA,
+  sites: {
+    [SITE]: {
+      edge: {
+        red4: { "GET stylesheet": 4, "GET script": 2 },
+        blue2: { "GET image": 3 },
+      },
+    },
+  },
+};
+
+describe("what the map asks Firefox to write", () => {
+  it("asks for no message again while what the map writes stays the same", async () => {
+    const page = await open();
+    page.chooseSite();
+    await settled();
+    page.messages.length = 0;
+    await page.comeBack();
+    page.chooseSite();
+    await settled();
+    assert.deepEqual(page.messages, []);
+  });
+
+  it("asks only for the messages of the counts that changed, and keeps those of the last answer alone", async () => {
+    const answers = [DATA, ONE_MORE, DATA, DATA];
+    let answer = 0;
+    const page = await open({ data: () => answers[answer] ?? DATA });
+    const counted = () =>
+      page.messages
+        .filter(([name]) => name === "mapRequestsMany")
+        .map((message) => message.slice(1));
+    assert.deepEqual(counted(), [["8"]]);
+    page.messages.length = 0;
+    answer = 1;
+    await page.comeBack();
+    assert.deepEqual(counted(), [["9"]]);
+    page.messages.length = 0;
+    answer = 2;
+    await page.comeBack();
+    assert.deepEqual(counted(), [["8"]]);
+    page.messages.length = 0;
+    answer = 3;
+    await page.comeBack();
+    assert.deepEqual(page.messages, []);
+  });
+
+  it("asks Firefox to write a site only when one of its labels is in punycode, and once", async () => {
+    const idn = "xn--bcher-kva.example";
+    const page = await open({
+      data: () => ({
+        ...DATA,
+        sites: { ...DATA.sites, [idn]: DATA.sites[SITE] ?? {} },
+      }),
+      display: (site) => (site === idn ? "bücher.example" : `shown ${site}`),
+    });
+    assert.deepEqual(page.domains, [idn]);
+    assert.deepEqual(page.shownSites().sort(), ["bücher.example", SITE]);
+    await page.comeBack();
+    assert.deepEqual(page.domains, [idn]);
   });
 });

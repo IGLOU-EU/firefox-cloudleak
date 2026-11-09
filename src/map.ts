@@ -73,12 +73,46 @@ const COPIED_MS = 1500;
 // window, the map shows the private session only.
 const privateWindow = browser.extension.inIncognitoContext === true;
 
+// Firefox checks, looks up and fills in a message at each call, 1 to 5 µs
+// (ExtensionCommon.sys.mjs, LibreWolf 159.0.1), and the map writes some
+// 4 000 for 900 sites at each answer of the event page, most of them the same
+// from one answer to the next. The messages of the last answer are kept
+// beside those of the current one, so that what is kept follows the counts
+// rather than grow with each of them.
+let messages = new Map<string, string>();
+let lastMessages = new Map<string, string>();
+
+function message(name: string, substitutions: readonly string[]): string {
+  const key = JSON.stringify([name, ...substitutions]);
+  let text = messages.get(key);
+  if (text === undefined) {
+    text =
+      lastMessages.get(key) ??
+      browser.i18n.getMessage(name, [...substitutions]);
+    messages.set(key, text);
+  }
+  return text;
+}
+
+// Firefox writes in Unicode only a label in punycode (idn.domainToDisplay
+// in child/ext-publicSuffix.js, LibreWolf 159.0.1), at 7 to 17 µs a call: any
+// other site, kept in lowercase ASCII as Firefox reduced it, shows as it is.
+const shownSites = new Map<string, string>();
+
+function shownSite(site: string): string {
+  if (!/(?:^|\.)xn--/i.test(site)) {
+    return site;
+  }
+  let shown = shownSites.get(site);
+  if (shown === undefined) {
+    shown = siteText(site);
+    shownSites.set(site, shown);
+  }
+  return shown;
+}
+
 const language = browser.i18n.getUILanguage();
-const formats = formatsOf(
-  language,
-  (name, substitutions) => browser.i18n.getMessage(name, [...substitutions]),
-  siteText,
-);
+const formats = formatsOf(language, message, shownSite);
 
 let map: PreparedMap | null = null;
 let filters: Filters = NO_FILTER;
@@ -878,6 +912,8 @@ function render(resetScroll: boolean): void {
 // counts, since both grow while the map is open.
 async function load(resetScroll: boolean): Promise<void> {
   const data = await ask<MapData>({ kind: "map", privateWindow });
+  lastMessages = messages;
+  messages = new Map();
   map = prepare(data, table.providers, formats);
   render(resetScroll);
   await askAddresses();
