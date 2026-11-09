@@ -2,7 +2,8 @@
 // Copyright (C) 2026 Adrien Kara
 
 // Firefox runs this file as an event page and runs it again at every wake-up,
-// so listeners must be added synchronously at the top level of this module.
+// so the listeners whose events must wake it are added synchronously at the
+// top level of this module.
 
 import { answer } from "./answer.js";
 import { onWindowRemoved } from "./counts.js";
@@ -18,6 +19,7 @@ import {
   onCommitted,
   onCompleted,
   onStatus,
+  ready,
 } from "./tabs.js";
 import { report, setBadgeColours } from "./toolbar.js";
 
@@ -41,10 +43,21 @@ browser.webRequest.onResponseStarted.addListener(
   FILTER,
   ["responseHeaders"],
 );
-browser.webRequest.onErrorOccurred.addListener(
-  (details) => report(onErrorOccurred(details)),
-  FILTER,
-);
+
+// Firefox persists only the listeners added while the page starts, until its
+// DOMContentLoaded, and wakes a suspended page for their events
+// (ExtensionCommon.sys.mjs and ext-backgroundPage.js, Firefox 159.0.1). A
+// blocker such as uBlock Origin, which LibreWolf installs, makes an error of
+// every request it cancels (ChannelWrapper.cpp, Firefox 159.0.1), and this
+// listener only drops a request waiting in memory, which a suspension loses
+// anyway. Added once the page has read its state, it is not persisted: it
+// receives the errors while the page is awake and never wakes it.
+ready.then(() => {
+  browser.webRequest.onErrorOccurred.addListener(
+    (details) => report(onErrorOccurred(details)),
+    FILTER,
+  );
+});
 
 // Without a filter, since Firefox throws on an empty one (browser-compat-data,
 // webextensions.api.webNavigation.onCommitted). Frames other than the top

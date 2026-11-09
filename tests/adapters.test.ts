@@ -171,12 +171,21 @@ function getDomain(
   return hostname.split(".").slice(-2).join(".");
 }
 
-// The listeners background.js adds, by event.
+// The listeners background.js adds, by event, and the arguments each was
+// added with after the listener, such as a filter.
 const listeners = new Map<string, ((...args: unknown[]) => unknown)[]>();
+const listenerOptions = new Map<string, unknown[][]>();
 function event(name: string) {
   return {
-    addListener: (listener: (...args: unknown[]) => unknown) => {
+    addListener: (
+      listener: (...args: unknown[]) => unknown,
+      ...options: unknown[]
+    ) => {
       listeners.set(name, [...(listeners.get(name) ?? []), listener]);
+      listenerOptions.set(name, [
+        ...(listenerOptions.get(name) ?? []),
+        options,
+      ]);
     },
   };
 }
@@ -299,11 +308,30 @@ const counts = await importModule<Counts>("counts.js");
 const { answer } = await importModule<Answer>("answer.js");
 const { siteOfTyped } = await importModule<Site>("site.js");
 await importModule<object>("background.js");
+// What background.js added before the page read its state.
+const startupListeners = new Set(listeners.keys());
 
 const closing = tabs.forget(CLOSED_AT_WAKE_UP);
 finishWakeUp();
 await closing;
 await tabs.ready;
+
+// Every promise already settled has run its callbacks, such as a read of
+// storage.local the stand-in answered at once.
+function settled(): Promise<void> {
+  return new Promise((done) => setImmediate(done));
+}
+
+// An event as Firefox delivers it, to every listener background.js added for
+// it, whose work goes on once they return.
+async function fire(name: string, ...args: unknown[]): Promise<void> {
+  const registered = listeners.get(name) ?? [];
+  assert.ok(registered.length > 0, `no listener for ${name}`);
+  for (const listener of registered) {
+    listener(...args);
+  }
+  await settled();
+}
 
 let lastId = 0;
 function nextId(): string {
@@ -444,6 +472,49 @@ function iconOf(tabId: number) {
 const RED = { icon: "/icons/red.svg", badge: "1" };
 const NEUTRAL = { icon: "/icons/neutral.svg", badge: "" };
 
+describe("the listener of request errors", () => {
+  it("is added once the page has read its state, so that Firefox does not persist it and an error never wakes the page", () => {
+    assert.equal(startupListeners.has("webRequest.onErrorOccurred"), false);
+    assert.equal(listeners.get("webRequest.onErrorOccurred")?.length, 1);
+    assert.deepEqual(listenerOptions.get("webRequest.onErrorOccurred"), [
+      [{ urls: ["*://*/*"] }],
+    ]);
+    for (const name of [
+      "webRequest.onSendHeaders",
+      "webRequest.onBeforeRedirect",
+      "webRequest.onResponseStarted",
+      "webNavigation.onCommitted",
+      "webNavigation.onCompleted",
+      "tabs.onUpdated",
+      "tabs.onRemoved",
+      "windows.onRemoved",
+      "permissions.onAdded",
+      "permissions.onRemoved",
+      "runtime.onMessage",
+    ]) {
+      assert.ok(startupListeners.has(name), name);
+    }
+  });
+
+  it("drops the request it ends, whose response then says requests were missed", async () => {
+    const tab = 95;
+    await redPage(tab, 1000);
+    const requestId = nextId();
+    await send(tab, requestId, "image", 2000);
+    await fire("webRequest.onErrorOccurred", {
+      tabId: tab,
+      requestId,
+      error: "NS_ERROR_ABORT",
+    });
+    await requests.onResponseStarted(
+      response(tab, requestId, "image", 2001, EDGE_IP),
+    );
+    mock.timers.runAll();
+    const { state } = tabs.recordOf(tab);
+    assert.ok(state.kind === "seen" && state.missed, JSON.stringify(state));
+  });
+});
+
 describe("a navigation that never commits", () => {
   const endings: [
     string,
@@ -465,8 +536,12 @@ describe("a navigation that never commits", () => {
     ],
     [
       "a stop",
-      (_tabId, requestId) =>
-        requests.onErrorOccurred({ requestId, error: "NS_BINDING_ABORTED" }),
+      (tabId, requestId) =>
+        fire("webRequest.onErrorOccurred", {
+          tabId,
+          requestId,
+          error: "NS_BINDING_ABORTED",
+        }),
     ],
   ];
 
@@ -2321,12 +2396,6 @@ describe("the map", () => {
 describe("the recording of addresses", () => {
   const SECRET = "s3cr3t-value";
   let at = 2000;
-
-  // Every promise already settled has run its callbacks, such as a read of
-  // storage.local the stand-in answered at once.
-  function settled(): Promise<void> {
-    return new Promise((done) => setImmediate(done));
-  }
 
   async function flush(): Promise<void> {
     await settled();

@@ -20,8 +20,9 @@ import table from "./providers.js";
 import { fold, missRequest, navigate, ready, recordOf } from "./tabs.js";
 
 // The request side waits here for its response, joined by request id. Each
-// entry goes at the response, the redirect or the error, so none outlives
-// its request.
+// entry goes at the response, the redirect or the error, and an entry whose
+// error came before the page was ready goes with the page at its
+// suspension.
 interface Pending {
   readonly tabId: number;
   // The navigation of the document the request was sent for.
