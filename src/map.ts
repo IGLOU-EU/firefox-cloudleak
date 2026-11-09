@@ -538,7 +538,8 @@ function labelOf(text: string, proof: string | null): HTMLElement {
 
 // A cut address fades at its end, and scrolls on hover and focus as far as
 // it is cut, so each is measured once in the page: every width first, then
-// every change, so that the page is laid out once.
+// every change, so that the page is laid out once. A list is always drawn
+// anew, so only the cut addresses have anything to change.
 function measure(list: HTMLElement): void {
   const buttons = Array.from(list.querySelectorAll<HTMLElement>(".address"));
   const cuts = buttons.map((button) => {
@@ -547,9 +548,11 @@ function measure(list: HTMLElement): void {
   });
   buttons.forEach((button, index) => {
     const cut = cuts[index] ?? 0;
-    button.classList.toggle("cut", cut > 0);
-    button.style.setProperty("--shift", `${-cut}px`);
-    button.style.setProperty("--duration", `${cut / ADDRESS_SPEED}s`);
+    if (cut > 0) {
+      button.classList.add("cut");
+      button.style.setProperty("--shift", `${-cut}px`);
+      button.style.setProperty("--duration", `${cut / ADDRESS_SPEED}s`);
+    }
   });
 }
 
@@ -573,10 +576,10 @@ async function copyAddress(
     copied = false;
     console.error(`Cloud Leak: address not copied: ${String(error)}`);
   }
-  const chip = button.querySelector<HTMLElement>(".copied");
-  chip?.classList.toggle("failed", !copied);
-  const word = chip?.querySelector<HTMLElement>(".word");
-  if (word !== null && word !== undefined) {
+  const chip = chipOf(button);
+  chip.classList.toggle("failed", !copied);
+  const word = chip.querySelector<HTMLElement>(".word");
+  if (word !== null) {
     word.textContent = copied ? copy.copied : copy.failed;
   }
   button.classList.add("done");
@@ -608,6 +611,20 @@ function checkMark(): SVGSVGElement {
   return image;
 }
 
+// The chip of a copy is drawn at the first copy of its address, since a list
+// may hold thousands of addresses that are never copied.
+function chipOf(button: HTMLElement): HTMLElement {
+  const drawn = button.querySelector<HTMLElement>(".copied");
+  if (drawn !== null) {
+    return drawn;
+  }
+  const chip = html("span", "copied");
+  chip.setAttribute("aria-hidden", "true");
+  chip.append(checkMark(), html("span", "word"));
+  button.append(chip);
+  return chip;
+}
+
 // Whole, the scheme included, which says whether the request was encrypted,
 // and whole again in its tooltip and in the copy.
 function addressList(row: AddressRow, copy: CopyTexts): HTMLElement {
@@ -618,10 +635,7 @@ function addressList(row: AddressRow, copy: CopyTexts): HTMLElement {
     const button = html("button", "address");
     button.type = "button";
     button.title = address;
-    const chip = html("span", "copied");
-    chip.setAttribute("aria-hidden", "true");
-    chip.append(checkMark(), html("span", "word", copy.copied));
-    button.append(html("span", "text", address), chip);
+    button.append(html("span", "text", address));
     button.addEventListener("click", () =>
       report(copyAddress(button, address, copy)),
     );
@@ -860,7 +874,13 @@ async function askAddresses(): Promise<void> {
   if (selectedSite() !== site) {
     return;
   }
-  record = { site, addresses, limit: settings.recordLimit };
+  const next = { site, addresses, limit: settings.recordLimit };
+  // The panel already shows them when the map comes back into view or its
+  // site is chosen again, and a long list costs its drawing.
+  if (JSON.stringify(next) === JSON.stringify(record)) {
+    return;
+  }
+  record = next;
   renderPanel();
 }
 

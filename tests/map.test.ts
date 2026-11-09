@@ -328,6 +328,71 @@ describe("the addresses of the panel of a site on the map", () => {
     assert.deepEqual(page.listed(), [...STYLES].sort());
   });
 
+  it("draws the panel once when the tab comes back into view and the addresses kept are the same", async () => {
+    let gate: Promise<void> = Promise.resolve();
+    const page = await open({
+      addresses: async () => {
+        await gate;
+        return ADDRESSES;
+      },
+    });
+    page.chooseSite();
+    await settled();
+    page.kinds()[0]?.click();
+    let release = () => {};
+    gate = new Promise((done) => {
+      release = done;
+    });
+    await page.comeBack();
+    const list = page.element("panel-content").querySelector("ul.addresses");
+    assert.ok(list);
+    release();
+    await settled();
+    assert.equal(
+      page.element("panel-content").querySelector("ul.addresses"),
+      list,
+    );
+  });
+
+  it("draws the panel once when its site is chosen again and the addresses kept are the same", async () => {
+    let gate: Promise<void> = Promise.resolve();
+    const page = await open({
+      addresses: async () => {
+        await gate;
+        return ADDRESSES;
+      },
+    });
+    page.chooseSite();
+    await settled();
+    page.kinds()[0]?.click();
+    let release = () => {};
+    gate = new Promise((done) => {
+      release = done;
+    });
+    page.chooseSite();
+    await settled();
+    const list = page.element("panel-content").querySelector("ul.addresses");
+    assert.ok(list);
+    release();
+    await settled();
+    assert.equal(
+      page.element("panel-content").querySelector("ul.addresses"),
+      list,
+    );
+  });
+
+  it("draws the list again when the addresses kept changed", async () => {
+    const more = "https://cdn.example.net/assets/print.css";
+    let answer = ADDRESSES;
+    const page = await open({ addresses: async () => answer });
+    page.chooseSite();
+    await settled();
+    page.kinds()[0]?.click();
+    answer = { edge: { red4: { "GET stylesheet": [more, ...STYLES] } } };
+    await page.comeBack();
+    assert.deepEqual(page.listed(), [more, ...STYLES].sort());
+  });
+
   it("copies an address at a click, whole, says so on its chip for 1.5 s and to a screen reader", async () => {
     const page = await open();
     page.chooseSite();
@@ -382,6 +447,43 @@ describe("the addresses of the panel of a site on the map", () => {
       assert.match(
         String(errors.mock.calls[0]?.arguments[0]),
         /^Cloud Leak: address not copied: .*NotAllowedError/,
+      );
+    } finally {
+      errors.mock.restore();
+    }
+  });
+
+  it("holds an address in its text alone until a copy draws its chip, which the next copies keep", async () => {
+    const errors = mock.method(console, "error", () => {});
+    try {
+      let failures = 1;
+      const page = await open({
+        writeText: () => {
+          failures -= 1;
+          return failures >= 0
+            ? Promise.reject(new Error("NotAllowedError"))
+            : Promise.resolve();
+        },
+      });
+      page.chooseSite();
+      await settled();
+      page.kinds()[0]?.click();
+      const [first] = page.addressButtons();
+      assert.ok(first);
+      assert.deepEqual(
+        first.children.map((part) => part.className),
+        ["text"],
+      );
+      first.click();
+      await settled();
+      first.click();
+      await settled();
+      const chips = first.querySelectorAll(".copied");
+      assert.equal(chips.length, 1);
+      assert.equal(chips[0]?.classList.contains("failed"), false);
+      assert.equal(
+        chips[0]?.querySelector(".word")?.textContent,
+        "mapAddressCopied",
       );
     } finally {
       errors.mock.restore();
