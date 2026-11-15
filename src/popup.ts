@@ -155,20 +155,12 @@ async function open(): Promise<void> {
   await load();
 }
 
-// A popup cannot open a dialog, so the footer itself becomes the question.
-// Firefox scrolls a popup taller than 600 pixels, which would leave the
-// question, at its foot, out of view.
+// A popup cannot open a dialog, so the footer itself becomes the question,
+// stuck like it to the bottom of the view.
 function askToConfirm(asking: "clear" | "ignore" | null): void {
   element("footer").hidden = asking !== null;
-  const clearing = element("clear-confirmation");
-  const ignoring = element("ignore-confirmation");
-  clearing.hidden = asking !== "clear";
-  ignoring.hidden = asking !== "ignore";
-  if (asking !== null) {
-    (asking === "clear" ? clearing : ignoring).scrollIntoView({
-      block: "nearest",
-    });
-  }
+  element("clear-confirmation").hidden = asking !== "clear";
+  element("ignore-confirmation").hidden = asking !== "ignore";
 }
 
 // What a clear takes depends on the site and the window, which the answer of
