@@ -276,7 +276,7 @@
     "description": "Help, paragraph 2: what HTTPS protects."
   },
   "helpProviders": {
-    "message": "However, most often for performance, a site can call on a company that handles part of the processing of the pages you visit. Where these services become a problem is that, to work, they may need to read what you exchange with the site.",
+    "message": "However, most often for performance or to protect itself from attacks, a site can call on a company that handles part of the processing of the pages you visit. Where these services become a problem is that, to work, they may need to read what you exchange with the site.",
     "description": "Help, paragraph 3: the providers that stand between the user and the site, and decrypt the connection."
   },
   "helpLaw": {
