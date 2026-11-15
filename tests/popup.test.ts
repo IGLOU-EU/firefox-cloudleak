@@ -16,7 +16,14 @@ import {
   type TabState,
 } from "../src/core/tab-state.js";
 import { importModule, writeTable } from "./built-extension.js";
-import { type Element, find, htmlOf, installPage, settled } from "./dom.js";
+import {
+  type Element,
+  find,
+  focusedElement,
+  htmlOf,
+  installPage,
+  settled,
+} from "./dom.js";
 import { POPUP_MESSAGES } from "./messages.js";
 
 writeTable();
@@ -266,6 +273,38 @@ describe("the popup", () => {
       assert.ok(POPUP_MESSAGES.includes(message), message);
       assert.equal(label.textContent, message);
     }
+  });
+
+  it("opens the help over the page, and closes it by its cross, Escape or a click on the veil", async () => {
+    const page = await open({});
+    const help = page.element("help");
+    const close = page.element("help-close");
+    const veil = page.element("help-veil");
+    const content = page.element("content");
+    assert.equal(help.attributes.get("aria-label"), "helpOpen");
+    assert.equal(help.attributes.get("title"), "helpOpen");
+    assert.equal(close.attributes.get("aria-label"), "helpClose");
+    assert.equal(close.attributes.get("title"), "helpClose");
+    const shown = () => [veil.hidden, content.inert, focusedElement()];
+    assert.deepEqual(shown().slice(0, 2), [true, false]);
+    help.click();
+    assert.deepEqual(shown(), [false, true, close]);
+    // A click inside the help reaches the veil from its own target.
+    veil.dispatch("click", { target: page.element("help-title") });
+    assert.deepEqual(shown(), [false, true, close]);
+    close.click();
+    assert.deepEqual(shown(), [true, false, help]);
+    help.click();
+    veil.click();
+    assert.deepEqual(shown(), [true, false, help]);
+    page.root.dispatch("keydown", { key: "Escape" });
+    assert.deepEqual(shown(), [true, false, help]);
+    help.click();
+    page.root.dispatch("keydown", { key: "Enter" });
+    assert.deepEqual(shown(), [false, true, close]);
+    page.root.dispatch("keydown", { key: "Escape" });
+    assert.deepEqual(shown(), [true, false, help]);
+    assert.equal(page.sent.length, 1);
   });
 
   it("names the gear for those who cannot see it, and in its tooltip", async () => {

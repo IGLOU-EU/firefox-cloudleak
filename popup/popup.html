@@ -8,13 +8,18 @@
 <script type="module" src="../popup.js"></script>
 </head>
 <body>
+<!-- Inert while the help is open over it. -->
+<div id="content" class="content">
 <header class="header">
   <img id="state" src="/icons/neutral.svg" alt="" width="32" height="32">
   <span id="site" class="site"></span>
   <span id="unknown-site" class="site" data-message="popupUnknownSite" hidden></span>
   <span id="browser-page" class="site" data-message="popupBrowserPage" hidden></span>
-  <!-- The script names it, for its tooltip and for those who cannot see it. -->
-  <button type="button" id="preferences" class="settings"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.45 2.932L6.95 0.826A7.25 7.25 0 0 1 9.05 0.826L9.55 2.932A5.3 5.3 0 0 1 10.488 3.32L12.33 2.185A7.25 7.25 0 0 1 13.815 3.67L12.68 5.512A5.3 5.3 0 0 1 13.068 6.45L15.174 6.95A7.25 7.25 0 0 1 15.174 9.05L13.068 9.55A5.3 5.3 0 0 1 12.68 10.488L13.815 12.33A7.25 7.25 0 0 1 12.33 13.815L10.488 12.68A5.3 5.3 0 0 1 9.55 13.068L9.05 15.174A7.25 7.25 0 0 1 6.95 15.174L6.45 13.068A5.3 5.3 0 0 1 5.512 12.68L3.67 13.815A7.25 7.25 0 0 1 2.185 12.33L3.32 10.488A5.3 5.3 0 0 1 2.932 9.55L0.826 9.05A7.25 7.25 0 0 1 0.826 6.95L2.932 6.45A5.3 5.3 0 0 1 3.32 5.512L2.185 3.67A7.25 7.25 0 0 1 3.67 2.185L5.512 3.32A5.3 5.3 0 0 1 6.45 2.932ZM10.3 8A2.3 2.3 0 1 0 5.7 8A2.3 2.3 0 1 0 10.3 8Z" fill="currentColor" fill-rule="evenodd"/></svg></button>
+  <!-- The script names them, for their tooltips and for those who cannot see them. -->
+  <div class="header-buttons">
+    <button type="button" id="preferences" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.45 2.932L6.95 0.826A7.25 7.25 0 0 1 9.05 0.826L9.55 2.932A5.3 5.3 0 0 1 10.488 3.32L12.33 2.185A7.25 7.25 0 0 1 13.815 3.67L12.68 5.512A5.3 5.3 0 0 1 13.068 6.45L15.174 6.95A7.25 7.25 0 0 1 15.174 9.05L13.068 9.55A5.3 5.3 0 0 1 12.68 10.488L13.815 12.33A7.25 7.25 0 0 1 12.33 13.815L10.488 12.68A5.3 5.3 0 0 1 9.55 13.068L9.05 15.174A7.25 7.25 0 0 1 6.95 15.174L6.45 13.068A5.3 5.3 0 0 1 5.512 12.68L3.67 13.815A7.25 7.25 0 0 1 2.185 12.33L3.32 10.488A5.3 5.3 0 0 1 2.932 9.55L0.826 9.05A7.25 7.25 0 0 1 0.826 6.95L2.932 6.45A5.3 5.3 0 0 1 3.32 5.512L2.185 3.67A7.25 7.25 0 0 1 3.67 2.185L5.512 3.32A5.3 5.3 0 0 1 6.45 2.932ZM10.3 8A2.3 2.3 0 1 0 5.7 8A2.3 2.3 0 1 0 10.3 8Z" fill="currentColor" fill-rule="evenodd"/></svg></button>
+    <button type="button" id="help" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.3A1.9 1.9 0 1 1 9.221 7.755C8.6 8.15 8 8.6 8 9.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r="1" fill="currentColor"/></svg></button>
+  </div>
 </header>
 <section id="ignored" hidden>
   <div class="heading"><span data-message="popupIgnored"></span></div>
@@ -57,6 +62,16 @@
     <button type="button" id="clear-cancel" data-message="popupCancel"></button>
   </div>
 </div>
+</div>
+</div>
+<div id="help-veil" class="veil" hidden>
+  <div class="help-window" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="help-head">
+      <p id="help-title" class="help-title" data-message="helpTitle"></p>
+      <button type="button" id="help-close" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    </div>
+    <p class="help-text" data-message="helpText"></p>
+  </div>
 </div>
 </body>
 </html>

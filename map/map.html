@@ -9,6 +9,8 @@
 <script type="module" src="../map.js"></script>
 </head>
 <body>
+<!-- Inert while the help is open over it. -->
+<div id="content" class="content">
 <header class="header">
   <img src="/icons/neutral.svg" alt="" width="24" height="24">
   <div class="title"><b data-message="mapTitle"></b><span id="subtitle"></span></div>
@@ -19,6 +21,8 @@
     <button type="button" id="purge" class="danger" data-message="mapPurge" hidden></button>
     <button type="button" id="purge-cancel" data-message="mapCancel" hidden></button>
   </div>
+  <!-- The script names it, for its tooltip and for those who cannot see it. -->
+  <button type="button" id="help" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M6.1 6.3A1.9 1.9 0 1 1 9.221 7.755C8.6 8.15 8 8.6 8 9.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11.7" r="1" fill="currentColor"/></svg></button>
 </header>
 <div class="legend">
   <span class="item"><svg width="28" height="10" aria-hidden="true"><line class="link red4" x1="0" y1="5" x2="28" y2="5"/></svg><span data-message="mapLegendRed4"></span></span>
@@ -48,6 +52,16 @@
     <!-- What a click on an address did, for a screen reader: the chip it shows is not read. -->
     <p id="announce" class="sr" aria-live="polite"></p>
   </aside>
+</div>
+</div>
+<div id="help-veil" class="veil" hidden>
+  <div class="help-window" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <div class="help-head">
+      <p id="help-title" class="help-title" data-message="helpTitle"></p>
+      <button type="button" id="help-close" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    </div>
+    <p class="help-text" data-message="helpText"></p>
+  </div>
 </div>
 </body>
 </html>

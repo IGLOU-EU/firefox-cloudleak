@@ -13,6 +13,13 @@ import { readFileSync } from "node:fs";
 
 type Listener = (event: object) => void;
 
+// The element the script last focused.
+let focused: Element | null = null;
+
+export function focusedElement(): Element | null {
+  return focused;
+}
+
 // A data-* attribute as dataset names it: data-row-key is rowKey.
 function datasetName(attribute: string): string {
   return attribute
@@ -42,6 +49,7 @@ export class Element {
   id = "";
   className = "";
   hidden = false;
+  inert = false;
   checked = false;
   lang = "";
   value = "";
@@ -202,6 +210,10 @@ export class Element {
 
   click(): void {
     this.dispatch("click");
+  }
+
+  focus(): void {
+    focused = this;
   }
 
   *all(): Generator<Element> {

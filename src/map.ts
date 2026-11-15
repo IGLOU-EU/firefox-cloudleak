@@ -44,6 +44,7 @@ import type {
   Settings,
   SiteAddresses,
 } from "./core/popup-message.js";
+import { setUpHelp } from "./help.js";
 import { ask, element, writeLabels } from "./page.js";
 import table from "./providers.js";
 import { siteText } from "./site.js";
@@ -965,6 +966,7 @@ element("ask-purge").addEventListener("click", () => askToPurge(true));
 element("purge-cancel").addEventListener("click", () => askToPurge(false));
 element("purge").addEventListener("click", () => report(purge()));
 element("back").addEventListener("click", () => choose(null));
+setUpHelp();
 element("plan").addEventListener("scroll", follow, { passive: true });
 element("plan").addEventListener("click", (event) => {
   if (element("drawing").contains(event.target as Node)) {
