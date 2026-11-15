@@ -18,6 +18,8 @@
   --blue: #3478f6;
   --orange: #d67200;
   --red: #e03050;
+  /* The text of the light theme at half opacity, on both themes. */
+  --veil: rgb(21 20 26 / 50%);
   color-scheme: light dark;
 }
 
@@ -42,8 +44,6 @@ body {
 }
 
 body {
-  display: flex;
-  flex-direction: column;
   margin: 0;
   background: var(--background);
   color: var(--text);
@@ -55,6 +55,13 @@ body {
 
 p {
   margin: 0;
+}
+
+/* Inert while the help is open over it. */
+.content {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 button {
@@ -120,6 +127,82 @@ svg [data-k]:focus-visible {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* The help and its cross: grey and without a frame until pointed at or
+   focused, as the gear of the popup. */
+.icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon:hover,
+.icon:focus-visible {
+  color: var(--text);
+  background: var(--button);
+  border-color: var(--border);
+}
+
+.icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* The help, last of the header and 16 pixels from what comes before it. */
+.header > .icon {
+  margin-left: 6px;
+}
+
+/* The help centred over the tab, under a veil that covers it all. A click
+   on the veil closes it. */
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--veil);
+}
+
+.help-window {
+  width: 520px;
+  max-width: calc(100% - 32px);
+  max-height: calc(100% - 96px);
+  overflow: auto;
+  padding: 12px 20px 20px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.help-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.help-head .icon {
+  margin-inline-start: auto;
+}
+
+.help-text {
+  margin-top: 8px;
 }
 
 .actions .question {

@@ -18,6 +18,7 @@ import {
   type Row,
   viewOf,
 } from "./core/popup-view.js";
+import { setUpHelp } from "./help.js";
 import { ask, element, text, writeLabels } from "./page.js";
 import table from "./providers.js";
 import { siteText } from "./site.js";
@@ -231,6 +232,7 @@ const preferences = browser.i18n.getMessage("popupPreferences");
 gear.setAttribute("aria-label", preferences);
 gear.setAttribute("title", preferences);
 gear.addEventListener("click", () => report(openPreferences()));
+setUpHelp();
 element("ignore-site").addEventListener("click", () => askToConfirm("ignore"));
 element("ignore-cancel").addEventListener("click", () => askToConfirm(null));
 element("ignore").addEventListener("click", () => report(ignore()));

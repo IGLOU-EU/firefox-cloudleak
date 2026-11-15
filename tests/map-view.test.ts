@@ -1281,6 +1281,10 @@ describe("the map messages", () => {
     messages: messagesOf(locale),
   }));
   const shared = [
+    "helpOpen",
+    "helpTitle",
+    "helpClose",
+    "helpText",
     "popupSite",
     "popupSitePrivate",
     "level2",

@@ -16,6 +16,8 @@
   --border: #8f8f9d;
   --danger: #dc2c4c;
   --danger-text: #ffffff;
+  /* The text of the light theme at half opacity, on both themes. */
+  --veil: rgb(21 20 26 / 50%);
   color-scheme: light dark;
 }
 
@@ -33,12 +35,13 @@
   box-sizing: border-box;
 }
 
-/* Firefox sizes the popup on its content, up to 800 by 600 pixels. The foot
-   carries the bottom padding, so that it stays under the stuck actions. */
+/* Firefox sizes the popup on its content, up to 800 by 600 pixels. The
+   content and the veil of the help share the one cell of the grid, so that
+   the popup takes the height of the taller of the two. */
 body {
+  display: grid;
   width: 360px;
   margin: 0;
-  padding: 12px 14px 0;
   background: var(--background);
   color: var(--text);
   font:
@@ -48,6 +51,13 @@ body {
 
 p {
   margin: 0;
+}
+
+/* The foot carries the bottom padding, so that it stays under the stuck
+   actions. */
+.content {
+  grid-area: 1 / 1;
+  padding: 12px 14px 0;
 }
 
 .header {
@@ -68,11 +78,19 @@ p {
   overflow-wrap: anywhere;
 }
 
-/* A setting, not a state: grey and without a frame until it is pointed at
-   or focused, so that it never reads as a second cloud. */
-.settings {
+/* The gear and the help together at the end of the header, the help in the
+   corner. */
+.header-buttons {
   flex: none;
   margin-inline-start: auto;
+  display: flex;
+  gap: 4px;
+}
+
+/* A setting, the help and its cross, not a state: grey and without a frame
+   until pointed at or focused, so that they never read as a second cloud. */
+.icon {
+  flex: none;
   display: grid;
   place-items: center;
   width: 28px;
@@ -83,14 +101,14 @@ p {
   border-color: transparent;
 }
 
-.settings:hover,
-.settings:focus-visible {
+.icon:hover,
+.icon:focus-visible {
   color: var(--text);
   background: var(--button);
   border-color: var(--border);
 }
 
-.settings svg {
+.icon svg {
   width: 16px;
   height: 16px;
 }
@@ -217,6 +235,51 @@ button.danger {
 .choices {
   display: flex;
   gap: 8px;
+  margin-top: 8px;
+}
+
+/* The help over the content, at 8 pixels from the edges, and stuck to the
+   top of the view when the popup scrolls. Positioned, so that it covers the
+   stuck foot. A click on the veil around it closes it. */
+.veil {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  padding: 8px;
+  background: var(--veil);
+}
+
+.help-window {
+  position: sticky;
+  top: 8px;
+  width: 100%;
+  padding: 10px 14px 14px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+}
+
+.help-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.help-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.help-head .icon {
+  margin-inline-start: auto;
+}
+
+.help-text {
   margin-top: 8px;
 }
 

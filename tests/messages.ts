@@ -15,6 +15,11 @@ const ROOT = fileURLToPath(new URL("../../_locales/", import.meta.url));
 // The messages of the popup page, apart from those of the tooltip, so that
 // the check of the locales knows every message in use.
 export const POPUP_MESSAGES: readonly string[] = [
+  // The help, which the map shares.
+  "helpOpen",
+  "helpTitle",
+  "helpClose",
+  "helpText",
   "popupPage",
   "popupUnit",
   "popupSite",

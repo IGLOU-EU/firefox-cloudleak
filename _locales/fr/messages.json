@@ -255,6 +255,22 @@
     "message": "Ce site est de nouveau regardé, à partir du prochain chargement de la page.",
     "description": "Popup text shown right after the user stopped ignoring the site shown: the page still open was not watched meanwhile."
   },
+  "helpOpen": {
+    "message": "Aide",
+    "description": "Accessible name and tooltip of the question mark in a circle, at the top right of the popup and of the map, which opens the help."
+  },
+  "helpTitle": {
+    "message": "Les niveaux et leur gravité",
+    "description": "Title of the help window of the popup and of the map, which explains the leak levels and how serious each one is."
+  },
+  "helpClose": {
+    "message": "Fermer l'aide",
+    "description": "Accessible name and tooltip of the cross that closes the help window."
+  },
+  "helpText": {
+    "message": "Texte provisoire. Le vrai texte, qui expliquera les niveaux et leur gravité, reste à écrire.",
+    "description": "Placeholder of the help window, until its real text is written."
+  },
   "popupPreferences": {
     "message": "Préférences",
     "description": "Accessible name and tooltip of the gear of the popup, which opens the preferences of the extension in the add-ons manager."

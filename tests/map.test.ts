@@ -14,7 +14,7 @@ import type {
   SiteAddresses,
 } from "../src/core/popup-message.js";
 import { importModule, writeTable } from "./built-extension.js";
-import { Element, find, htmlOf, installPage } from "./dom.js";
+import { Element, find, focusedElement, htmlOf, installPage } from "./dom.js";
 
 writeTable();
 
@@ -199,6 +199,26 @@ function text(entry: Element): string {
 
 afterEach(() => {
   mock.timers.reset();
+});
+
+describe("the help of the map", () => {
+  it("opens over the map at a click on its question mark, and closes by its cross", async () => {
+    const page = await open();
+    const help = page.element("help");
+    const veil = page.element("help-veil");
+    assert.equal(help.attributes.get("title"), "helpOpen");
+    assert.equal(veil.hidden, true);
+    help.click();
+    assert.deepEqual(
+      [veil.hidden, page.element("content").inert, focusedElement()],
+      [false, true, page.element("help-close")],
+    );
+    page.element("help-close").click();
+    assert.deepEqual(
+      [veil.hidden, page.element("content").inert, focusedElement()],
+      [true, false, help],
+    );
+  });
 });
 
 describe("the addresses of the panel of a site on the map", () => {
