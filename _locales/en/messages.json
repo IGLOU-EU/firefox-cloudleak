@@ -267,9 +267,45 @@
     "message": "Close the help",
     "description": "Accessible name and tooltip of the cross that closes the help window."
   },
-  "helpText": {
-    "message": "Placeholder text. The real text, which will explain the levels and how serious they are, is still to be written.",
-    "description": "Placeholder of the help window, until its real text is written."
+  "helpRoute": {
+    "message": "When you browse the Internet, absolutely everything you look at, everything you say, and even what is private, goes through a set of computers known as servers.",
+    "description": "Help, paragraph 1: everything a browser exchanges goes through many computers."
+  },
+  "helpHttps": {
+    "message": "When the address starts with “https”, the connection is said to be encrypted. Normally, this means that only you and the site you visit know what happens between you. For instance, when you pay with your card or file your taxes, it is better not to have someone in the middle who could see all that.",
+    "description": "Help, paragraph 2: what HTTPS protects."
+  },
+  "helpProviders": {
+    "message": "However, most often for performance or to protect itself from attacks, a site can call on a company that handles part of the processing of the pages you visit. Where these services become a problem is that, to work, they may need to read what you exchange with the site.",
+    "description": "Help, paragraph 3: the providers that stand between the user and the site, and decrypt the connection."
+  },
+  "helpLaw": {
+    "message": "These services can potentially see all your data, yes, even your card number, if the payment site uses one of them. These companies answer to their government, which may be a foreign power to yours. So everything that goes through them is subject to the authorities of their country, on top of yours. On the map, the flag of each provider shows the country whose law applies.",
+    "description": "Help, paragraph 4: the providers obey the law of their country, which the flag of the map shows."
+  },
+  "helpStates": {
+    "message": "It becomes possible for these states to decide whether a site is available, to intercept your information and to use it as they see fit.",
+    "description": "Help, paragraph 5: what the states of the providers can do."
+  },
+  "helpLevels": {
+    "message": "This risk can be ranked simply.",
+    "description": "Help: introduces the list of the levels."
+  },
+  "helpLevel2": {
+    "message": "Level 2, public resources are used that go through one of these services, with little at stake, even though a script changed on the way would act in the name of the site.",
+    "description": "Help, list of the levels: level 2, named as in the popup."
+  },
+  "helpLevel3": {
+    "message": "Level 3, the pages you read go through one of these services.",
+    "description": "Help, list of the levels: level 3, named as in the popup."
+  },
+  "helpLevel4": {
+    "message": "Level 4, sensitive information goes through one of these services, such as what you send or your sign-in to an account.",
+    "description": "Help, list of the levels: level 4, named as in the popup."
+  },
+  "helpColours": {
+    "message": "In orange, nothing proves that the service reads what goes through. In red, it is proven, it reads it and can change it.",
+    "description": "Help, last paragraph: what orange and red say of the proof."
   },
   "popupPreferences": {
     "message": "Preferences",
