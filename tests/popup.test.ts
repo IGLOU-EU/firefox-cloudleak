@@ -322,10 +322,10 @@ describe("the popup", () => {
         "p helpHttps",
         "p helpProviders",
         "p helpLaw",
+        "p helpStates",
         "p helpLevels",
         ["li helpLevel2", "li helpLevel3", "li helpLevel4"],
         "p helpColours",
-        ["li helpRed", "li helpOrange", "li helpBlue"],
       ],
     );
   });

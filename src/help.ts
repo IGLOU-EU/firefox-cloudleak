@@ -16,10 +16,10 @@ const TEXT: readonly (string | readonly string[])[] = [
   "helpHttps",
   "helpProviders",
   "helpLaw",
+  "helpStates",
   "helpLevels",
   ["helpLevel2", "helpLevel3", "helpLevel4"],
   "helpColours",
-  ["helpRed", "helpOrange", "helpBlue"],
 ];
 
 function written(tagName: string, message: string): HTMLElement {

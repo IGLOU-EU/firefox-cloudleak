@@ -268,52 +268,44 @@
     "description": "Accessible name and tooltip of the cross that closes the help window."
   },
   "helpRoute": {
-    "message": "When you browse the web, everything you look at and everything you send, even what is private, goes through many computers between you and the site.",
+    "message": "When you browse the Internet, absolutely everything you look at, everything you say, and even what is private, goes through a set of computers known as servers.",
     "description": "Help, paragraph 1: everything a browser exchanges goes through many computers."
   },
   "helpHttps": {
-    "message": "When the address starts with “https”, the connection is encrypted: normally, only you and the site can read what you exchange. That is what protects a card payment or a tax return, for instance: nobody in the middle should be able to read them.",
+    "message": "When the address starts with “https”, the connection is said to be encrypted. Normally, this means that only you and the site you visit know what happens between you. For instance, when you pay with your card or file your taxes, it is better not to have someone in the middle who could see all that.",
     "description": "Help, paragraph 2: what HTTPS protects."
   },
   "helpProviders": {
-    "message": "But many sites hand part of their work to another company, most often to be faster or to protect themselves from attacks. That service then stands between you and the site, and to do its work, it often opens the encrypted connection itself: it sees in clear what you exchange with the site, and could even change it. So it can see all your data, yes, even your card number if the payment site goes through it.",
+    "message": "However, most often for performance, a site can call on a company that handles part of the processing of the pages you visit. Where these services become a problem is that, to work, they may need to read what you exchange with the site.",
     "description": "Help, paragraph 3: the providers that stand between the user and the site, and decrypt the connection."
   },
   "helpLaw": {
-    "message": "These companies obey the laws of their country, which is not necessarily yours. What goes through them is therefore subject to the authorities of their country, on top of those of yours. These authorities can force them to hand over your information, or to cut off access to a site. On the map, the flag of each provider shows the country whose law applies.",
+    "message": "These services can potentially see all your data, yes, even your card number, if the payment site uses one of them. These companies answer to their government, which may be a foreign power to yours. So everything that goes through them is subject to the authorities of their country, on top of yours.",
     "description": "Help, paragraph 4: the providers obey the law of their country, which the flag of the map shows."
   },
+  "helpStates": {
+    "message": "It becomes possible for these states to decide whether a site is available, to intercept your information and to use it as they see fit.",
+    "description": "Help, paragraph 5: what the states of the providers can do."
+  },
   "helpLevels": {
-    "message": "The extension ranks this risk in levels, by what goes through the service:",
+    "message": "This risk can be ranked simply.",
     "description": "Help: introduces the list of the levels."
   },
   "helpLevel2": {
-    "message": "Level 2, usage: public files, such as images, fonts or scripts. The service learns which site you visit, and when. The risk is low, but not zero: a script changed on the way would act in the name of the site.",
+    "message": "Level 2, public resources are used that go through one of these services, with little at stake.",
     "description": "Help, list of the levels: level 2, named as in the popup."
   },
   "helpLevel3": {
-    "message": "Level 3, reading: the pages themselves. The service can know what you read, and what you search for.",
+    "message": "Level 3, the pages you read go through one of these services.",
     "description": "Help, list of the levels: level 3, named as in the popup."
   },
   "helpLevel4": {
-    "message": "Level 4, personal data: what you send, such as a form, a message or a payment, or what identifies you, such as being signed in to your account. The service can read it, and even change it.",
+    "message": "Level 4, sensitive information goes through one of these services, such as what you send or your sign-in to an account.",
     "description": "Help, list of the levels: level 4, named as in the popup."
   },
   "helpColours": {
-    "message": "The colour tells whether there is proof that the service sees your exchanges in clear:",
-    "description": "Help: introduces the list of the colours of the clouds."
-  },
-  "helpRed": {
-    "message": "Red, decryption proven: there is proof of it, for instance because the service left its mark in the response of the site.",
-    "description": "Help, list of the colours: red, decryption proven."
-  },
-  "helpOrange": {
-    "message": "Orange, decryption not proven: the service is on the way, but nothing proves it sees your exchanges in clear.",
-    "description": "Help, list of the colours: orange, decryption not proven."
-  },
-  "helpBlue": {
-    "message": "Blue: level 2, proven or not, since what goes through is public.",
-    "description": "Help, list of the colours: blue, level 2 whatever the proof."
+    "message": "In orange, nothing proves that the service reads what goes through. In red, it is proven, it reads it and can change it.",
+    "description": "Help, last paragraph: what orange and red say of the proof."
   },
   "popupPreferences": {
     "message": "Preferences",
