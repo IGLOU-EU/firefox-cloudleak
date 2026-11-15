@@ -280,7 +280,7 @@
     "description": "Help, paragraph 3: the providers that stand between the user and the site, and decrypt the connection."
   },
   "helpLaw": {
-    "message": "These services can potentially see all your data, yes, even your card number, if the payment site uses one of them. These companies answer to their government, which may be a foreign power to yours. So everything that goes through them is subject to the authorities of their country, on top of yours.",
+    "message": "These services can potentially see all your data, yes, even your card number, if the payment site uses one of them. These companies answer to their government, which may be a foreign power to yours. So everything that goes through them is subject to the authorities of their country, on top of yours. On the map, the flag of each provider shows the country whose law applies.",
     "description": "Help, paragraph 4: the providers obey the law of their country, which the flag of the map shows."
   },
   "helpStates": {
@@ -292,7 +292,7 @@
     "description": "Help: introduces the list of the levels."
   },
   "helpLevel2": {
-    "message": "Level 2, public resources are used that go through one of these services, with little at stake.",
+    "message": "Level 2, public resources are used that go through one of these services, with little at stake, even though a script changed on the way would act in the name of the site.",
     "description": "Help, list of the levels: level 2, named as in the popup."
   },
   "helpLevel3": {
