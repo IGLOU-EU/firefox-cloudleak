@@ -251,10 +251,15 @@ button.danger {
   background: var(--veil);
 }
 
+/* At most the 600 pixels of the popup less the margins of the veil: a
+   longer text scrolls inside, under the title and the cross. */
 .help-window {
   position: sticky;
   top: 8px;
+  display: flex;
+  flex-direction: column;
   width: 100%;
+  max-height: 584px;
   padding: 10px 14px 14px;
   background: var(--background);
   border: 1px solid var(--border);
@@ -280,7 +285,22 @@ button.danger {
 }
 
 .help-text {
+  min-height: 0;
   margin-top: 8px;
+  overflow-y: auto;
+}
+
+.help-text > * + * {
+  margin-top: 8px;
+}
+
+.help-text ul {
+  margin-bottom: 0;
+  padding-inline-start: 18px;
+}
+
+.help-text ul > * + * {
+  margin-top: 4px;
 }
 
 /* Last, so that the attribute wins over every display set above. */

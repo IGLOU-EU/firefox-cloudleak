@@ -307,6 +307,29 @@ describe("the popup", () => {
     assert.equal(page.sent.length, 1);
   });
 
+  it("writes the help as paragraphs, with the levels and the colours in lists", async () => {
+    const page = await open({});
+    assert.deepEqual(
+      page
+        .element("help-text")
+        .children.map((part) =>
+          part.tagName === "ul"
+            ? part.children.map((item) => `${item.tagName} ${item.textContent}`)
+            : `${part.tagName} ${part.textContent}`,
+        ),
+      [
+        "p helpRoute",
+        "p helpHttps",
+        "p helpProviders",
+        "p helpLaw",
+        "p helpLevels",
+        ["li helpLevel2", "li helpLevel3", "li helpLevel4"],
+        "p helpColours",
+        ["li helpRed", "li helpOrange", "li helpBlue"],
+      ],
+    );
+  });
+
   it("names the gear for those who cannot see it, and in its tooltip", async () => {
     const page = await open({});
     const gear = page.element("preferences");

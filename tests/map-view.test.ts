@@ -1284,7 +1284,6 @@ describe("the map messages", () => {
     "helpOpen",
     "helpTitle",
     "helpClose",
-    "helpText",
     "popupSite",
     "popupSitePrivate",
     "level2",

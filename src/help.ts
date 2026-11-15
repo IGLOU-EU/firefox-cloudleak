@@ -9,11 +9,40 @@
 
 import { element } from "./page.js";
 
+// The text of the help, in order: a paragraph for each message, a list for
+// each group of messages.
+const TEXT: readonly (string | readonly string[])[] = [
+  "helpRoute",
+  "helpHttps",
+  "helpProviders",
+  "helpLaw",
+  "helpLevels",
+  ["helpLevel2", "helpLevel3", "helpLevel4"],
+  "helpColours",
+  ["helpRed", "helpOrange", "helpBlue"],
+];
+
+function written(tagName: string, message: string): HTMLElement {
+  const node = document.createElement(tagName);
+  node.textContent = browser.i18n.getMessage(message);
+  return node;
+}
+
 export function setUpHelp(): void {
   const open = element("help");
   const close = element("help-close");
   const veil = element("help-veil");
   const content = element("content");
+  element("help-text").append(
+    ...TEXT.map((part) => {
+      if (typeof part === "string") {
+        return written("p", part);
+      }
+      const list = document.createElement("ul");
+      list.append(...part.map((message) => written("li", message)));
+      return list;
+    }),
+  );
   for (const [button, message] of [
     [open, "helpOpen"],
     [close, "helpClose"],
