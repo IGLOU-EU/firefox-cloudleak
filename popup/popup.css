@@ -33,11 +33,12 @@
   box-sizing: border-box;
 }
 
-/* Firefox sizes the popup on its content, up to 800 by 600 pixels. */
+/* Firefox sizes the popup on its content, up to 800 by 600 pixels. The foot
+   carries the bottom padding, so that it stays under the stuck actions. */
 body {
   width: 360px;
   margin: 0;
-  padding: 12px 14px;
+  padding: 12px 14px 0;
   background: var(--background);
   color: var(--text);
   font:
@@ -157,12 +158,22 @@ p {
   border-top: 1px dashed var(--rule);
 }
 
+/* Firefox scrolls a popup taller than 600 pixels: the actions, or the
+   question that replaces them, stay at the bottom of the view, opaque so that
+   the rows pass under them. Paddings rather than margins, which would let the
+   rows show through. */
+.foot {
+  position: sticky;
+  bottom: 0;
+  padding: 12px 0;
+  background: var(--background);
+}
+
 .footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--rule);
 }
@@ -194,7 +205,6 @@ button.danger {
 }
 
 .confirmation {
-  margin-top: 12px;
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;

@@ -33,6 +33,9 @@
   <p id="totals-empty" data-message="popupNothingSite" hidden></p>
   <div id="totals-rows"></div>
 </section>
+<!-- Stuck to the bottom of the view, so that the actions and their questions
+     never need a scroll when the popup grows taller than Firefox lets it. -->
+<div class="foot">
 <footer id="footer" class="footer">
   <button type="button" id="map" class="primary" data-message="popupMap"></button>
   <!-- Hidden until the event page names the site, the only one they act on. -->
@@ -53,6 +56,7 @@
     <button type="button" id="clear" class="primary danger" data-message="popupClear"></button>
     <button type="button" id="clear-cancel" data-message="popupCancel"></button>
   </div>
+</div>
 </div>
 </body>
 </html>

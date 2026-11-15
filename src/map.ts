@@ -24,7 +24,6 @@ import {
   type LimitList,
   type LimitRow,
   NO_FILTER,
-  OTHERS,
   type Panel,
   type PreparedMap,
   panelOf,
@@ -463,10 +462,6 @@ function renderColumn(resetScroll: boolean): void {
   for (const label of places.providers) {
     pill(label.key, label.y, label.name, label.sites, label.provider.title);
   }
-  if (places.others !== null) {
-    const { others } = places;
-    pill(others.key, others.y, others.name, others.note, others.title);
-  }
   drawing.replaceChildren(list, right);
   follow();
 }
@@ -776,9 +771,9 @@ function limitOf(row: LimitRow): HTMLElement {
   return button;
 }
 
-function head(icon: Element | null, name: string): HTMLElement {
+function head(icon: Element, name: string): HTMLElement {
   const block = html("div", "panel-head");
-  block.append(...(icon === null ? [] : [icon]), html("span", "name", name));
+  block.append(icon, html("span", "name", name));
   return block;
 }
 
@@ -798,13 +793,6 @@ function panelParts(panel: Panel, drawn: HTMLElement[]): HTMLElement[] {
             ? []
             : [html("p", "panel-note", section.note)]),
         ]),
-      ];
-    case "others":
-      return [
-        head(null, panel.name),
-        html("p", "panel-text", panel.text),
-        headingOf(panel.heading),
-        ...panel.choices.map(choiceOf),
       ];
     case "site":
       return [
@@ -889,7 +877,7 @@ async function askAddresses(): Promise<void> {
 function refresh(withPanel: boolean): void {
   renderColumn(true);
   renderTools();
-  if (withPanel || selection === null || selection === OTHERS) {
+  if (withPanel || selection === null) {
     renderPanel();
   }
   renderHighlight();

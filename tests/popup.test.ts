@@ -400,22 +400,6 @@ describe("the popup", () => {
     assert.deepEqual(page.summary("page-rows"), PAGE_ROWS);
   });
 
-  it("scrolls each question into view as it opens, since Firefox scrolls a popup taller than 600 pixels", async () => {
-    const page = await open({});
-    page.element("clear-site").click();
-    assert.deepEqual(page.element("clear-confirmation").scrolls, [
-      { block: "nearest" },
-    ]);
-    page.element("clear-cancel").click();
-    page.element("ignore-site").click();
-    assert.deepEqual(page.element("ignore-confirmation").scrolls, [
-      { block: "nearest" },
-    ]);
-    page.element("ignore-cancel").click();
-    assert.equal(page.element("clear-confirmation").scrolls.length, 1);
-    assert.equal(page.element("ignore-confirmation").scrolls.length, 1);
-  });
-
   it("asks before it ignores the site, then shows what the event page says of the tab", async () => {
     const page = await open({
       getDomain: BUCHER,

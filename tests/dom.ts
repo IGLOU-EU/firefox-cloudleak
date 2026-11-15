@@ -37,8 +37,6 @@ export class Element {
   readonly attributes = new Map<string, string>();
   readonly dataset: Record<string, string> = {};
   readonly listeners = new Map<string, Listener[]>();
-  // The options of each call of scrollIntoView, in order.
-  readonly scrolls: object[] = [];
   readonly style = new Style();
   parent: Element | null = null;
   id = "";
@@ -204,10 +202,6 @@ export class Element {
 
   click(): void {
     this.dispatch("click");
-  }
-
-  scrollIntoView(options: object): void {
-    this.scrolls.push(options);
   }
 
   *all(): Generator<Element> {

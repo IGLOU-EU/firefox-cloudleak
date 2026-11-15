@@ -730,15 +730,6 @@ export function columnOf(basis: Basis, filters: Filters): Column {
   };
 }
 
-// The providers left without any link under the filters, set apart at the
-// foot of the right side rather than among those that keep links.
-export function othersOf(map: PreparedMap, column: Column): MapProvider[] {
-  return map.order
-    .filter((id) => (column.byProvider.get(id) ?? 0) === 0)
-    .map((id) => map.provider.get(id))
-    .filter((entry) => entry !== undefined);
-}
-
 export interface ProviderLabel {
   readonly key: string;
   readonly y: number;
@@ -748,28 +739,19 @@ export interface ProviderLabel {
   readonly sites: string;
 }
 
-export interface OthersLabel {
-  readonly key: string;
-  readonly y: number;
-  readonly name: string;
-  readonly note: string;
-  readonly title: string;
-}
-
 export interface Places {
   readonly providers: readonly ProviderLabel[];
-  readonly others: OthersLabel | null;
 }
 
-// The providers keep their order and the step they have without filter,
-// those that keep links close up from the top, and the others follow them.
+// The providers keep their order and the step they have without filter.
+// Under a filter, those that keep links close up from the top, and those
+// left without any leave the column.
 export function placesOf(
   map: PreparedMap,
   column: Column,
   viewHeight: number,
 ): Places {
   const { formats } = map;
-  const others = othersOf(map, column);
   const shown = map.order
     .filter((id) => (column.byProvider.get(id) ?? 0) > 0)
     .map((id) => map.provider.get(id))
@@ -796,21 +778,8 @@ export function placesOf(
           : counted(formats, "mapSites", provider.sites.length),
       };
     }),
-    others:
-      others.length === 0
-        ? null
-        : {
-            key: OTHERS,
-            y: yAt(shown.length),
-            name: formats.message("mapOthers", [formats.number(others.length)]),
-            note: formats.message("mapOthersNote", []),
-            title: others.map((entry) => entry.name).join(", "),
-          },
   };
 }
-
-// The selection of the label of the other providers.
-export const OTHERS = "others";
 
 export interface MapHeader {
   readonly subtitle: string;
@@ -1036,13 +1005,6 @@ export type Panel =
       readonly line: string;
       readonly notes: readonly string[];
       readonly sections: readonly LimitSection[];
-    }
-  | {
-      readonly kind: "others";
-      readonly name: string;
-      readonly text: string;
-      readonly heading: Heading;
-      readonly choices: readonly Choice[];
     }
   | {
       readonly kind: "site";
@@ -1490,22 +1452,6 @@ function groupPanel(map: PreparedMap, group: GroupRow): Panel {
   };
 }
 
-function othersPanel(map: PreparedMap, others: readonly MapProvider[]): Panel {
-  const { formats } = map;
-  return {
-    kind: "others",
-    name: formats.message("mapOthers", [formats.number(others.length)]),
-    text: formats.message("mapOthersText", []),
-    heading: {
-      title: formats.message("mapProvidersHeading", []),
-      unit: formats.message("mapSitesInAll", []),
-    },
-    choices: others.map((provider) =>
-      providerChoice(provider, formats.number(provider.sites.length)),
-    ),
-  };
-}
-
 // The panel of what is selected, or the overview without a selection and for
 // a selection the map no longer shows. The panel of a site lists the
 // addresses kept of its rows, those the event page gave for it, and unfolds
@@ -1518,12 +1464,7 @@ export function panelOf(
   record: SiteRecord | null = null,
   unfolded: ReadonlySet<string> = new Set(),
 ): Panel {
-  if (selection === OTHERS) {
-    const others = othersOf(map, column);
-    if (others.length > 0) {
-      return othersPanel(map, others);
-    }
-  } else if (selection !== null) {
+  if (selection !== null) {
     const colon = selection.indexOf(":");
     const kind = selection.slice(0, colon);
     const rest = selection.slice(colon + 1);

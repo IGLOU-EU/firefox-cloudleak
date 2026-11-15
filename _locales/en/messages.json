@@ -749,20 +749,6 @@
     "message": "in Israel",
     "description": "Where the parent company of a provider is, in its tooltip on the map: Israel."
   },
-  "mapOthers": {
-    "message": "Other providers ($COUNT$)",
-    "description": "Label at the foot of the providers of the map, and title of its panel, that gathers the providers left without a link under the search and the limits, with their number.",
-    "placeholders": {
-      "count": {
-        "content": "$1",
-        "example": "6"
-      }
-    }
-  },
-  "mapOthersNote": {
-    "message": "no site shown",
-    "description": "Line under the label of the other providers on the map."
-  },
   "mapOverview": {
     "message": "Overview",
     "description": "Title of the panel of the map without a selection, search or limit."
@@ -824,14 +810,6 @@
   "mapBack": {
     "message": "Back to the overview",
     "description": "Button of the panel of a site, a provider or a group of sites on the map, which shows the panel without a selection again."
-  },
-  "mapOthersText": {
-    "message": "None of these providers has a link among the sites shown.",
-    "description": "Text of the panel of the other providers on the map."
-  },
-  "mapSitesInAll": {
-    "message": "sites in all",
-    "description": "Unit at the right of the list of the other providers in the panel of the map, whose numbers count all the sites of each."
   },
   "mapSince": {
     "message": "Since $DATE$",
