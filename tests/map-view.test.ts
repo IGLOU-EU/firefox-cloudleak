@@ -22,7 +22,6 @@ import {
   type LimitRow,
   type MapFormats,
   NO_FILTER,
-  othersOf,
   type Panel,
   type PreparedMap,
   panelOf,
@@ -661,13 +660,12 @@ describe("the overview", () => {
 });
 
 describe("the providers of the map", () => {
-  it("keep the place they have without filter, and close up from the top under a filter", () => {
+  it("keep the place they have without filter, and under a filter close up from the top, without those left without a link", () => {
     const places = placesOf(LARGE, LARGE.whole, 690);
     assert.deepEqual(
       places.providers.map((label) => label.provider.id),
       LARGE.order,
     );
-    assert.equal(places.others, null);
     const step = Math.max(48, (690 - 10 - 44) / 7);
     assert.deepEqual(
       places.providers.map((label) => label.y),
@@ -684,46 +682,6 @@ describe("the providers of the map", () => {
       ]),
       [["fastly", 44 + step * 0.5, "190 sites"]],
     );
-    assert.equal(limited.others?.y, 44 + step * 1.5);
-  });
-
-  it("set the providers left without a link apart, in the order of their places", () => {
-    const fastly = columnOf(LARGE, filters({ provider: "fastly" }));
-    const others = othersOf(LARGE, fastly);
-    assert.deepEqual(
-      others.map((entry) => entry.id),
-      LARGE.order.filter((id) => id !== "fastly"),
-    );
-    const label = placesOf(LARGE, fastly, 690).others;
-    assert.equal(label?.name, "Autres fournisseurs (6)");
-    assert.equal(label?.note, "sans site affiché");
-    assert.equal(label?.title, others.map((entry) => entry.name).join(", "));
-    const panel = panelOf(
-      LARGE,
-      fastly,
-      filters({ provider: "fastly" }),
-      "others",
-    );
-    assert.equal(panel.kind, "others");
-    if (panel.kind === "others") {
-      assert.equal(panel.name, "Autres fournisseurs (6)");
-      assert.equal(
-        panel.text,
-        "Aucun de ces fournisseurs n'a de lien parmi les sites affichés.",
-      );
-      assert.deepEqual(panel.heading, {
-        title: "Fournisseurs",
-        unit: "sites en tout",
-      });
-      assert.deepEqual(
-        panel.choices.map((choice) => [choice.key, choice.label, choice.count]),
-        others.map((entry) => [
-          `f:${entry.id}`,
-          entry.name,
-          String(entry.sites.length),
-        ]),
-      );
-    }
   });
 
   it("name the law each is subject to, and the parent company under another law", () => {
@@ -1143,15 +1101,9 @@ describe("a selection the map no longer shows", () => {
       "f:gone",
       "g:radware",
       "g:nothing",
-      "others",
       "x:y",
     ]) {
-      const panel = panelOf(
-        LARGE,
-        selection === "others" ? LARGE.whole : column,
-        fastly,
-        selection,
-      );
+      const panel = panelOf(LARGE, column, fastly, selection);
       assert.equal(panel.kind, "overview", selection);
     }
   });
@@ -1508,10 +1460,6 @@ describe("the map messages", () => {
     assert.equal(
       overview(map, column, chosen).line,
       "190 sites of 900, 1 provider, 7,497 requests.",
-    );
-    assert.equal(
-      placesOf(map, column, 690).others?.name,
-      "Other providers (6)",
     );
     assert.equal(
       map.provider.get("imperva")?.title,
