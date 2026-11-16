@@ -26,6 +26,7 @@ import {
   type Panel,
   type PreparedMap,
   panelOf,
+  placesInView,
   placesOf,
   prepare,
   type SiteRecord,
@@ -1356,6 +1357,39 @@ describe("a supposed provider on the map", () => {
         ["Inconnu", "fournisseurs supposés"],
         ["États-Unis", null],
       ],
+    );
+  });
+});
+
+describe("the providers of the rows in view", () => {
+  const ORDER = ["a", "b", "c", "d"];
+
+  it("take their place from the top, in their order, and the others leave the column", () => {
+    const places = placesInView(ORDER, new Set(["d", "b"]), 148);
+    assert.deepEqual(
+      [...places],
+      [
+        ["b", 44 + 48 * 0.5],
+        ["d", 44 + 48 * 1.5],
+      ],
+    );
+    assert.deepEqual([...placesInView(ORDER, new Set(), 700)], []);
+    assert.deepEqual([...placesInView(ORDER, new Set(["z"]), 700)], []);
+  });
+
+  it("spread over the height when few, up to twice the least step, and keep the least step when many", () => {
+    assert.deepEqual(
+      [...placesInView(ORDER, new Set(["a"]), 700).values()],
+      [44 + 96 * 0.5],
+    );
+    const room = 10 + 44 + 4 * 60;
+    assert.deepEqual(
+      [...placesInView(ORDER, new Set(ORDER), room).values()],
+      [0.5, 1.5, 2.5, 3.5].map((index) => 44 + 60 * index),
+    );
+    assert.deepEqual(
+      [...placesInView(ORDER, new Set(ORDER), 100).values()],
+      [0.5, 1.5, 2.5, 3.5].map((index) => 44 + 48 * index),
     );
   });
 });

@@ -811,6 +811,27 @@ export function cutToFit(
   return cut(fits);
 }
 
+// The providers the rows in view link to, with the one chosen, take their
+// place from the top of the column, in their order, and the others leave
+// it: with every provider drawn, those beyond the height of the view would
+// never show. They spread over the height when few, up to twice the least
+// step, so that their links fan out without setting the pills far apart.
+export function placesInView(
+  order: readonly string[],
+  linked: ReadonlySet<string>,
+  viewHeight: number,
+): Map<string, number> {
+  const shown = order.filter((id) => linked.has(id));
+  const room = viewHeight - PROVIDERS_BOTTOM - PROVIDERS_TOP;
+  const step = Math.min(
+    2 * PROVIDERS_MIN_STEP,
+    Math.max(PROVIDERS_MIN_STEP, room / (shown.length || 1)),
+  );
+  return new Map(
+    shown.map((id, index) => [id, PROVIDERS_TOP + step * (index + 0.5)]),
+  );
+}
+
 export interface ProviderLabel {
   readonly key: string;
   readonly y: number;

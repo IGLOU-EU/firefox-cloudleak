@@ -23,6 +23,12 @@ const SUFFIXES = [
   "b-cdn.net",
   "azurewebsites.net",
   "github.io",
+  "jp",
+  "co.jp",
+  "tokyo.jp",
+  "chiyoda.tokyo.jp",
+  "us-west-2.elb.amazonaws.com",
+  "s3.amazonaws.com",
 ];
 
 function suffixOf(name: string): string | null {
@@ -57,14 +63,14 @@ describe("isSupposed", () => {
 });
 
 describe("supposedOf", () => {
-  it("names the registrable domain of a canonical name that leaves the host", () => {
+  it("names the last two labels of a canonical name that leaves the host", () => {
     assert.equal(
       supposedOf("www.example.org", "edge.cdn-example.net", LIST),
       "cdn-example.net",
     );
     assert.equal(
-      supposedOf("www.example.org", "lb.host.co.uk", LIST),
-      "host.co.uk",
+      supposedOf("www.example.org", "a.b.c.cdn-example.net", LIST),
+      "cdn-example.net",
     );
   });
 
@@ -75,25 +81,43 @@ describe("supposedOf", () => {
     );
   });
 
-  it("names the suffix itself for a hosting suffix under a generic top-level domain", () => {
+  it("gathers the names of a hosting suffix of the private section, and those above it, under one provider", () => {
     assert.equal(
       supposedOf("www.example.org", "example.b-cdn.net", LIST),
       "b-cdn.net",
     );
     assert.equal(
-      supposedOf("www.example.org", "a.b.example.azurewebsites.net", LIST),
-      "azurewebsites.net",
+      supposedOf("www.example.org", "lb.us-west-2.elb.amazonaws.com", LIST),
+      "amazonaws.com",
+    );
+    assert.equal(
+      supposedOf("www.example.org", "bucket.s3.amazonaws.com", LIST),
+      "amazonaws.com",
     );
   });
 
-  it("keeps the registrable domain under a country code, where a suffix of several labels may be the registry's", () => {
+  it("adds a label under a country code while what is taken is a known suffix", () => {
+    assert.equal(
+      supposedOf("www.example.org", "edge.cdn.amazon.co.jp", LIST),
+      "amazon.co.jp",
+    );
+    assert.equal(
+      supposedOf("www.example.org", "lb.host.co.uk", LIST),
+      "host.co.uk",
+    );
+    assert.equal(
+      supposedOf("www.example.org", "a.b.shop.chiyoda.tokyo.jp", LIST),
+      "shop.chiyoda.tokyo.jp",
+    );
+    // A hosting suffix under a country code cannot be told from one of the
+    // registry, so its customer stays in the name.
     assert.equal(
       supposedOf("www.example.org", "example.github.io", LIST),
       "example.github.io",
     );
     assert.equal(
-      supposedOf("www.example.org", "www.service.gouv.fr", LIST),
-      "service.gouv.fr",
+      supposedOf("www.example.org", "edge.cdn.example.fr", LIST),
+      "example.fr",
     );
   });
 
@@ -102,11 +126,23 @@ describe("supposedOf", () => {
     assert.equal(supposedOf("www.example.org", "lb.example.org", LIST), null);
     assert.equal(supposedOf("WWW.Example.org", "lb.example.org", LIST), null);
     assert.equal(supposedOf("example.org", "example.org", LIST), null);
+    assert.equal(
+      supposedOf("www.amazon.co.jp", "edge.amazon.co.jp", LIST),
+      null,
+    );
   });
 
-  it("supposes nothing for a host that already belongs to the hosting suffix", () => {
+  it("supposes nothing for a host that already belongs to the provider", () => {
     assert.equal(
       supposedOf("app.azurewebsites.net", "waws.azurewebsites.net", LIST),
+      null,
+    );
+    assert.equal(
+      supposedOf(
+        "bucket.s3.amazonaws.com",
+        "s3-w.us-east-1.amazonaws.com",
+        LIST,
+      ),
       null,
     );
   });

@@ -22,26 +22,39 @@ export interface SuffixList {
 // name stays within what the host belongs to, or when the list knows no
 // suffix for it, as for a name of a local network.
 //
-// The registrable domain alone would split a hosting provider that has its
-// suffix in the private section into one provider for each of its customers
-// (customer.b-cdn.net), and Firefox has no way to leave that section out. So
-// a known suffix of several labels under a generic top-level domain, of more
-// than two letters, is the provider itself: there, such suffixes are those
-// hosting providers register. Under a country code, they are mostly those of
-// the registry (co.uk), and the registrable domain stays.
+// The provider is the last two labels of the name, which gather every name
+// of one company whatever the list says of them: us-west-2.elb.amazonaws.com
+// and s3.amazonaws.com are both amazonaws.com, where the registrable domain
+// would give one provider for each region or customer, the list holding such
+// names in its private section, which Firefox has no way to leave out. Under
+// a country code, of two letters, the last two labels may be a suffix of the
+// registry (co.uk, co.jp): a label is then added for as long as what is
+// taken is itself a known suffix, so that x.amazon.co.jp is amazon.co.jp.
 export function supposedOf(
   host: string,
   canonicalName: string,
   list: SuffixList,
 ): string | null {
   const name = canonicalName.toLowerCase().replace(/\.$/, "");
-  const domain = list.domain(name);
-  if (domain === null || !isSupposed(domain)) {
+  // Neither an address, nor a suffix alone, nor a name without known suffix.
+  if (list.domain(name) === null) {
     return null;
   }
-  const suffix = list.suffix(name);
-  const provider =
-    suffix !== null && /\.[^.]{3,}$/.test(suffix) ? suffix : domain;
+  const labels = name.split(".");
+  const countryCode = (labels.at(-1) ?? "").length === 2;
+  let taken = 2;
+  while (
+    countryCode &&
+    taken < labels.length &&
+    list.suffix(labels.slice(-taken).join(".")) ===
+      labels.slice(-taken).join(".")
+  ) {
+    taken += 1;
+  }
+  const provider = labels.slice(-taken).join(".");
+  if (!isSupposed(provider)) {
+    return null;
+  }
   const asked = host.toLowerCase();
   return asked === provider || asked.endsWith(`.${provider}`) ? null : provider;
 }
