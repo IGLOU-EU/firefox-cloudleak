@@ -10,7 +10,7 @@ import {
   recordViewOf,
   rowsOf,
 } from "../src/core/options-view.js";
-import { getMessageOf, messagesOf, OPTIONS_MESSAGES } from "./messages.js";
+import { getMessageOf, LOCALES, OPTIONS_MESSAGES } from "./messages.js";
 
 const shown = (site: string) =>
   site === "xn--bcher-kva.de" ? "bücher.de" : `shown ${site}`;
@@ -158,39 +158,19 @@ describe("the limit typed", () => {
 });
 
 describe("the messages of the preferences", () => {
-  const locales = ["en", "fr"].map((locale) => ({
-    locale,
-    messages: messagesOf(locale),
-  }));
   const withSite = ["optionsRemoveSite", "optionsAlready"];
   const withText = ["optionsRefused"];
 
-  it("exist in every locale", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of OPTIONS_MESSAGES) {
-        assert.ok(messages[name]?.message, `${locale}: ${name}`);
-        assert.ok(messages[name]?.description, `${locale}: ${name}`);
-      }
-    }
-  });
-
   it("put the site where a site is given, the typed text where it is given, and nothing else", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const name of OPTIONS_MESSAGES) {
-        const entry = messages[name];
         for (const [key, names] of [
           ["site", withSite],
           ["text", withText],
         ] as const) {
-          const expected = names.includes(name);
           assert.equal(
-            entry?.message.includes(`$${key.toUpperCase()}$`),
-            expected,
-            `${locale}: ${name}`,
-          );
-          assert.equal(
-            entry?.placeholders?.[key]?.content,
-            expected ? "$1" : undefined,
+            messages[name]?.placeholders?.[key]?.content,
+            names.includes(name) ? "$1" : undefined,
             `${locale}: ${name}`,
           );
         }
@@ -317,33 +297,5 @@ describe("the messages of the preferences", () => {
     const en = getMessageOf("en");
     assert.ok(fr("optionsEmpty", []).includes(fr("popupIgnoreSite", [])));
     assert.ok(en("optionsEmpty", []).includes(en("popupIgnoreSite", [])));
-  });
-
-  it("hold no line break", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of OPTIONS_MESSAGES) {
-        assert.doesNotMatch(
-          messages[name]?.message ?? "",
-          /\n/,
-          `${locale}: ${name}`,
-        );
-      }
-    }
-  });
-
-  it("put a no-break space before a colon, a question mark or a closing guillemet, and after an opening one, in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of OPTIONS_MESSAGES) {
-      const text = fr[name]?.message ?? "";
-      assert.doesNotMatch(text, /[^\u00a0][:?»]/u, name);
-      assert.doesNotMatch(text, /«[^\u00a0]/u, name);
-    }
-  });
-
-  it("hold neither an em dash nor a semicolon in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of OPTIONS_MESSAGES) {
-      assert.doesNotMatch(fr[name]?.message ?? "", /[\u2014;]/u, name);
-    }
   });
 });

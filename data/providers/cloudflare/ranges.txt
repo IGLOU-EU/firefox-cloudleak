@@ -1,6 +1,7 @@
 # Source: https://www.cloudflare.com/ips-v4
 # Source: https://www.cloudflare.com/ips-v6
 # Fetched: 2026-11-06
+# The edges that browsers reached on 2026-11-05 on www.legifrance.gouv.fr (141.101.90.107), and on 2026-11-06 on www.interieur.gouv.fr (2606:4700:10::ac42:9501) and procedures.inpi.fr (104.18.27.66), fall within these ranges.
 173.245.48.0/20
 103.21.244.0/22
 103.22.200.0/22

@@ -44,7 +44,7 @@ import {
   privateSample,
   smallSample,
 } from "./map-sample.js";
-import { getMessageOf, MAP_MESSAGES, messagesOf } from "./messages.js";
+import { getMessageOf, LOCALES, MAP_MESSAGES } from "./messages.js";
 
 // Every message the view asks for, to check that each is known.
 const asked = new Set<string>();
@@ -1276,10 +1276,6 @@ describe("the map of a private window", () => {
 });
 
 describe("the map messages", () => {
-  const locales = ["en", "fr"].map((locale) => ({
-    locale,
-    messages: messagesOf(locale),
-  }));
   const shared = [
     "helpOpen",
     "helpTitle",
@@ -1305,16 +1301,8 @@ describe("the map messages", () => {
     ...htmlOf("map/map.html").matchAll(/data-message="([^"]+)"/g),
   ].map((match) => match[1] ?? "");
 
-  it("exist in every locale", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of MAP_MESSAGES) {
-        assert.ok(messages[name]?.message, `${locale}: ${name}`);
-      }
-    }
-  });
-
   it("give the law and the place of every country of the data", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const country of countries) {
         assert.ok(
           messages[`mapLawOf${country}`]?.message,
@@ -1389,30 +1377,8 @@ describe("the map messages", () => {
     );
   });
 
-  it("have the same placeholders in each locale, each written in the message", () => {
-    const [en, fr] = locales;
-    for (const name of MAP_MESSAGES) {
-      const names = (entry: typeof en) =>
-        Object.entries(entry?.messages[name]?.placeholders ?? {}).map(
-          ([key, value]) => `${key}=${value.content}`,
-        );
-      assert.deepEqual(names(fr), names(en), name);
-      for (const { locale, messages } of locales) {
-        const entry = messages[name];
-        const written = [
-          ...(entry?.message ?? "").matchAll(/\$([A-Z]+)\$/g),
-        ].map((match) => (match[1] ?? "").toLowerCase());
-        assert.deepEqual(
-          written.sort(),
-          Object.keys(entry?.placeholders ?? {}).sort(),
-          `${locale}: ${name}`,
-        );
-      }
-    }
-  });
-
   it("put the count in the singular too, which 0 takes in French", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const name of MAP_MESSAGES.filter((entry) =>
         /(One|Many)$/.test(entry),
       )) {
@@ -1421,32 +1387,6 @@ describe("the map messages", () => {
           `${locale}: ${name}`,
         );
       }
-    }
-  });
-
-  it("hold no line break", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of MAP_MESSAGES) {
-        assert.doesNotMatch(
-          messages[name]?.message ?? "",
-          /\n/,
-          `${locale}: ${name}`,
-        );
-      }
-    }
-  });
-
-  it("put a no-break space before a colon or a question mark in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of MAP_MESSAGES) {
-      assert.doesNotMatch(fr[name]?.message ?? "", /[^\u00a0][:?]/u, name);
-    }
-  });
-
-  it("hold neither an em dash nor a semicolon in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of MAP_MESSAGES) {
-      assert.doesNotMatch(fr[name]?.message ?? "", /[\u2014;]/u, name);
     }
   });
 

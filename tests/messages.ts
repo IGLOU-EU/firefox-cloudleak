@@ -201,6 +201,12 @@ export function messagesOf(locale: string): Record<string, Message> {
   ) as Record<string, Message>;
 }
 
+// Each locale with its messages, English, the source, first.
+export const LOCALES: readonly {
+  readonly locale: string;
+  readonly messages: Record<string, Message>;
+}[] = ["en", "fr"].map((locale) => ({ locale, messages: messagesOf(locale) }));
+
 // Fills a message as browser.i18n.getMessage does: each $NAME$ takes the
 // content of its placeholder, whose $1 takes the first substitution. A
 // missing message fails, where Firefox would show an empty string.

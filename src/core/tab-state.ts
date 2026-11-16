@@ -7,6 +7,7 @@ import {
   colourOf,
   type LeakLevel,
 } from "./classify.js";
+import { rankOf } from "./counts.js";
 
 // The number of requests of a tab at one level, and, for the levels whose
 // colour depends on it, with or without proven decryption.
@@ -68,8 +69,6 @@ export const NEUTRAL: TabState = {
 export const NOT_OBSERVED: TabState = { kind: "not-observed" };
 
 export const IGNORED: TabState = { kind: "ignored" };
-
-const COLOUR_RANK: Record<Colour, number> = { blue: 0, orange: 1, red: 2 };
 
 function isPartial(state: TabState): boolean {
   return (
@@ -136,16 +135,17 @@ function count(tallies: readonly Tally[], request: Classification): Tally[] {
   );
 }
 
-// The order of the icon, red before orange before blue, then by level
-// number, so that the tooltip lists the counts in the order the icon follows.
+// The order of the categories, positive when the first grade is the more
+// serious, so that the tooltip lists the counts in the order the icon
+// follows.
 function compareGrades(
   a: { readonly level: LeakLevel; readonly proven: boolean | null },
   b: { readonly level: LeakLevel; readonly proven: boolean | null },
 ): number {
-  const colour =
-    COLOUR_RANK[colourOf(a.level, a.proven === true)] -
-    COLOUR_RANK[colourOf(b.level, b.proven === true)];
-  return colour !== 0 ? colour : a.level - b.level;
+  return (
+    rankOf(colourOf(b.level, b.proven === true), b.level) -
+    rankOf(colourOf(a.level, a.proven === true), a.level)
+  );
 }
 
 // At the same colour and level, a request of the site replaces one of the

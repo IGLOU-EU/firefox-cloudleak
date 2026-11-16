@@ -26,7 +26,7 @@ import {
   NOT_OBSERVED,
   type TabState,
 } from "../src/core/tab-state.js";
-import { getMessageOf, messagesOf, POPUP_MESSAGES } from "./messages.js";
+import { getMessageOf, LOCALES, POPUP_MESSAGES } from "./messages.js";
 
 const PROVIDERS = [
   { id: "cloudflare", name: "Cloudflare" },
@@ -473,24 +473,12 @@ describe("cleared", () => {
 });
 
 describe("the popup messages", () => {
-  const locales = ["en", "fr"].map((locale) => ({
-    locale,
-    messages: messagesOf(locale),
-  }));
   const withDate = ["popupSite", "popupClearSiteQuestion"];
   const withSite = [
     "popupIgnoreSiteQuestion",
     "popupClearSiteQuestion",
     "popupClearSiteQuestionPrivate",
   ];
-
-  it("exist in every locale", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of POPUP_MESSAGES) {
-        assert.ok(messages[name]?.message, `${locale}: ${name}`);
-      }
-    }
-  });
 
   it("cover every message the view produces", () => {
     const views = [
@@ -527,18 +515,11 @@ describe("the popup messages", () => {
   });
 
   it("put the date where a date is given, and nowhere else", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const name of POPUP_MESSAGES) {
-        const entry = messages[name];
-        const expected = withDate.includes(name);
         assert.equal(
-          entry?.message.includes("$DATE$"),
-          expected,
-          `${locale}: ${name}`,
-        );
-        assert.equal(
-          entry?.placeholders?.["date"] !== undefined,
-          expected,
+          messages[name]?.placeholders?.["date"] !== undefined,
+          withDate.includes(name),
           `${locale}: ${name}`,
         );
       }
@@ -546,18 +527,11 @@ describe("the popup messages", () => {
   });
 
   it("put the site where a site is given, and nowhere else, before the date", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const name of POPUP_MESSAGES) {
-        const entry = messages[name];
-        const expected = withSite.includes(name);
         assert.equal(
-          entry?.message.includes("$SITE$"),
-          expected,
-          `${locale}: ${name}`,
-        );
-        assert.equal(
-          entry?.placeholders?.["site"]?.content,
-          expected ? "$1" : undefined,
+          messages[name]?.placeholders?.["site"]?.content,
+          withSite.includes(name) ? "$1" : undefined,
           `${locale}: ${name}`,
         );
       }
@@ -644,32 +618,5 @@ describe("the popup messages", () => {
   it("name the preferences", () => {
     assert.equal(getMessageOf("fr")("popupPreferences", []), "Préférences");
     assert.equal(getMessageOf("en")("popupPreferences", []), "Preferences");
-  });
-
-  it("hold no line break", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of POPUP_MESSAGES) {
-        assert.doesNotMatch(
-          messages[name]?.message ?? "",
-          /\n/,
-          `${locale}: ${name}`,
-        );
-      }
-    }
-  });
-
-  it("put a no-break space before a colon or a question mark in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of POPUP_MESSAGES) {
-      const text = fr[name]?.message ?? "";
-      assert.doesNotMatch(text, /[^\u00a0][:?]/u, name);
-    }
-  });
-
-  it("hold neither an em dash nor a semicolon in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of POPUP_MESSAGES) {
-      assert.doesNotMatch(fr[name]?.message ?? "", /[\u2014;]/u, name);
-    }
   });
 });

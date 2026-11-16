@@ -1,8 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import { type Classification, colourOf } from "./classify.js";
-import type { Category, SiteCounts } from "./popup-message.js";
+import {
+  type Classification,
+  type Colour,
+  colourOf,
+  type LeakLevel,
+} from "./classify.js";
+import type {
+  Category,
+  RequestKindCounts,
+  SiteCounts,
+} from "./popup-message.js";
 
 // What the kept counts take of a request through a provider: its
 // classification, which gives the provider and the category, the method and
@@ -37,6 +46,48 @@ export function emptyCounts(since: number): KeptCounts {
 export function categoryOf(request: Classification): Category {
   const level = request.leak.level;
   return `${colourOf(level, request.proven)}${level}`;
+}
+
+// The categories the classification gives, from the most serious: red before
+// orange before blue, then the highest level first. The order of the icon,
+// the tooltip, the popup and the map. It never gives level 1, and a category
+// this version does not know is left out rather than guessed.
+export const CATEGORIES = [
+  "red4",
+  "red3",
+  "orange4",
+  "orange3",
+  "blue2",
+] as const satisfies readonly Category[];
+export type KnownCategory = (typeof CATEGORIES)[number];
+
+export function colourOfCategory(category: Category): Colour {
+  return category.slice(0, -1) as Colour;
+}
+
+export function levelOfCategory(category: Category): LeakLevel {
+  return Number(category.slice(-1)) as LeakLevel;
+}
+
+// What the colour of a category says of the decryption: red is proven,
+// orange is not, and blue depends on no proof.
+export function proofOfCategory(category: Category): boolean | null {
+  const colour = colourOfCategory(category);
+  return colour === "blue" ? null : colour === "red";
+}
+
+// The place in CATEGORIES of the category of a colour and a level.
+export function rankOf(colour: Colour, level: LeakLevel): number {
+  return CATEGORIES.findIndex(
+    (category) =>
+      colourOfCategory(category) === colour &&
+      levelOfCategory(category) === level,
+  );
+}
+
+// The requests of a category, whatever their method and request type.
+export function sumOf(kinds: RequestKindCounts | undefined): number {
+  return Object.values(kinds ?? {}).reduce((sum, count) => sum + count, 0);
 }
 
 // The method and request type key of a count, such as "GET image", as

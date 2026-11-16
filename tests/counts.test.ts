@@ -35,7 +35,7 @@ function seen(
   return { classification, method, type, privateWindow };
 }
 
-const SESSION: Leak = {
+const SESSION_POSSIBLE: Leak = {
   level: 4,
   case: "session",
   possible: true,
@@ -81,7 +81,7 @@ describe("categoryOf", () => {
     assert.equal(categoryOf(request({ level: 2 }, false)), "blue2");
     assert.equal(categoryOf(request({ level: 3 }, false)), "orange3");
     assert.equal(categoryOf(request({ level: 3 }, true)), "red3");
-    assert.equal(categoryOf(request(SESSION, false)), "orange4");
+    assert.equal(categoryOf(request(SESSION_POSSIBLE, false)), "orange4");
     assert.equal(categoryOf(request(DATA_SENT, true)), "red4");
   });
 });
@@ -122,7 +122,7 @@ describe("countInSite", () => {
       image,
       image,
       seen(request({ level: 2 }, false), "GET", "script"),
-      seen(request(SESSION, true), "POST", "xmlhttprequest"),
+      seen(request(SESSION_POSSIBLE, true), "POST", "xmlhttprequest"),
       seen(request({ level: 2 }, true, "akamai")),
     ].reduce(
       (siteCounts, entry) => countInSite(siteCounts, entry),
@@ -241,7 +241,11 @@ describe("dropSite", () => {
     "example.org",
     800,
   );
-  const counted = count(before, LEBONCOIN, seen(request(SESSION, true)));
+  const counted = count(
+    before,
+    LEBONCOIN,
+    seen(request(SESSION_POSSIBLE, true)),
+  );
 
   it("keeps nothing of the site, neither its counts nor its own start, and leaves the others and the common start", () => {
     const after = dropSite(counted, LEBONCOIN);
