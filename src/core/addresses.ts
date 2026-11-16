@@ -2,7 +2,12 @@
 // Copyright (C) 2026 Adrien Kara
 
 import type { LeakLevel } from "./classify.js";
-import { categoryOf, requestKindOf, type SeenRequest } from "./counts.js";
+import {
+  categoryOf,
+  levelOfCategory,
+  requestKindOf,
+  type SeenRequest,
+} from "./counts.js";
 import type {
   Category,
   RecordLevel,
@@ -136,10 +141,6 @@ export function addAddress(
   };
 }
 
-function levelOf(category: Category): LeakLevel {
-  return Number(category.slice(-1)) as LeakLevel;
-}
-
 // What the settings keep of the addresses: the categories of the levels
 // recorded, and in each row the most recent up to the limit. A provider or a
 // category left without a row goes. The addresses given are never changed.
@@ -155,7 +156,7 @@ export function fitAddresses(
       Category,
       Record<string, readonly string[]>,
     ][]) {
-      if (!recordsLevel(settings.record, levelOf(category))) {
+      if (!recordsLevel(settings.record, levelOfCategory(category))) {
         continue;
       }
       const keptRows: Record<string, readonly string[]> = {};

@@ -5,13 +5,13 @@
 // for the counts of every site and puts them into the page through the view
 // of core/map-view.ts, which decides everything that is shown.
 
+import { colourOfCategory } from "./core/counts.js";
 import {
   type AddressRow,
   type CategoryLine,
   type Choice,
   type Column,
   type CopyTexts,
-  colourOfCategory,
   columnOf,
   type DetailLine,
   type Filters,
@@ -21,6 +21,7 @@ import {
   heightOf,
   highlightOf,
   type Icon,
+  keyPartsOf,
   type LimitList,
   type LimitRow,
   NO_FILTER,
@@ -845,7 +846,8 @@ function renderPanel(): void {
 }
 
 function selectedSite(): string | null {
-  return selection?.startsWith("s:") ? selection.slice(2) : null;
+  const parts = selection === null ? null : keyPartsOf(selection);
+  return parts?.kind === "site" ? parts.name : null;
 }
 
 // Asked when the panel of a site opens, rather than with the counts of every

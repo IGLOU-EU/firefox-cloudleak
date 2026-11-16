@@ -69,15 +69,9 @@ export async function onSendHeaders(
   // the counts, so whether the recording is on is known after the wait.
   const address = privateWindow ? null : addressOf(details.url);
   await ready;
-  if (type === "main_frame") {
-    navigate(tabId, requestId, timeStamp);
-  }
   pending.set(requestId, {
     tabId,
-    navigation:
-      type === "main_frame"
-        ? requestId
-        : navigationAt(recordOf(tabId), timeStamp),
+    navigation: navigationOf(tabId, requestId, type, timeStamp),
     request,
     privateWindow,
     address: recording() ? address : null,
@@ -110,15 +104,23 @@ export async function onResponseStarted(
     return;
   }
   const { tabId, requestId, type, timeStamp } = details;
+  missRequest(tabId, navigationOf(tabId, requestId, type, timeStamp));
+}
+
+// A request for a document starts the navigation of its tab, named by its
+// request id, and any other request belongs to the navigation its tab showed
+// when it was sent.
+function navigationOf(
+  tabId: number,
+  requestId: string,
+  type: string,
+  sentAt: number,
+): string {
   if (type === "main_frame") {
-    navigate(tabId, requestId, timeStamp);
+    navigate(tabId, requestId, sentAt);
+    return requestId;
   }
-  missRequest(
-    tabId,
-    type === "main_frame"
-      ? requestId
-      : navigationAt(recordOf(tabId), timeStamp),
-  );
+  return navigationAt(recordOf(tabId), sentAt);
 }
 
 async function settle(

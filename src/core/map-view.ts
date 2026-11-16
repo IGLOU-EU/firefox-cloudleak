@@ -7,6 +7,14 @@
 // without a browser, and the page only puts it into the DOM.
 
 import type { Colour } from "./classify.js";
+import {
+  CATEGORIES,
+  colourOfCategory,
+  type KnownCategory,
+  levelOfCategory,
+  proofOfCategory,
+  sumOf,
+} from "./counts.js";
 import type {
   CategoryCounts,
   MapData,
@@ -14,37 +22,70 @@ import type {
   SiteAddresses,
 } from "./popup-message.js";
 
-// The categories the classification gives, from the most serious: the order
-// of the column, of its headings and of the panel. It never gives level 1,
-// and a category this version does not know is left out rather than guessed,
-// as the popup does.
-export const CATEGORIES = [
-  "red4",
-  "red3",
-  "orange4",
-  "orange3",
-  "blue2",
-] as const;
-export type MapCategory = (typeof CATEGORIES)[number];
-
-const COLOURS: Record<MapCategory, Colour> = {
-  red4: "red",
-  red3: "red",
-  orange4: "orange",
-  orange3: "orange",
-  blue2: "blue",
-};
-
-export function colourOfCategory(category: MapCategory): Colour {
-  return COLOURS[category];
-}
-
-function rankOf(category: MapCategory): number {
+// The column, its headings and the panel follow the order of CATEGORIES.
+function rankOf(category: KnownCategory): number {
   return CATEGORIES.indexOf(category);
 }
 
+// The keys of what the map draws and what a click selects: a site, a
+// provider, a group of blue sites by its providers, and the link of a site or
+// of a group to a provider.
+function siteKey(site: string): string {
+  return `s:${site}`;
+}
+
+function providerKey(provider: string): string {
+  return `f:${provider}`;
+}
+
+function groupKey(together: string): string {
+  return `g:${together}`;
+}
+
+function siteLinkKey(site: string, provider: string): string {
+  return `l:${site}|${provider}`;
+}
+
+function groupLinkKey(together: string, provider: string): string {
+  return `lg:${together}|${provider}`;
+}
+
+export interface KeyParts {
+  readonly kind: "site" | "provider" | "group" | "site-link" | "group-link";
+  // The site, the provider or the providers of the group, and for a link
+  // those of its row.
+  readonly name: string;
+}
+
+const KEY_KINDS: ReadonlyMap<string, KeyParts["kind"]> = new Map([
+  ["s", "site"],
+  ["f", "provider"],
+  ["g", "group"],
+  ["l", "site-link"],
+  ["lg", "group-link"],
+]);
+
+// The kind ends at the first colon, since a site in IPv6 holds colons of its
+// own, and a link names its provider after the last bar, since a provider id
+// holds none. Null for a key of no kind the map draws.
+export function keyPartsOf(key: string): KeyParts | null {
+  const colon = key.indexOf(":");
+  const kind = KEY_KINDS.get(key.slice(0, colon));
+  if (kind === undefined) {
+    return null;
+  }
+  const rest = key.slice(colon + 1);
+  return {
+    kind,
+    name:
+      kind === "site-link" || kind === "group-link"
+        ? rest.slice(0, rest.lastIndexOf("|"))
+        : rest,
+  };
+}
+
 // "red4" names its messages "…Red4".
-function suffixOf(category: MapCategory): string {
+function suffixOf(category: KnownCategory): string {
   return `${category.charAt(0).toUpperCase()}${category.slice(1)}`;
 }
 
@@ -136,10 +177,10 @@ export function flagOf(country: string): string {
 export interface MapLink {
   readonly provider: string;
   readonly categories: {
-    readonly [category in MapCategory]?: RequestKindCounts;
+    readonly [category in KnownCategory]?: RequestKindCounts;
   };
   readonly total: number;
-  readonly worst: MapCategory;
+  readonly worst: KnownCategory;
   readonly title: string;
 }
 
@@ -153,7 +194,7 @@ export interface MapSite {
   readonly since: number | null;
   // From the most serious, then the most requests.
   readonly links: readonly MapLink[];
-  readonly worst: MapCategory;
+  readonly worst: KnownCategory;
   readonly total: number;
   // Its providers, which a blue site shares with the others of its group.
   readonly together: string;
@@ -198,10 +239,6 @@ export interface PreparedMap extends Basis {
   readonly order: readonly string[];
 }
 
-function sumOf(kinds: RequestKindCounts | undefined): number {
-  return Object.values(kinds ?? {}).reduce((sum, count) => sum + count, 0);
-}
-
 function counted(
   formats: MapFormats,
   word: "mapSites" | "mapProviders" | "mapRequests",
@@ -223,7 +260,7 @@ function sitesOf(formats: MapFormats, count: number, of: number): string {
   );
 }
 
-function levelOf(formats: MapFormats, category: MapCategory): string {
+function levelOf(formats: MapFormats, category: KnownCategory): string {
   return formats.message(`mapLevel${suffixOf(category)}`, []);
 }
 
@@ -231,9 +268,9 @@ function linkOf(
   provider: string,
   counts: CategoryCounts,
 ): Omit<MapLink, "title"> | null {
-  const categories: { [category in MapCategory]?: RequestKindCounts } = {};
+  const categories: { [category in KnownCategory]?: RequestKindCounts } = {};
   let total = 0;
-  let worst: MapCategory | null = null;
+  let worst: KnownCategory | null = null;
   for (const category of CATEGORIES) {
     const kinds = counts[category];
     const count = sumOf(kinds);
@@ -398,7 +435,7 @@ function orderOf(
 export interface Filters {
   readonly text: string;
   readonly provider: string | null;
-  readonly category: MapCategory | null;
+  readonly category: KnownCategory | null;
   readonly country: string | null;
 }
 
@@ -523,7 +560,7 @@ export interface ColumnLink {
   readonly key: string;
   readonly slot: number;
   readonly provider: string;
-  readonly category: MapCategory;
+  readonly category: KnownCategory;
   readonly title: string;
 }
 
@@ -539,7 +576,7 @@ export interface Column {
   // How many sites kept each provider, category of link and country has,
   // counted by the links kept.
   readonly byProvider: ReadonlyMap<string, number>;
-  readonly byCategory: ReadonlyMap<MapCategory, number>;
+  readonly byCategory: ReadonlyMap<KnownCategory, number>;
   readonly byCountry: ReadonlyMap<string, number>;
   // The row that shows each site kept, its own or that of its group.
   readonly rowOf: ReadonlyMap<string, string>;
@@ -634,7 +671,7 @@ export function columnOf(basis: Basis, filters: Filters): Column {
   const links: ColumnLink[] = [];
   const rowOf = new Map<string, string>();
   let slot = 0;
-  let last: MapCategory | null = null;
+  let last: KnownCategory | null = null;
   const pending: Pending[] = [
     ...serious.map((entry) => ({ kind: "site" as const, entry })),
     ...background,
@@ -652,7 +689,7 @@ export function columnOf(basis: Basis, filters: Filters): Column {
     }
     if (item.kind === "site") {
       const { site } = item.entry;
-      const key = `s:${site.site}`;
+      const key = siteKey(site.site);
       const start = text === "" ? -1 : site.key.indexOf(text);
       rows.push({
         kind: "site",
@@ -665,7 +702,7 @@ export function columnOf(basis: Basis, filters: Filters): Column {
       rowOf.set(site.site, key);
       for (const link of item.entry.links) {
         links.push({
-          key: `l:${site.site}|${link.provider}`,
+          key: siteLinkKey(site.site, link.provider),
           slot,
           provider: link.provider,
           category: link.worst,
@@ -673,7 +710,7 @@ export function columnOf(basis: Basis, filters: Filters): Column {
         });
       }
     } else {
-      const key = `g:${item.together}`;
+      const key = groupKey(item.together);
       const of = basis.groups.get(item.together) ?? item.sites.length;
       const label = sitesOf(formats, item.sites.length, of);
       const names = (item.sites[0]?.links ?? []).map(
@@ -697,7 +734,7 @@ export function columnOf(basis: Basis, filters: Filters): Column {
       }
       for (const provider of providers) {
         links.push({
-          key: `lg:${item.together}|${provider}`,
+          key: groupLinkKey(item.together, provider),
           slot,
           provider,
           category: "blue2",
@@ -766,7 +803,7 @@ export function placesOf(
     providers: shown.map((provider, index) => {
       const count = column.byProvider.get(provider.id) ?? 0;
       return {
-        key: `f:${provider.id}`,
+        key: providerKey(provider.id),
         y: yAt(index),
         provider,
         name:
@@ -845,7 +882,7 @@ export type Icon =
     };
 
 // The point of a blue site, the cloud of its category for the others.
-function siteIcon(category: MapCategory): Icon {
+function siteIcon(category: KnownCategory): Icon {
   return category === "blue2"
     ? { kind: "point" }
     : { kind: "cloud", colour: colourOfCategory(category) };
@@ -1068,16 +1105,16 @@ function kindText(formats: MapFormats, kind: string): string {
   return `${kind.slice(0, space)} ${message === undefined ? type : formats.message(message, [])}`;
 }
 
-function levelLine(formats: MapFormats, category: MapCategory) {
-  const colour = colourOfCategory(category);
+function levelLine(formats: MapFormats, category: KnownCategory) {
+  const proven = proofOfCategory(category);
   return {
-    colour,
-    label: formats.message(`level${category.slice(-1)}`, []),
+    colour: colourOfCategory(category),
+    label: formats.message(`level${levelOfCategory(category)}`, []),
     proof:
-      colour === "blue"
+      proven === null
         ? null
         : formats.message(
-            colour === "red" ? "decryptionProven" : "decryptionUnproven",
+            proven ? "decryptionProven" : "decryptionUnproven",
             [],
           ),
   };
@@ -1117,7 +1154,7 @@ function addressRow(
 
 function categoryLine(
   formats: MapFormats,
-  category: MapCategory,
+  category: KnownCategory,
   count: number,
   kinds: RequestKindCounts | null,
   rows: RowAddresses | null = null,
@@ -1141,7 +1178,7 @@ function categoryLine(
 
 function providerChoice(provider: MapProvider, count: string): Choice {
   return {
-    key: `f:${provider.id}`,
+    key: providerKey(provider.id),
     icon: { kind: "flag", flag: provider.flag, title: null },
     label: provider.name,
     bold: true,
@@ -1153,11 +1190,11 @@ function providerChoice(provider: MapProvider, count: string): Choice {
 function siteChoice(
   formats: MapFormats,
   site: MapSite,
-  category: MapCategory,
+  category: KnownCategory,
   count: number,
 ): Choice {
   return {
-    key: `s:${site.site}`,
+    key: siteKey(site.site),
     icon: siteIcon(category),
     label: site.name,
     bold: false,
@@ -1339,7 +1376,7 @@ function sitePanel(
         choice:
           provider === undefined
             ? {
-                key: `f:${link.provider}`,
+                key: providerKey(link.provider),
                 icon: { kind: "flag", flag: "", title: null },
                 label: link.provider,
                 bold: true,
@@ -1400,7 +1437,7 @@ function providerPanel(map: PreparedMap, provider: MapProvider): Panel {
       ]),
     );
   }
-  const byWorst = new Map<MapCategory, number>();
+  const byWorst = new Map<KnownCategory, number>();
   for (const { link } of provider.sites) {
     add(byWorst, link.worst);
   }
@@ -1465,20 +1502,18 @@ export function panelOf(
   unfolded: ReadonlySet<string> = new Set(),
 ): Panel {
   if (selection !== null) {
-    const colon = selection.indexOf(":");
-    const kind = selection.slice(0, colon);
-    const rest = selection.slice(colon + 1);
-    if (kind === "s") {
-      const site = map.site.get(rest);
+    const parts = keyPartsOf(selection);
+    if (parts?.kind === "site") {
+      const site = map.site.get(parts.name);
       if (site !== undefined) {
         return sitePanel(map, site, record, unfolded);
       }
-    } else if (kind === "f") {
-      const provider = map.provider.get(rest);
+    } else if (parts?.kind === "provider") {
+      const provider = map.provider.get(parts.name);
       if (provider !== undefined) {
         return providerPanel(map, provider);
       }
-    } else if (kind === "g") {
+    } else if (parts?.kind === "group") {
       const group = column.rows.find(
         (row): row is GroupRow => row.kind === "group" && row.key === selection,
       );
@@ -1492,11 +1527,12 @@ export function panelOf(
 
 // A link stands for its site, or for its group.
 export function selectionOf(key: string): string {
-  if (key.startsWith("l:")) {
-    return `s:${key.slice(2, key.lastIndexOf("|"))}`;
+  const parts = keyPartsOf(key);
+  if (parts?.kind === "site-link") {
+    return siteKey(parts.name);
   }
-  if (key.startsWith("lg:")) {
-    return `g:${key.slice(3, key.lastIndexOf("|"))}`;
+  if (parts?.kind === "group-link") {
+    return groupKey(parts.name);
   }
   return key;
 }
@@ -1522,17 +1558,16 @@ export function highlightOf(
     row.kind === "site"
       ? row.links.map((link) => [
           link.provider,
-          `l:${row.site.site}|${link.provider}`,
+          siteLinkKey(row.site.site, link.provider),
         ])
       : row.providers.map((provider) => [
           provider,
-          `lg:${row.key.slice(2)}|${provider}`,
+          groupLinkKey(keyPartsOf(row.key)?.name ?? "", provider),
         ]);
-  const colon = selection.indexOf(":");
-  const kind = selection.slice(0, colon);
-  const rest = selection.slice(colon + 1);
-  const chosen = kind === "s" ? (column.rowOf.get(rest) ?? null) : selection;
-  if (kind === "s" || kind === "g") {
+  const parts = keyPartsOf(selection);
+  const chosen =
+    parts?.kind === "site" ? (column.rowOf.get(parts.name) ?? null) : selection;
+  if (parts?.kind === "site" || parts?.kind === "group") {
     const row = column.rows.find(
       (entry): entry is SiteRow | GroupRow =>
         entry.kind !== "heading" && entry.key === chosen,
@@ -1540,18 +1575,18 @@ export function highlightOf(
     if (row !== undefined) {
       active.add(row.key);
       for (const [provider, link] of linksOf(row)) {
-        active.add(`f:${provider}`);
+        active.add(providerKey(provider));
         active.add(link);
       }
     }
-  } else if (kind === "f") {
+  } else if (parts?.kind === "provider") {
     active.add(selection);
     for (const row of column.rows) {
       if (row.kind === "heading") {
         continue;
       }
       for (const [provider, link] of linksOf(row)) {
-        if (provider === rest) {
+        if (provider === parts.name) {
           active.add(row.key);
           active.add(link);
         }

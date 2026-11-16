@@ -32,17 +32,7 @@ declare global {
 // rather than lose its counts. The key stays in punycode, as the URL gives
 // it, stable and comparable.
 export function siteOf(hostname: string): string {
-  try {
-    return (
-      browser.publicSuffix.getDomain(hostname, {
-        allowIPAddress: true,
-        allowPlainSuffix: true,
-        allowUnknownSuffix: true,
-      }) ?? hostname
-    );
-  } catch {
-    return hostname;
-  }
+  return domainOf(hostname, "punycode");
 }
 
 // The host as the URL gives it, in punycode, with the brackets of an IPv6
@@ -77,16 +67,25 @@ export function siteOfTyped(text: string): string | null {
 // DomainEncoding). The call throws on a name it cannot read, which is then
 // shown as it came.
 export function siteText(site: string): string {
+  return domainOf(site, "display");
+}
+
+// Punycode is what Firefox writes without the option (public_suffix.json,
+// Firefox 159.0.1).
+function domainOf(
+  host: string,
+  encoding: NonNullable<browser.publicSuffix.DomainOptions["encoding"]>,
+): string {
   try {
     return (
-      browser.publicSuffix.getDomain(site, {
-        encoding: "display",
+      browser.publicSuffix.getDomain(host, {
+        encoding,
         allowIPAddress: true,
         allowPlainSuffix: true,
         allowUnknownSuffix: true,
-      }) ?? site
+      }) ?? host
     );
   } catch {
-    return site;
+    return host;
   }
 }

@@ -7,18 +7,21 @@
 
 import { type Colour, colourOf, type LeakLevel } from "./classify.js";
 import {
+  CATEGORIES,
+  colourOfCategory,
+  levelOfCategory,
+  proofOfCategory,
+  rankOf,
+  sumOf,
+} from "./counts.js";
+import {
   type Display,
   displayOf,
   type Icon,
   line,
   type TitleLine,
 } from "./display.js";
-import type {
-  CategoryCounts,
-  PopupData,
-  RequestKindCounts,
-  SiteCounts,
-} from "./popup-message.js";
+import type { CategoryCounts, PopupData, SiteCounts } from "./popup-message.js";
 import type { Tally } from "./tab-state.js";
 
 // One row of a table of counts: the cloud of its category, the name of its
@@ -243,17 +246,6 @@ function rowOf(
   };
 }
 
-// The order of the icon and the tooltip: red before orange before blue, then
-// the highest level first.
-const COLOURS: readonly Colour[] = ["red", "orange", "blue"];
-const LEVELS: readonly LeakLevel[] = [4, 3, 2, 1];
-
-function rankOf(row: Row): number {
-  return (
-    COLOURS.indexOf(row.colour) * LEVELS.length + LEVELS.indexOf(row.level)
-  );
-}
-
 // A provider comes before another when its most serious category does, and
 // by name at the same category. One without any request is left out.
 function providerRows(
@@ -274,32 +266,27 @@ function providerRows(
 
 function leadRank(entry: ProviderRows): number {
   const lead = entry.rows[0];
-  return lead === undefined ? Number.POSITIVE_INFINITY : rankOf(lead);
+  return lead === undefined
+    ? Number.POSITIVE_INFINITY
+    : rankOf(lead.colour, lead.level);
 }
 
-// A category is its colour then its level, "red4", and its proof is what the
-// colour says: red is proven, orange is not, and blue depends on no proof. A
-// category this version does not know is left out rather than guessed.
+// A row for each category of CATEGORIES with requests, in its order, with the
+// proof its colour says.
 function rowsOf(categories: CategoryCounts): Row[] {
   const rows: Row[] = [];
-  for (const colour of COLOURS) {
-    for (const level of LEVELS) {
-      const count = sumOf(categories[`${colour}${level}`]);
-      if (count > 0) {
-        rows.push(
-          rowOf(
-            colour,
-            level,
-            colour === "blue" ? null : colour === "red",
-            count,
-          ),
-        );
-      }
+  for (const category of CATEGORIES) {
+    const count = sumOf(categories[category]);
+    if (count > 0) {
+      rows.push(
+        rowOf(
+          colourOfCategory(category),
+          levelOfCategory(category),
+          proofOfCategory(category),
+          count,
+        ),
+      );
     }
   }
   return rows;
-}
-
-function sumOf(kinds: RequestKindCounts | undefined): number {
-  return Object.values(kinds ?? {}).reduce((sum, count) => sum + count, 0);
 }
