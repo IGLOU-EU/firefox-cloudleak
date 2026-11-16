@@ -212,7 +212,10 @@ describe("the help of the map", () => {
     const help = page.element("help");
     const veil = page.element("help-veil");
     assert.equal(help.attributes.get("title"), "helpOpen");
-    assert.equal(page.element("help-title").textContent, "helpOpen");
+    assert.equal(
+      page.element("help-window").attributes.get("aria-label"),
+      "helpOpen",
+    );
     assert.equal(veil.hidden, true);
     help.click();
     assert.deepEqual(
@@ -226,15 +229,32 @@ describe("the help of the map", () => {
     );
   });
 
-  it("ends with the about section of the popup, with the version of the manifest", async () => {
+  it("has the tabs of the popup, opens on the help, and shows the about section of the popup in its own tab", async () => {
     const page = await open();
-    const last = page.element("help-text").children.at(-1);
-    assert.equal(last?.className, "about-section");
+    const chosen = () =>
+      ["help-tab", "about-tab"].map((id) =>
+        page.element(id).getAttribute("aria-selected"),
+      );
+    page.element("help").click();
+    assert.deepEqual(chosen(), ["true", "false"]);
+    page.element("help-tab").dispatch("keydown", {
+      key: "ArrowRight",
+      preventDefault: () => {},
+    });
+    assert.deepEqual(chosen(), ["false", "true"]);
     assert.equal(
-      last?.querySelectorAll("p.meta").map((line) => line.textContent)[0],
+      page.element("about-panel").classList.contains("unseen"),
+      false,
+    );
+    page.element("help-close").click();
+    page.element("help").click();
+    assert.deepEqual(chosen(), ["true", "false"]);
+    const about = page.element("about-panel");
+    assert.equal(
+      about.querySelectorAll("p.meta").map((line) => line.textContent)[0],
       "aboutVersion 9.8.7",
     );
-    assert.equal(last?.querySelectorAll("a").length, 3);
+    assert.equal(about.querySelectorAll("a").length, 3);
   });
 });
 

@@ -232,6 +232,37 @@ async function open(options: Options): Promise<Opened> {
   };
 }
 
+// Each tab, whether it is chosen, whether it is in the tab order, and
+// whether its panel shows, the help first.
+function tabsOf(page: Opened): string[] {
+  return [
+    ["help-tab", "help-text"],
+    ["about-tab", "about-panel"],
+  ].map(([tab, panel]) => {
+    const button = page.element(tab ?? "");
+    const shown = !page.element(panel ?? "").classList.contains("unseen");
+    return `${tab} ${button.getAttribute("aria-selected")} ${button.getAttribute("tabindex")} ${shown ? "shown" : "unseen"}`;
+  });
+}
+
+const ON_HELP = ["help-tab true 0 shown", "about-tab false -1 unseen"];
+const ON_ABOUT = ["help-tab false -1 unseen", "about-tab true 0 shown"];
+
+// The tabs and their panels as the HTML of a page wires them: each tab with
+// the panel it controls, each panel with the tab that names it.
+function wiringOf(html: string): string[] {
+  return [
+    ...html.matchAll(
+      /role="(tablist|tab|tabpanel)"(?: id="([\w-]+)")?(?: class="[\w -]+")?(?: aria-(controls|labelledby)="([\w-]+)")?/g,
+    ),
+  ].map((match) =>
+    match
+      .slice(1)
+      .filter((part) => part !== undefined)
+      .join(" "),
+  );
+}
+
 // Ignore, stop ignoring and clear, in the order of the footer.
 function footer(page: Opened): boolean[] {
   return ["ignore-site", "unignore-site", "clear-site"].map(
@@ -244,12 +275,11 @@ const LISTING = "https://addons.mozilla.org/firefox/addon/cloud-leak/";
 const ISSUE =
   "https://gitlab.com/iglou.eu/firefox-cloudleak/-/issues/new?issuable_template=provider-or-translation";
 
-// What the about section shows, in order: each text with its tag and class,
-// the image by its source, its text alternative and its size, and each link
-// by its text, its address, where it opens and its referrer policy.
+// What the about tab shows, in order: each text with its tag and class, the
+// image by its source, its text alternative and its size, and each link by
+// its text, its address, where it opens and its referrer policy.
 function aboutOf(page: Opened): string[] {
-  const section = page.element("help-text").children.at(-1);
-  return [...(section?.all() ?? [])].flatMap((part) => {
+  return [...page.element("about-panel").all()].slice(1).flatMap((part) => {
     const attribute = (name: string) => part.getAttribute(name) ?? "";
     switch (part.tagName) {
       case "img":
@@ -326,14 +356,17 @@ describe("the popup", () => {
     assert.equal(help.attributes.get("title"), "helpOpen");
     assert.equal(close.attributes.get("aria-label"), "helpClose");
     assert.equal(close.attributes.get("title"), "helpClose");
-    // Titled by the name of the question mark that opens it.
-    assert.equal(page.text("help-title"), "helpOpen");
+    // Named by the name of the question mark that opens it.
+    assert.equal(
+      page.element("help-window").attributes.get("aria-label"),
+      "helpOpen",
+    );
     const shown = () => [veil.hidden, content.inert, focusedElement()];
     assert.deepEqual(shown().slice(0, 2), [true, false]);
     help.click();
     assert.deepEqual(shown(), [false, true, close]);
     // A click inside the help reaches the veil from its own target.
-    veil.dispatch("click", { target: page.element("help-title") });
+    veil.dispatch("click", { target: page.element("help-tab") });
     assert.deepEqual(shown(), [false, true, close]);
     close.click();
     assert.deepEqual(shown(), [true, false, help]);
@@ -354,21 +387,84 @@ describe("the popup", () => {
     );
   });
 
-  it("writes the help as paragraphs, with the levels and the colours in lists, and the about section last", async () => {
+  it("puts two tabs in place of a title, the help and the about section, each wired to its panel", async () => {
+    const page = await open({});
+    assert.equal(page.text("help-tab"), "helpOpen");
+    assert.equal(page.text("about-tab"), "aboutTitle");
+    for (const html of [HTML, htmlOf("map/map.html")]) {
+      assert.deepEqual(wiringOf(html), [
+        "tablist",
+        "tab help-tab controls help-text",
+        "tab about-tab controls about-panel",
+        "tabpanel help-text labelledby help-tab",
+        "tabpanel about-panel labelledby about-tab",
+      ]);
+    }
+  });
+
+  it("opens the help on its help tab at each opening, the other tab out of the tab order and its panel unseen", async () => {
+    const page = await open({});
+    assert.deepEqual(tabsOf(page), ON_HELP);
+    page.element("help").click();
+    assert.deepEqual(tabsOf(page), ON_HELP);
+    page.element("about-tab").click();
+    assert.deepEqual(tabsOf(page), ON_ABOUT);
+    page.element("about-tab").click();
+    assert.deepEqual(tabsOf(page), ON_ABOUT);
+    page.element("help-close").click();
+    page.element("help").click();
+    assert.deepEqual(tabsOf(page), ON_HELP);
+    assert.equal(focusedElement(), page.element("help-close"));
+    page.element("about-tab").click();
+    page.root.dispatch("keydown", { key: "Escape" });
+    assert.equal(page.element("help-veil").hidden, true);
+    page.element("help").click();
+    assert.deepEqual(tabsOf(page), ON_HELP);
+  });
+
+  it("goes from one tab to the other by the arrows, around, and to the first and the last by Home and End", async () => {
+    const page = await open({});
+    page.element("help").click();
+    let prevented = 0;
+    const press = (tab: string, key: string) =>
+      page.element(tab).dispatch("keydown", {
+        key,
+        preventDefault: () => {
+          prevented += 1;
+        },
+      });
+    const steps: [string, string, readonly string[], string][] = [
+      ["help-tab", "ArrowRight", ON_ABOUT, "about-tab"],
+      ["about-tab", "ArrowRight", ON_HELP, "help-tab"],
+      ["help-tab", "ArrowLeft", ON_ABOUT, "about-tab"],
+      ["about-tab", "ArrowLeft", ON_HELP, "help-tab"],
+      ["help-tab", "End", ON_ABOUT, "about-tab"],
+      ["about-tab", "Home", ON_HELP, "help-tab"],
+      ["help-tab", "Home", ON_HELP, "help-tab"],
+    ];
+    for (const [tab, key, state, focused] of steps) {
+      press(tab, key);
+      assert.deepEqual(tabsOf(page), state, `${tab} ${key}`);
+      assert.equal(focusedElement(), page.element(focused), `${tab} ${key}`);
+    }
+    assert.equal(prevented, steps.length);
+    // Any other key is left to Firefox.
+    press("help-tab", "ArrowDown");
+    press("help-tab", "Enter");
+    assert.deepEqual(tabsOf(page), ON_HELP);
+    assert.equal(prevented, steps.length);
+  });
+
+  it("writes the help as paragraphs, with the levels and the colours in lists", async () => {
     const page = await open({});
     assert.deepEqual(
-      page.element("help-text").children.map((part) => {
-        switch (part.tagName) {
-          case "ul":
-            return part.children.map(
-              (item) => `${item.tagName} ${item.textContent}`,
-            );
-          case "section":
-            return `${part.tagName} ${part.className}`;
-          default:
-            return `${part.tagName} ${part.textContent}`;
-        }
-      }),
+      page
+        .element("help-text")
+        .children.map((part) =>
+          part.tagName === "ul"
+            ? part.children.map((item) => `${item.tagName} ${item.textContent}`)
+            : `${part.tagName} ${part.textContent}`,
+        ),
       [
         "p helpRoute",
         "p helpHttps",
@@ -379,15 +475,13 @@ describe("the popup", () => {
         "p helpLevels",
         ["li helpLevel2", "li helpLevel3", "li helpLevel4"],
         "p helpColours",
-        "section about-section",
       ],
     );
   });
 
-  it("says in the about section the logo, the name, the version of the manifest and the licence, then the links, each to a new tab that gets no referrer", async () => {
+  it("says in the about tab the logo, the name, the version of the manifest and the licence, then the links, each to a new tab that gets no referrer", async () => {
     const page = await open({});
     assert.deepEqual(aboutOf(page), [
-      "p about-title aboutTitle",
       "img /icons/logo.svg alt= 48x48",
       "p name extensionName",
       `p meta aboutVersion ${VERSION}`,
@@ -397,9 +491,9 @@ describe("the popup", () => {
       "p  aboutContribute",
       `a aboutIssue ${ISSUE} _blank noreferrer`,
     ]);
-    const section = page.element("help-text").children.at(-1);
+    const section = page.element("about-panel");
     for (const selector of [
-      "section.about-section > div.about > div.identity > img",
+      "div.about > div.identity > img",
       "div.identity > div > p.name",
       "div.about > ul.links > li > a",
       "div.about > p.issue > a",
@@ -407,14 +501,14 @@ describe("the popup", () => {
       assert.ok(section?.querySelector(selector), selector);
     }
     // The whole address in the tooltip of each link.
-    for (const link of section?.querySelectorAll("a") ?? []) {
+    for (const link of section.querySelectorAll("a")) {
       assert.equal(link.getAttribute("title"), link.getAttribute("href"));
     }
   });
 
   it("opens the issue from a template that the repository has", async () => {
     const page = await open({});
-    const issue = page.element("help-text").querySelector("p.issue > a");
+    const issue = page.element("about-panel").querySelector("p.issue > a");
     const template = new URL(
       issue?.getAttribute("href") ?? "",
     ).searchParams.get("issuable_template");

@@ -257,7 +257,7 @@
   },
   "helpOpen": {
     "message": "Aide",
-    "description": "Name of the help: accessible name and tooltip of the question mark in a circle, at the top right of the popup and of the map, which opens the help, and title of the help window it opens."
+    "description": "Name of the help: accessible name and tooltip of the question mark in a circle, at the top right of the popup and of the map, which opens the help, accessible name of the help window it opens, and name of the first tab of that window, which shows the help."
   },
   "helpClose": {
     "message": "Fermer l'aide",
@@ -305,7 +305,7 @@
   },
   "aboutTitle": {
     "message": "À propos",
-    "description": "Title of the about section, at the end of the text of the help window, under a rule."
+    "description": "Name of the second tab of the help window, which shows the about section of the extension."
   },
   "aboutVersion": {
     "message": "Version $VERSION$",

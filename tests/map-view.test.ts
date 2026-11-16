@@ -1434,6 +1434,7 @@ describe("the map messages", () => {
   const shared = [
     "helpOpen",
     "helpClose",
+    "aboutTitle",
     "popupSite",
     "popupSitePrivate",
     "level2",
