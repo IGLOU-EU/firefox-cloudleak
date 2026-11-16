@@ -70,8 +70,16 @@ function requestOf(message: unknown): PopupRequest | null {
   if (typeof message !== "object" || message === null) {
     return null;
   }
-  const { kind, tabId, site, privateWindow, host, record, recordLimit } =
-    message as Record<string, unknown>;
+  const {
+    kind,
+    tabId,
+    site,
+    privateWindow,
+    host,
+    record,
+    recordLimit,
+    dynamic,
+  } = message as Record<string, unknown>;
   if (
     kind === "clearSite" &&
     typeof site === "string" &&
@@ -106,12 +114,17 @@ function requestOf(message: unknown): PopupRequest | null {
   if (kind === "settings") {
     return { kind };
   }
-  // A level that is not one of the three is refused, and so is a limit that
-  // is not an integer of at least 1.
-  if (kind === "setSettings" && isRecordLevel(record)) {
+  // A level that is not one of the three is refused, and so are a limit that
+  // is not an integer of at least 1 and a dynamic detection neither on nor
+  // off.
+  if (
+    kind === "setSettings" &&
+    isRecordLevel(record) &&
+    typeof dynamic === "boolean"
+  ) {
     const limit = recordLimitOf(recordLimit);
     if (limit !== null) {
-      return { kind, record, recordLimit: limit };
+      return { kind, record, recordLimit: limit, dynamic };
     }
   }
   if (
@@ -203,9 +216,10 @@ async function settingsData(): Promise<Settings> {
 async function settingsChanged({
   record,
   recordLimit,
+  dynamic,
 }: Extract<PopupRequest, { kind: "setSettings" }>): Promise<Settings> {
   await ready;
-  return changeSettings({ record, recordLimit });
+  return changeSettings({ record, recordLimit, dynamic });
 }
 
 async function addressesData({

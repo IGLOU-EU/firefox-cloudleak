@@ -216,39 +216,67 @@ describe("recordLimitOf", () => {
 
 describe("settingsOf", () => {
   it("records nothing and keeps 100 addresses by default", () => {
-    assert.deepEqual(DEFAULT_SETTINGS, { record: "none", recordLimit: 100 });
+    assert.deepEqual(DEFAULT_SETTINGS, {
+      record: "none",
+      recordLimit: 100,
+      dynamic: false,
+    });
     assert.deepEqual(settingsOf(undefined), DEFAULT_SETTINGS);
   });
 
   it("keeps stored settings that are valid", () => {
-    assert.deepEqual(settingsOf({ record: "level4", recordLimit: 5 }), {
-      record: "level4",
-      recordLimit: 5,
-    });
-    assert.deepEqual(settingsOf({ record: "level3and4", recordLimit: 1000 }), {
-      record: "level3and4",
-      recordLimit: 1000,
-    });
     assert.deepEqual(
-      settingsOf({ record: "level3and4", recordLimit: 250_000 }),
-      { record: "level3and4", recordLimit: 250_000 },
+      settingsOf({ record: "level4", recordLimit: 5, dynamic: false }),
+      {
+        record: "level4",
+        recordLimit: 5,
+        dynamic: false,
+      },
+    );
+    assert.deepEqual(
+      settingsOf({ record: "level3and4", recordLimit: 1000, dynamic: false }),
+      {
+        record: "level3and4",
+        recordLimit: 1000,
+        dynamic: false,
+      },
+    );
+    assert.deepEqual(
+      settingsOf({
+        record: "level3and4",
+        recordLimit: 250_000,
+        dynamic: false,
+      }),
+      { record: "level3and4", recordLimit: 250_000, dynamic: false },
     );
   });
 
   it("falls back to the default of each setting that is not valid, so that a doubt records nothing", () => {
-    assert.deepEqual(settingsOf({ record: "all", recordLimit: 5 }), {
-      record: "none",
-      recordLimit: 5,
-    });
-    assert.deepEqual(settingsOf({ record: "level4", recordLimit: "5" }), {
-      record: "level4",
-      recordLimit: 100,
-    });
-    for (const recordLimit of [0, 2.5, -1]) {
-      assert.deepEqual(settingsOf({ record: "level4", recordLimit }), {
+    assert.deepEqual(
+      settingsOf({ record: "all", recordLimit: 5, dynamic: false }),
+      {
+        record: "none",
+        recordLimit: 5,
+        dynamic: false,
+      },
+    );
+    assert.deepEqual(
+      settingsOf({ record: "level4", recordLimit: "5", dynamic: false }),
+      {
         record: "level4",
         recordLimit: 100,
-      });
+        dynamic: false,
+      },
+    );
+    for (const recordLimit of [0, 2.5, -1]) {
+      assert.deepEqual(
+        settingsOf({ record: "level4", recordLimit, dynamic: false }),
+        {
+          record: "level4",
+          recordLimit: 100,
+          dynamic: false,
+        },
+      );
     }
     for (const value of [null, "level4", 4, []]) {
       assert.deepEqual(settingsOf(value), DEFAULT_SETTINGS, String(value));
@@ -360,27 +388,39 @@ const KEPT: SiteAddresses = {
 describe("fitAddresses", () => {
   it("keeps everything that the settings take", () => {
     assert.deepEqual(
-      fitAddresses(KEPT, { record: "level3and4", recordLimit: 3 }),
+      fitAddresses(KEPT, {
+        record: "level3and4",
+        recordLimit: 3,
+        dynamic: false,
+      }),
       KEPT,
     );
   });
 
   it("keeps only the categories of the levels recorded, and no provider left empty", () => {
     assert.deepEqual(
-      fitAddresses(KEPT, { record: "level4", recordLimit: 100 }),
+      fitAddresses(KEPT, {
+        record: "level4",
+        recordLimit: 100,
+        dynamic: false,
+      }),
       {
         edge: { red4: { "GET xmlhttprequest": ["/4a", "/4b", "/4c"] } },
       },
     );
     assert.deepEqual(
-      fitAddresses(KEPT, { record: "none", recordLimit: 100 }),
+      fitAddresses(KEPT, { record: "none", recordLimit: 100, dynamic: false }),
       {},
     );
   });
 
   it("keeps the most recent addresses of each row up to the limit", () => {
     assert.deepEqual(
-      fitAddresses(KEPT, { record: "level3and4", recordLimit: 1 }),
+      fitAddresses(KEPT, {
+        record: "level3and4",
+        recordLimit: 1,
+        dynamic: false,
+      }),
       {
         edge: {
           red4: { "GET xmlhttprequest": ["/4a"] },
@@ -393,7 +433,7 @@ describe("fitAddresses", () => {
 
   it("leaves the addresses given as they are", () => {
     const before = JSON.stringify(KEPT);
-    fitAddresses(KEPT, { record: "level4", recordLimit: 1 });
+    fitAddresses(KEPT, { record: "level4", recordLimit: 1, dynamic: false });
     assert.equal(JSON.stringify(KEPT), before);
   });
 });
@@ -402,6 +442,7 @@ describe("keepsFewer", () => {
   const settings = (record: RecordLevel, recordLimit = 100) => ({
     record,
     recordLimit,
+    dynamic: false,
   });
 
   it("says whether an address kept under the old settings is left out by the new ones", () => {
@@ -429,6 +470,47 @@ describe("keepsFewer", () => {
     assert.equal(
       keepsFewer(settings("level4", 100), settings("level4", 500)),
       false,
+    );
+  });
+});
+
+describe("the dynamic detection in the settings", () => {
+  it("is off unless the stored settings say it is on", () => {
+    assert.equal(DEFAULT_SETTINGS.dynamic, false);
+    assert.equal(
+      settingsOf({ record: "none", recordLimit: 100 }).dynamic,
+      false,
+    );
+    for (const dynamic of [false, "true", 1, null]) {
+      assert.equal(
+        settingsOf({ record: "none", recordLimit: 100, dynamic }).dynamic,
+        false,
+      );
+    }
+    assert.equal(
+      settingsOf({ record: "none", recordLimit: 100, dynamic: true }).dynamic,
+      true,
+    );
+  });
+
+  it("keeps the addresses of a supposed provider only while it is on", () => {
+    const row = { orange4: { "GET image": ["https://a.example/"] } };
+    const recorded = { alpha: row, "b-cdn.net": row };
+    assert.deepEqual(
+      fitAddresses(recorded, {
+        record: "level4",
+        recordLimit: 100,
+        dynamic: true,
+      }),
+      recorded,
+    );
+    assert.deepEqual(
+      fitAddresses(recorded, {
+        record: "level4",
+        recordLimit: 100,
+        dynamic: false,
+      }),
+      { alpha: row },
     );
   });
 });

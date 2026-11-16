@@ -126,7 +126,11 @@ async function open(options: Options = {}): Promise<Opened> {
               ? {}
               : await (options.addresses?.() ?? ADDRESSES);
           case "settings":
-            return { record: "level4", recordLimit: options.limit ?? 100 };
+            return {
+              record: "level4",
+              recordLimit: options.limit ?? 100,
+              dynamic: false,
+            };
           default:
             throw new Error(`unexpected ${request.kind}`);
         }

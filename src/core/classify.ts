@@ -278,6 +278,34 @@ export function classifyByCname(
     : classificationOf({ ...facts, cnames: [name] }, provider, table);
 }
 
+// A supposed provider, named by the canonical name alone when the dynamic
+// detection is on. It has no signature, so its decryption is proven only
+// over plain HTTP, no cookie is its own and no request is a challenge.
+export function classifySupposed(
+  facts: RequestFacts,
+  provider: string,
+  table: ProviderTable,
+): Classification {
+  return classificationOf(facts, { ...NO_SIGNATURE, id: provider }, table);
+}
+
+const NO_SIGNATURE: ProviderEntry = {
+  id: "",
+  name: "",
+  country: "",
+  parent: null,
+  ranges: { ipv4: [], ipv6: [] },
+  headers: [],
+  cookies: [],
+  siteConnectorCookies: [],
+  server: [],
+  cname: [],
+  challengeHosts: [],
+  challengePaths: [],
+  challengeHeaders: [],
+  challengeQueryNames: [],
+};
+
 function classificationOf(
   facts: RequestFacts,
   provider: ProviderEntry,

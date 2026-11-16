@@ -82,6 +82,7 @@ async function open(options: Options = {}): Promise<Opened> {
   let settings: Settings = options.settings ?? {
     record: "none",
     recordLimit: 100,
+    dynamic: false,
   };
   (globalThis as Record<string, unknown>)["browser"] = {
     runtime: {
@@ -116,6 +117,7 @@ async function open(options: Options = {}): Promise<Opened> {
             settings = {
               record: request.record,
               recordLimit: request.recordLimit,
+              dynamic: false,
             };
             return settings;
           default:
@@ -360,7 +362,12 @@ describe("the recording of addresses in the preferences", () => {
     page.pick("record-level4");
     await settled();
     assert.deepEqual(page.sent.slice(LOADED.length), [
-      { kind: "setSettings", record: "level4", recordLimit: 100 },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: 100,
+        dynamic: false,
+      },
     ]);
     assert.deepEqual(page.record(), {
       checked: ["record-level4"],
@@ -372,14 +379,19 @@ describe("the recording of addresses in the preferences", () => {
     page.pick("record-level3and4");
     await settled();
     assert.deepEqual(page.sent.slice(LOADED.length + 1), [
-      { kind: "setSettings", record: "level3and4", recordLimit: 100 },
+      {
+        kind: "setSettings",
+        record: "level3and4",
+        recordLimit: 100,
+        dynamic: false,
+      },
     ]);
     assert.deepEqual(page.record().checked, ["record-level3and4"]);
   });
 
   it("asks before going back to none, hides the limit meanwhile, and changes nothing before the answer", async () => {
     const page = await open({
-      settings: { record: "level3and4", recordLimit: 40 },
+      settings: { record: "level3and4", recordLimit: 40, dynamic: false },
     });
     assert.deepEqual(page.record().checked, ["record-level3and4"]);
     assert.equal(page.element("limit").value, "40");
@@ -397,7 +409,7 @@ describe("the recording of addresses in the preferences", () => {
 
   it("goes back to the level kept when the question is cancelled, and sends nothing", async () => {
     const page = await open({
-      settings: { record: "level4", recordLimit: 100 },
+      settings: { record: "level4", recordLimit: 100, dynamic: false },
     });
     page.pick("record-none");
     page.element("record-cancel").click();
@@ -414,13 +426,13 @@ describe("the recording of addresses in the preferences", () => {
 
   it("goes back to none once the user confirms, and says the addresses are cleared until the next choice", async () => {
     const page = await open({
-      settings: { record: "level4", recordLimit: 30 },
+      settings: { record: "level4", recordLimit: 30, dynamic: false },
     });
     page.pick("record-none");
     page.element("record-purge").click();
     await settled();
     assert.deepEqual(page.sent.slice(LOADED.length), [
-      { kind: "setSettings", record: "none", recordLimit: 30 },
+      { kind: "setSettings", record: "none", recordLimit: 30, dynamic: false },
     ]);
     assert.deepEqual(page.record(), {
       checked: ["record-none"],
@@ -436,7 +448,7 @@ describe("the recording of addresses in the preferences", () => {
 
   it("drops the question when the level kept is chosen again, without sending it", async () => {
     const page = await open({
-      settings: { record: "level4", recordLimit: 100 },
+      settings: { record: "level4", recordLimit: 100, dynamic: false },
     });
     page.pick("record-none");
     page.pick("record-level4");
@@ -463,15 +475,20 @@ describe("the recording of addresses in the preferences", () => {
     page.pick("record-none");
     await settled();
     assert.deepEqual(page.sent.slice(LOADED.length), [
-      { kind: "setSettings", record: "level4", recordLimit: 100 },
-      { kind: "setSettings", record: "none", recordLimit: 100 },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: 100,
+        dynamic: false,
+      },
+      { kind: "setSettings", record: "none", recordLimit: 100, dynamic: false },
     ]);
     assert.equal(page.record().question, false);
   });
 
   it("keeps a limit with no maximum once the user leaves the field, not at each keystroke", async () => {
     const page = await open({
-      settings: { record: "level4", recordLimit: 100 },
+      settings: { record: "level4", recordLimit: 100, dynamic: false },
     });
     for (const typed of ["2", "25", "250000"]) {
       page.typeLimit(typed);
@@ -482,7 +499,12 @@ describe("the recording of addresses in the preferences", () => {
     page.leaveLimit();
     await settled();
     assert.deepEqual(page.sent.slice(LOADED.length), [
-      { kind: "setSettings", record: "level4", recordLimit: 250_000 },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: 250_000,
+        dynamic: false,
+      },
     ]);
     assert.equal(page.element("limit-help").hidden, false);
     assert.equal(page.element("limit").attributes.get("aria-invalid"), "false");
@@ -493,7 +515,7 @@ describe("the recording of addresses in the preferences", () => {
 
   it("refuses a limit that is not an integer of at least 1, says so in place of the help, and keeps nothing", async () => {
     const page = await open({
-      settings: { record: "level4", recordLimit: 100 },
+      settings: { record: "level4", recordLimit: 100, dynamic: false },
     });
     for (const typed of ["", "0", "-4", "2.5", "1e3", "abc"]) {
       page.typeLimit(typed);
@@ -516,7 +538,7 @@ describe("the recording of addresses in the preferences", () => {
     const errors = mock.method(console, "error", () => {});
     try {
       const page = await open({
-        settings: { record: "level4", recordLimit: 100 },
+        settings: { record: "level4", recordLimit: 100, dynamic: false },
         settingsFail: true,
       });
       page.pick("record-level3and4");
