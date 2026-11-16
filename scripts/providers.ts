@@ -592,7 +592,9 @@ function serviceRanges(body: string, service: string): string[] {
   return ranges;
 }
 
-// A text list never starts with "{", so a body that does is read as JSON.
+// A text list never starts with "{", so a body that does is read as JSON. A
+// line without a prefix length is one address, as in Bunny's list of its edge
+// servers, each rented alone from a hosting company.
 function textOrJsonRanges(body: string): string[] {
   if (body.trimStart().startsWith("{")) {
     return allRanges(body);
@@ -601,7 +603,12 @@ function textOrJsonRanges(body: string): string[] {
     .split("\n")
     .map((line, index) => ({ line: line.trim(), index }))
     .filter(({ line }) => line !== "")
-    .map(({ line, index }) => checkedRange(line, `line ${index + 1}`));
+    .map(({ line, index }) =>
+      checkedRange(
+        line.includes("/") ? line : `${line}/${line.includes(":") ? 128 : 32}`,
+        `line ${index + 1}`,
+      ),
+    );
 }
 
 export function readPublishedList(list: PublishedList, body: string): string[] {
