@@ -12,6 +12,7 @@ import { loadTable } from "../scripts/providers.js";
 import {
   type Column,
   columnOf,
+  cutToFit,
   type Filters,
   flagOf,
   formatsOf,
@@ -1356,6 +1357,42 @@ describe("a supposed provider on the map", () => {
         ["États-Unis", null],
       ],
     );
+  });
+});
+
+describe("a name too long for its pill", () => {
+  // Each letter 10 wide, as a measure of the page would give.
+  const widthOf = (text: string) => [...text].length * 10;
+  const LONG = "\u2753 us-west-2.elb.amazonaws.com";
+
+  it("is cut at its end, with an ellipsis, to the longest start that fits", () => {
+    assert.equal(cutToFit(LONG, 180, widthOf), "\u2753 us-west-2.elb.a…");
+    assert.equal(widthOf(cutToFit(LONG, 180, widthOf)) <= 180, true);
+    assert.equal(cutToFit(LONG, 185, widthOf), "\u2753 us-west-2.elb.a…");
+    assert.equal(cutToFit(LONG, 190, widthOf), "\u2753 us-west-2.elb.am…");
+  });
+
+  it("stays whole when it fits, and is not even measured when it is short", () => {
+    assert.equal(cutToFit(LONG, 290, widthOf), LONG);
+    let measured = 0;
+    const counting = (text: string) => {
+      measured += 1;
+      return widthOf(text);
+    };
+    assert.equal(
+      cutToFit("\u2753 b-cdn.net", 10, counting),
+      "\u2753 b-cdn.net",
+    );
+    assert.equal(measured, 0);
+  });
+
+  it("leaves no space before the ellipsis, and never cuts a flag in two", () => {
+    assert.equal(
+      cutToFit("abcdefgh ijklmnopqrstuvwxyz", 100, widthOf),
+      "abcdefgh…",
+    );
+    const flagged = `${flagOf("US")} Amazon CloudFront Global`;
+    assert.equal(cutToFit(flagged, 60, widthOf), `${flagOf("US")} Am…`);
   });
 });
 
