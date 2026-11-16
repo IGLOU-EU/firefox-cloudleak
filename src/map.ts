@@ -29,6 +29,7 @@ import {
   type Panel,
   type PreparedMap,
   panelOf,
+  placesInView,
   placesOf,
   prepare,
   ROW_HEIGHT,
@@ -124,7 +125,9 @@ let selection: string | null = null;
 let confirming = false;
 let column: Column | null = null;
 // Each link with what places it, so that a scroll moves it without a lookup.
-let drawn: { path: SVGPathElement; slot: number; end: number }[] = [];
+let drawn: { path: SVGPathElement; slot: number; provider: string }[] = [];
+// The pill of each provider drawn, in the order of the column.
+let pills = new Map<string, SVGGElement>();
 let pillX = LINKS_MIN_WIDTH - PILL_WIDTH - PILL_MARGIN;
 // The addresses the event page keeps of the site whose panel is open, and
 // the rows of that panel the user unfolded.
@@ -283,6 +286,7 @@ function renderColumn(resetScroll: boolean): void {
   const drawing = element("drawing");
   const noMatch = element("no-match");
   drawn = [];
+  pills = new Map();
   if (map === null || map.sites.length === 0) {
     column = null;
     noMatch.hidden = true;
@@ -407,12 +411,9 @@ function renderColumn(resetScroll: boolean): void {
   });
   title.textContent = header.providersHeading;
   const links = svg("g");
-  const ends = new Map(
-    places.providers.map((label) => [label.provider.id, label.y]),
-  );
+  const placed = new Set(places.providers.map((label) => label.provider.id));
   for (const link of current.links) {
-    const end = ends.get(link.provider);
-    if (end === undefined) {
+    if (!placed.has(link.provider)) {
       continue;
     }
     const path = svg("path", {
@@ -420,11 +421,12 @@ function renderColumn(resetScroll: boolean): void {
       "data-k": link.key,
     });
     links.append(titled(path, link.title));
-    drawn.push({ path, slot: link.slot, end });
+    drawn.push({ path, slot: link.slot, provider: link.provider });
   }
   right.append(title, links);
   const named: [SVGTextElement, string][] = [];
   const pill = (
+    id: string,
     key: string,
     y: number,
     name: string,
@@ -437,6 +439,7 @@ function renderColumn(resetScroll: boolean): void {
       tabindex: 0,
       transform: `translate(${pillX} ${y.toFixed(1)})`,
     });
+    pills.set(id, label);
     const first = svg("text", {
       x: PILL_PADDING,
       y: -3,
@@ -467,7 +470,14 @@ function renderColumn(resetScroll: boolean): void {
     right.append(titled(label, tip));
   };
   for (const label of places.providers) {
-    pill(label.key, label.y, label.name, label.sites, label.provider.title);
+    pill(
+      label.provider.id,
+      label.key,
+      label.y,
+      label.name,
+      label.sites,
+      label.provider.title,
+    );
   }
   drawing.replaceChildren(list, right);
   // A name too long for its pill is cut at its end, once it is in the page
@@ -482,19 +492,48 @@ function renderColumn(resetScroll: boolean): void {
 }
 
 // While the sites scroll, each link leaves from where its row is in view,
-// and the links of the rows out of view are not drawn.
+// and the links of the rows out of view are not drawn. The column shows the
+// providers those links reach, and the one chosen, whose panel is open.
 function follow(): void {
   const plan = element("plan");
   const top = plan.scrollTop;
   const viewHeight = plan.clientHeight;
   const middle = pillX / 2;
-  for (const { path, slot, end } of drawn) {
+  const inView = (slot: number): boolean => {
+    const y = yOf(slot) - top;
+    return y >= 24 && y <= viewHeight - 4;
+  };
+  const linked = new Set<string>();
+  for (const { slot, provider } of drawn) {
+    if (inView(slot)) {
+      linked.add(provider);
+    }
+  }
+  for (const [id, label] of pills) {
+    if (label.classList.contains("chosen")) {
+      linked.add(id);
+    }
+  }
+  const places = placesInView([...pills.keys()], linked, viewHeight);
+  for (const [id, label] of pills) {
+    const y = places.get(id);
+    label.style.display = y === undefined ? "none" : "";
+    if (y !== undefined) {
+      label.setAttribute("transform", `translate(${pillX} ${y.toFixed(1)})`);
+    }
+  }
+  for (const { path, slot, provider } of drawn) {
+    const end = places.get(provider);
+    if (end === undefined || !inView(slot)) {
+      path.style.display = "none";
+      continue;
+    }
     const y = yOf(slot) - top;
     path.setAttribute(
       "d",
       `M0 ${y.toFixed(1)}C${middle} ${y.toFixed(1)} ${middle} ${end.toFixed(1)} ${pillX} ${end.toFixed(1)}`,
     );
-    path.style.display = y < 24 || y > viewHeight - 4 ? "none" : "";
+    path.style.display = "";
   }
 }
 
@@ -524,9 +563,10 @@ function renderHighlight(): void {
       y > plan.scrollTop + plan.clientHeight - 48
     ) {
       plan.scrollTop = y - plan.clientHeight / 3;
-      follow();
     }
   }
+  // The provider chosen stays in the column, whatever the rows in view.
+  follow();
 }
 
 function headingOf(heading: Heading): HTMLElement {
