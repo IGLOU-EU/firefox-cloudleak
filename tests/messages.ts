@@ -29,6 +29,8 @@ export const POPUP_MESSAGES: readonly string[] = [
   "helpLevel3",
   "helpLevel4",
   "helpColours",
+  "helpSupposed",
+  "supposed",
   "popupPage",
   "popupUnit",
   "popupSite",
@@ -85,10 +87,22 @@ export const OPTIONS_MESSAGES: readonly string[] = [
   "optionsLimit",
   "optionsLimitHelp",
   "optionsLimitError",
+  "optionsDynamic",
+  "optionsDynamicOn",
+  "optionsDynamicText",
+  "optionsDynamicHelp",
+  "optionsDynamicPurged",
 ];
 
 // The messages of the map page, apart from those it shares with the popup.
 export const MAP_MESSAGES: readonly string[] = [
+  "mapLegendSupposed",
+  "mapProviderSupposed",
+  "mapSubjectToUnknown",
+  "mapSupposedOrigin",
+  "mapCountryUnknown",
+  "mapCountryUnknownNote",
+  "mapSupposedSites",
   "mapTitle",
   "mapKeptSince",
   "mapKeptSinceSummary",

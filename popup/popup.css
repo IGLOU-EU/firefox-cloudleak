@@ -307,3 +307,12 @@ button.danger {
 [hidden] {
   display: none;
 }
+
+/* The word after the name of a supposed provider, in the grey and the size
+   of the proof. */
+.provider .supposed {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}

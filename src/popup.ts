@@ -69,6 +69,12 @@ function providerOf(entry: ProviderRows): HTMLElement[] {
   const name = document.createElement("p");
   name.className = "provider";
   name.textContent = entry.name;
+  if (entry.supposed) {
+    const mark = document.createElement("span");
+    mark.className = "supposed";
+    mark.textContent = browser.i18n.getMessage("supposed");
+    name.append(mark);
+  }
   return [name, ...entry.rows.map(rowOf)];
 }
 

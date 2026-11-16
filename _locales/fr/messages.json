@@ -1134,5 +1134,109 @@
   "mapAddressCopiedAnnounced": {
     "message": "Adresse copiée",
     "description": "What a screen reader hears once a click on an address of the panel of a site copied it."
+  },
+  "optionsDynamic": {
+    "message": "Détection dynamique",
+    "description": "Title of the section of the preferences page that holds the dynamic detection."
+  },
+  "optionsDynamicOn": {
+    "message": "Activer la détection dynamique",
+    "description": "Label of the checkbox of the preferences page that turns the dynamic detection on, off by default."
+  },
+  "optionsDynamicText": {
+    "message": "Cette détection se base sur le nom DNS final (CNAME) des requêtes. Quand il mène hors du domaine demandé, il laisse supposer un service tiers absent de la liste connue. Ce ne sont que des suppositions de fournisseurs, il peut s'agir d'un simple hébergeur, et le pays de droit auquel les données sont soumises ne peut être déduit.",
+    "description": "Text under the checkbox of the dynamic detection: what it relies on, and that a supposed provider is only a supposition whose country is unknown."
+  },
+  "optionsDynamicHelp": {
+    "message": "Désactiver cette option entraîne la purge immédiate des statistiques des fournisseurs supposés.",
+    "description": "Line under the text of the dynamic detection: turning it off purges, without a question, what the supposed providers left."
+  },
+  "optionsDynamicPurged": {
+    "message": "Les statistiques des fournisseurs supposés sont purgées.",
+    "description": "Notice shown under the dynamic detection right after it is turned off."
+  },
+  "supposed": {
+    "message": "supposé",
+    "description": "Word shown in grey after the name of a supposed provider, in the popup."
+  },
+  "titleBlueSupposed": {
+    "message": "$PROVIDER$ (fournisseur supposé) sert des ressources publiques de cette page\u00a0: il sait que vous la visitez, et quand.",
+    "description": "As titleBlue, when the provider is one the dynamic detection supposes, named by a domain.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "b-cdn.net"
+      }
+    }
+  },
+  "titleOrangeSupposed": {
+    "message": "Cette page passe par $PROVIDER$ (fournisseur supposé), qui voit peut-être en clair tout ce qu'elle échange avec le site.",
+    "description": "As titleOrange, when the provider is one the dynamic detection supposes, named by a domain.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "b-cdn.net"
+      }
+    }
+  },
+  "titleRedSupposed": {
+    "message": "$PROVIDER$ (fournisseur supposé) voit en clair tout ce que cette page échange avec le site\u00a0: adresses, pages, cookies et formulaires.",
+    "description": "As titleRed, when the provider is one the dynamic detection supposes, named by a domain, which only plain HTTP proves.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "b-cdn.net"
+      }
+    }
+  },
+  "helpSupposed": {
+    "message": "Sur la carte, un ❓ à la place du drapeau marque un fournisseur supposé par la détection dynamique, d'après le nom DNS final (CNAME) des requêtes. Il peut s'agir d'un simple hébergeur, et le pays dont la loi s'applique n'est pas connu.",
+    "description": "Help, paragraph shown after the one on the law of the providers, only while the dynamic detection is on: what the question mark of a supposed provider means."
+  },
+  "mapLegendSupposed": {
+    "message": "fournisseur supposé, droit inconnu",
+    "description": "Legend of the map, after a question mark emoji: a supposed provider has that mark in place of a flag. Shown only when the map holds one."
+  },
+  "mapProviderSupposed": {
+    "message": "$PROVIDER$, fournisseur supposé, droit inconnu",
+    "description": "Tooltip of a supposed provider on the map, named by a domain.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "b-cdn.net"
+      }
+    }
+  },
+  "mapSubjectToUnknown": {
+    "message": "Soumis au droit\u00a0: inconnu $FLAG$",
+    "description": "Line of the panel of a supposed provider on the map, in place of mapSubjectTo, with the question mark emoji that stands for its flag.",
+    "placeholders": {
+      "flag": {
+        "content": "$1",
+        "example": "❓"
+      }
+    }
+  },
+  "mapSupposedOrigin": {
+    "message": "Fournisseur supposé d'après le nom DNS final (CNAME) des requêtes. Il peut s'agir d'un simple hébergeur.",
+    "description": "Second line of the panel of a supposed provider on the map: where the supposition comes from."
+  },
+  "mapCountryUnknown": {
+    "message": "Inconnu",
+    "description": "Name of the row of the list by country of the map, and of its chip, that gathers the supposed providers, whose country is not known."
+  },
+  "mapCountryUnknownNote": {
+    "message": "fournisseurs supposés",
+    "description": "Line under the row of the unknown country in the list by country of the map."
+  },
+  "mapSupposedSites": {
+    "message": "supposé, $SITES$",
+    "description": "Second line of the pill of a supposed provider on the map, before its number of sites as mapSites gives it.",
+    "placeholders": {
+      "sites": {
+        "content": "$1",
+        "example": "3 sites"
+      }
+    }
   }
 }

@@ -175,6 +175,17 @@ function getDomain(
   return hostname.split(".").slice(-2).join(".");
 }
 
+// The stand-in knows one hosting suffix of the private section, and takes
+// the last label of any other name for its suffix.
+function getKnownSuffix(hostname: string): string | null {
+  if (hostname === "" || hostname.includes("..")) {
+    throw new Error(`Invalid hostname: ${hostname}`);
+  }
+  return hostname.endsWith(".hosting.example")
+    ? "hosting.example"
+    : (hostname.split(".").at(-1) ?? null);
+}
+
 // The listeners background.js adds, by event, and the arguments each was
 // added with after the listener, such as a filter.
 const listeners = new Map<string, ((...args: unknown[]) => unknown)[]>();
@@ -287,7 +298,7 @@ function event(name: string) {
       return resolve(host);
     },
   },
-  publicSuffix: { getDomain },
+  publicSuffix: { getDomain, getKnownSuffix },
   webRequest: {
     onSendHeaders: event("webRequest.onSendHeaders"),
     onBeforeRedirect: event("webRequest.onBeforeRedirect"),
@@ -2628,6 +2639,7 @@ describe("the recording of addresses", () => {
       kind: "setSettings",
       record,
       recordLimit,
+      dynamic: false,
     })) as Settings;
   }
 
@@ -2718,7 +2730,11 @@ describe("the recording of addresses", () => {
   });
 
   it("records nothing by default, and keeps 100 addresses per row once on", async () => {
-    assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
+    assert.deepEqual(await settings(), {
+      record: "none",
+      recordLimit: 100,
+      dynamic: false,
+    });
     const tab = 2300;
     const site = "t2300.example";
     await page(tab, site);
@@ -2740,25 +2756,57 @@ describe("the recording of addresses", () => {
   it("answers no settings request of another shape, refuses a limit that is not an integer of at least 1, and keeps any other, however large", async () => {
     const writes = localWrites.length;
     for (const message of [
-      { kind: "setSettings", record: "all", recordLimit: 10 },
-      { kind: "setSettings", record: "level 4", recordLimit: 10 },
-      { kind: "setSettings", recordLimit: 10 },
+      { kind: "setSettings", record: "all", recordLimit: 10, dynamic: false },
+      {
+        kind: "setSettings",
+        record: "level 4",
+        recordLimit: 10,
+        dynamic: false,
+      },
+      { kind: "setSettings", recordLimit: 10, dynamic: false },
       { kind: "setSettings", record: "level4" },
-      { kind: "setSettings", record: "level4", recordLimit: "10" },
-      { kind: "setSettings", record: "level4", recordLimit: Number.NaN },
-      { kind: "setSettings", record: "level4", recordLimit: null },
-      { kind: "setSettings", record: "level4", recordLimit: 0 },
-      { kind: "setSettings", record: "level4", recordLimit: -3 },
-      { kind: "setSettings", record: "level4", recordLimit: 2.5 },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: "10",
+        dynamic: false,
+      },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: Number.NaN,
+        dynamic: false,
+      },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: null,
+        dynamic: false,
+      },
+      { kind: "setSettings", record: "level4", recordLimit: 0, dynamic: false },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: -3,
+        dynamic: false,
+      },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: 2.5,
+        dynamic: false,
+      },
       {
         kind: "setSettings",
         record: "level4",
         recordLimit: Number.POSITIVE_INFINITY,
+        dynamic: false,
       },
       {
         kind: "setSettings",
         record: "level4",
         recordLimit: Number.MAX_SAFE_INTEGER + 1,
+        dynamic: false,
       },
       { kind: "setting" },
       { kind: "siteAddresses", site: "t2300.example" },
@@ -2769,18 +2817,28 @@ describe("the recording of addresses", () => {
       assert.equal(answer(message), undefined, JSON.stringify(message));
     }
     assert.equal(localWrites.length, writes);
-    assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
+    assert.deepEqual(await settings(), {
+      record: "none",
+      recordLimit: 100,
+      dynamic: false,
+    });
     for (const limit of [1, 1000, 1001, 5000, 1_000_000, 100]) {
       assert.deepEqual(await setSettings("none", limit), {
         record: "none",
         recordLimit: limit,
+        dynamic: false,
       });
       assert.deepEqual(local.get("settings"), {
         record: "none",
         recordLimit: limit,
+        dynamic: false,
       });
     }
-    assert.deepEqual(await settings(), { record: "none", recordLimit: 100 });
+    assert.deepEqual(await settings(), {
+      record: "none",
+      recordLimit: 100,
+      dynamic: false,
+    });
   });
 
   it("records at level 4 the reduced address of each request of level 4, red or orange, once, the most recent first, and nothing of levels 3 and 2", async () => {
@@ -2788,6 +2846,7 @@ describe("the recording of addresses", () => {
     assert.deepEqual(await setSettings("level4", 100), {
       record: "level4",
       recordLimit: 100,
+      dynamic: false,
     });
     assert.equal(localWrites.length, writes + 1);
     assert.deepEqual(Object.keys(localWrites[writes] ?? {}), ["settings"]);
@@ -2928,12 +2987,14 @@ describe("the recording of addresses", () => {
     assert.deepEqual(await setSettings("level3and4", 1), {
       record: "level3and4",
       recordLimit: 1,
+      dynamic: false,
     });
     assert.equal(localWrites.length, writes + 1);
     const write = localWrites[writes] ?? {};
     assert.deepEqual(write["settings"], {
       record: "level3and4",
       recordLimit: 1,
+      dynamic: false,
     });
     assert.deepEqual(write[`addresses:${site}`], {
       edge: {
@@ -3159,6 +3220,7 @@ describe("the recording of addresses", () => {
     assert.deepEqual(woken.currentSettings(), {
       record: "level4",
       recordLimit: 100,
+      dynamic: false,
     });
     assert.deepEqual(
       await woken.totals(site, false),
@@ -3199,9 +3261,14 @@ describe("the recording of addresses", () => {
     assert.deepEqual(await setSettings("none", 100), {
       record: "none",
       recordLimit: 100,
+      dynamic: false,
     });
     const write = localWrites[writes] ?? {};
-    assert.deepEqual(write["settings"], { record: "none", recordLimit: 100 });
+    assert.deepEqual(write["settings"], {
+      record: "none",
+      recordLimit: 100,
+      dynamic: false,
+    });
     for (const key of keysBefore) {
       assert.deepEqual(write[key], {}, key);
     }
@@ -3217,6 +3284,202 @@ describe("the recording of addresses", () => {
     assert.deepEqual(woken.currentSettings(), {
       record: "none",
       recordLimit: 100,
+      dynamic: false,
     });
+  });
+});
+
+describe("the dynamic detection", () => {
+  let at = 9000;
+
+  async function flush(): Promise<void> {
+    await settled();
+    mock.timers.runAll();
+    await settled();
+  }
+
+  async function detect(dynamic: unknown, record = "none"): Promise<Settings> {
+    return (await answer({
+      kind: "setSettings",
+      record,
+      recordLimit: 100,
+      dynamic,
+    })) as Settings;
+  }
+
+  async function page(tab: number, site: string): Promise<void> {
+    await commit(tab, `doc-${tab}`, 1000, [], `https://${site}/`);
+  }
+
+  // A request of the page to a host no address or response ties to a
+  // provider, whose canonical name is the one given.
+  async function load(
+    tab: number,
+    host: string,
+    canonicalName: string,
+    options: { readonly cookie?: boolean; readonly incognito?: boolean } = {},
+  ): Promise<void> {
+    resolve = () => Promise.resolve({ canonicalName });
+    const requestId = nextId();
+    at += 10;
+    const incognito = options.incognito === true ? { incognito: true } : {};
+    await requests.onSendHeaders({
+      tabId: tab,
+      requestId,
+      type: "xmlhttprequest",
+      timeStamp: at,
+      url: `https://${host}/data`,
+      method: "GET",
+      requestHeaders:
+        options.cookie === true ? [{ name: "Cookie", value: "sid=1" }] : [],
+      ...incognito,
+    });
+    await requests.onResponseStarted({
+      ...response(tab, requestId, "xmlhttprequest", at + 1, OTHER_IP),
+      ...incognito,
+    });
+  }
+
+  it("supposes no provider while it is off, as it is by default", async () => {
+    const tab = 2500;
+    await page(tab, "t2500.example");
+    await load(tab, "api.t2500.example", "edge.thirdcdn.example");
+    await flush();
+    assert.equal(siteCounts("t2500.example"), undefined);
+    assert.deepEqual(iconOf(tab), NEUTRAL);
+  });
+
+  it("refuses a change of settings that does not say whether it is on", () => {
+    for (const dynamic of [undefined, null, "true", 1]) {
+      assert.equal(
+        answer({
+          kind: "setSettings",
+          record: "none",
+          recordLimit: 100,
+          dynamic,
+        }),
+        undefined,
+        String(dynamic),
+      );
+    }
+  });
+
+  it("counts a request whose canonical name leaves the domain of its host for the domain of that name, never proven", async () => {
+    assert.deepEqual(await detect(true), {
+      record: "none",
+      recordLimit: 100,
+      dynamic: true,
+    });
+    const tab = 2501;
+    await page(tab, "t2501.example");
+    await load(tab, "api.t2501.example", "edge.ThirdCDN.example.");
+    await load(tab, "img.t2501.example", "t2501.hosting.example", {
+      cookie: true,
+    });
+    await flush();
+    assert.deepEqual(siteCounts("t2501.example"), {
+      "thirdcdn.example": { orange3: { "GET xmlhttprequest": 1 } },
+      "hosting.example": { orange4: { "GET xmlhttprequest": 1 } },
+    });
+    assert.deepEqual(iconOf(tab), { icon: "/icons/orange.svg", badge: "1" });
+    assert.deepEqual((await popup(tab)).totals, siteCounts("t2501.example"));
+  });
+
+  it("supposes nothing for a canonical name within the domain of the host, or without a name", async () => {
+    const tab = 2502;
+    await page(tab, "t2502.example");
+    await load(tab, "api.t2502.example", "lb.t2502.example");
+    await load(tab, "www.t2502.example", "");
+    await flush();
+    assert.equal(siteCounts("t2502.example"), undefined);
+    assert.deepEqual(iconOf(tab), NEUTRAL);
+  });
+
+  it("asks Firefox for no name more than the CNAME step already does", async () => {
+    const tab = 2503;
+    await page(tab, "t2503.example");
+    const before = resolved.length;
+    await load(tab, "api.t2503.example", "edge.thirdcdn.example");
+    await load(tab, "api.t2503.example", "edge.thirdcdn.example");
+    assert.deepEqual(resolved.slice(before), ["api.t2503.example"]);
+  });
+
+  it("drops everything kept of the supposed providers when it is turned off, and nothing of the others", async () => {
+    await detect(true, "level3and4");
+    const tab = 2504;
+    const site = "t2504.example";
+    await page(tab, site);
+    await load(tab, `api.${site}`, "edge.thirdcdn.example");
+    at += 10;
+    await exchange(tab, "image", at, EDGE_IP);
+    await flush();
+    assert.deepEqual(Object.keys(siteCounts(site) ?? {}).sort(), [
+      "edge",
+      "thirdcdn.example",
+    ]);
+    assert.deepEqual(Object.keys(local.get(`addresses:${site}`) ?? {}), [
+      "thirdcdn.example",
+    ]);
+    // A site this run of the page never read, and one that holds no supposed
+    // provider, which is not written again.
+    const kept = { red4: { "GET image": 2 } };
+    local.set("site:t2505.example", { edge: kept, "b-cdn.net": kept });
+    local.set("addresses:t2505.example", {
+      edge: { red4: { "GET image": ["https://a.example/"] } },
+      "b-cdn.net": { orange4: { "GET image": ["https://b.example/"] } },
+    });
+    local.set("site:t2506.example", { edge: kept });
+    // Counted, and not yet written.
+    await load(tab, `api.${site}`, "edge.othercdn.example");
+    const privateTab = 2507;
+    await commit(privateTab, `doc-${privateTab}`, 1000, [], `https://${site}/`);
+    await load(privateTab, `api.${site}`, "edge.privatecdn.example", {
+      incognito: true,
+    });
+    at += 10;
+    await privateExchange(privateTab, nextId(), at);
+    const writes = localWrites.length;
+    assert.deepEqual(await detect(false, "level3and4"), {
+      record: "level3and4",
+      recordLimit: 100,
+      dynamic: false,
+    });
+    const write = localWrites.at(-1) ?? {};
+    assert.ok(localWrites.length > writes);
+    for (const key of [
+      `addresses:${site}`,
+      "addresses:t2505.example",
+      "settings",
+      `site:${site}`,
+      "site:t2505.example",
+    ]) {
+      assert.ok(key in write, key);
+    }
+    assert.equal("site:t2506.example" in write, false);
+    await flush();
+    assert.deepEqual(Object.keys(siteCounts(site) ?? {}), ["edge"]);
+    assert.deepEqual(local.get(`addresses:${site}`), {});
+    assert.deepEqual(siteCounts("t2505.example"), { edge: kept });
+    assert.deepEqual(local.get("addresses:t2505.example"), {
+      edge: { red4: { "GET image": ["https://a.example/"] } },
+    });
+    assert.deepEqual(Object.keys((await popup(tab)).totals), ["edge"]);
+    assert.deepEqual(Object.keys((await popup(privateTab, true)).totals), [
+      "edge",
+    ]);
+    assert.deepEqual(
+      Object.keys(
+        (session.get("privateCounts") as Record<string, SiteCounts>)[site] ??
+          {},
+      ),
+      ["edge"],
+    );
+    // Nothing more is supposed.
+    await load(tab, `api2.${site}`, "edge.thirdcdn.example");
+    await flush();
+    assert.deepEqual(Object.keys(siteCounts(site) ?? {}), ["edge"]);
+    const woken = await importModule<Counts>("counts.js?detection-off");
+    await woken.ready;
+    assert.equal(woken.currentSettings().dynamic, false);
   });
 });

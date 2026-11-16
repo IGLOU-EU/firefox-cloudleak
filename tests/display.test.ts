@@ -166,6 +166,25 @@ describe("displayOf", () => {
     assert.equal(at(1000), "+");
   });
 
+  it("says a supposed provider is one, by the domain that names it", () => {
+    const cases: [TabState, string][] = [
+      [seen({ level: 2 }, false, "b-cdn.net"), "titleBlueSupposed"],
+      [seen({ level: 3 }, false, "b-cdn.net"), "titleOrangeSupposed"],
+      [seen(DATA_SENT, true, "b-cdn.net"), "titleRedSupposed"],
+    ];
+    for (const [state, message] of cases) {
+      assert.deepEqual(
+        show(state).title[1],
+        [line(message, "b-cdn.net")],
+        message,
+      );
+    }
+    // A provider of the data this version no longer knows is not supposed.
+    assert.deepEqual(show(seen({ level: 3 }, false, "old-cdn")).title[1], [
+      line("titleOrange", "old-cdn"),
+    ]);
+  });
+
   it("says what the provider of the most serious request sees, in the message of its colour", () => {
     const cases: [TabState, string][] = [
       [seen({ level: 2 }, false), "titleBlue"],
@@ -354,7 +373,14 @@ describe("the tooltip messages", () => {
   const counts = ["2", "3Proven", "3Unproven", "4Proven", "4Unproven"].flatMap(
     (grade) => [`countLevel${grade}One`, `countLevel${grade}Many`],
   );
-  const withProvider = ["titleBlue", "titleOrange", "titleRed"];
+  const withProvider = [
+    "titleBlue",
+    "titleOrange",
+    "titleRed",
+    "titleBlueSupposed",
+    "titleOrangeSupposed",
+    "titleRedSupposed",
+  ];
   const plain = [
     "titleNeutral",
     "titleNotObserved",

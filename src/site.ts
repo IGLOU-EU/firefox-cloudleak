@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Adrien Kara
 
 import { WEB_SCHEMES } from "./core/request-facts.js";
+import { type SuffixList, supposedOf } from "./core/supposed.js";
 
 // The WebExtension types stop at Firefox 143, while Firefox gives the
 // registrable domain of a host from 153 on (browser-compat-data,
@@ -20,6 +21,7 @@ declare global {
       hostname: string,
       options?: DomainOptions,
     ): string | null;
+    function getKnownSuffix(hostname: string): string | null;
   }
 }
 
@@ -88,4 +90,34 @@ function domainOf(
   } catch {
     return host;
   }
+}
+
+// Without an option, Firefox gives the registrable domain only under a
+// suffix its list knows, and null for an address or a suffix alone. Both
+// calls throw on a name they cannot read, which then gives nothing
+// (ext-publicSuffix.js, Firefox 159.0.1).
+const FIREFOX_LIST: SuffixList = {
+  domain: (name) => {
+    try {
+      return browser.publicSuffix.getDomain(name);
+    } catch {
+      return null;
+    }
+  },
+  suffix: (name) => {
+    try {
+      return browser.publicSuffix.getKnownSuffix(name);
+    } catch {
+      return null;
+    }
+  },
+};
+
+// The supposed provider the canonical name of a host gives, by Firefox's
+// public suffix list. Of the name, only that domain goes further.
+export function supposedProviderOf(
+  host: string,
+  canonicalName: string,
+): string | null {
+  return supposedOf(host, canonicalName, FIREFOX_LIST);
 }

@@ -28,6 +28,7 @@ import type {
   SiteAddresses,
   SiteCounts,
 } from "./core/popup-message.js";
+import { isSupposed, withoutSupposed } from "./core/supposed.js";
 import { report } from "./toolbar.js";
 
 // storage.local holds the kept counts, the sites the user ignores, the
@@ -227,6 +228,17 @@ export function recordsAddressOf(level: LeakLevel): boolean {
   return recordsLevel(settings.record, level);
 }
 
+// Whether a request no known provider claims may suppose one.
+export function detecting(): boolean {
+  return settings.dynamic;
+}
+
+// What the settings keep of the counts of a site: nothing of a supposed
+// provider while the dynamic detection is off.
+function fitCounts(counts: SiteCounts): SiteCounts {
+  return settings.dynamic ? counts : withoutSupposed(counts);
+}
+
 // What storage holds for the addresses of a site, which only this page
 // writes.
 function storedAddresses(value: unknown): SiteAddresses {
@@ -306,8 +318,11 @@ function readCounts(site: string): Reading {
   return readOnce(countReads, site, [countsKey, sinceKey], (items, waiting) => {
     const counts = items[countsKey];
     const own = items[sinceKey];
+    // The detection may have been turned off while the counts were read.
     if (typeof counts === "object" && counts !== null) {
-      (kept.sites as Record<string, SiteCounts>)[site] = counts as SiteCounts;
+      (kept.sites as Record<string, SiteCounts>)[site] = fitCounts(
+        counts as SiteCounts,
+      );
     }
     if (typeof own === "number") {
       (kept.siteSince as Record<string, number>)[site] = own;
@@ -378,8 +393,13 @@ function countKept(site: string, request: SeenRequest): void {
 }
 
 // A request of a private window records nothing, whatever the settings. The
-// counts of the private session are read whole at the wake-up.
+// counts of the private session are read whole at the wake-up. A request of
+// a supposed provider that waited for the site of its document counts for
+// nothing once the dynamic detection is off.
 export function count(site: string, request: SeenRequest): void {
+  if (!settings.dynamic && isSupposed(request.classification.provider)) {
+    return;
+  }
   if (request.privateWindow) {
     countIn(privateSession, site, request);
     schedulePrivateWrite(site);
@@ -618,7 +638,8 @@ async function storedAddressKeys(): Promise<string[]> {
 // a read under way is fitted when it ends. The settings written are those of
 // the moment of the write, should another change come meanwhile. A failure
 // brings the previous settings back, so that asking again drops what it
-// failed to drop.
+// failed to drop. Turning the dynamic detection off drops the counts and the
+// addresses of every supposed provider the same way.
 export async function changeSettings(next: Settings): Promise<Settings> {
   const previous = settings;
   settings = next;
@@ -630,6 +651,9 @@ export async function changeSettings(next: Settings): Promise<Settings> {
     } else {
       await fitAllAddresses();
     }
+    if (previous.dynamic && !next.dynamic) {
+      await dropSupposed();
+    }
   } catch (error: unknown) {
     if (settings === next) {
       settings = previous;
@@ -637,6 +661,51 @@ export async function changeSettings(next: Settings): Promise<Settings> {
     throw error;
   }
   return settings;
+}
+
+// Nothing of a supposed provider stays once the dynamic detection is off,
+// in memory, in the private session or on disk. The whole store is read,
+// once, at a change the user makes: the sites this run of the page never
+// read may hold some too. What memory holds of a site wins over what storage
+// does, since it holds the counts of the burst not yet written, and a read
+// under way is fitted when it ends. Only the keys that hold a supposed
+// provider are written, in the same transaction as the settings.
+async function dropSupposed(): Promise<void> {
+  for (const [site, counts] of Object.entries(kept.sites)) {
+    (kept.sites as Record<string, SiteCounts>)[site] = fitCounts(counts);
+  }
+  for (const [site, recorded] of addresses) {
+    addresses.set(site, fitAddresses(recorded, settings));
+  }
+  for (const [site, counts] of Object.entries(privateSession.sites)) {
+    const fitted = fitCounts(counts);
+    if (fitted !== counts) {
+      (privateSession.sites as Record<string, SiteCounts>)[site] = fitted;
+      schedulePrivateWrite(site);
+    }
+  }
+  const stored = await browser.storage.local.get(null);
+  const items: Record<string, unknown> = { [SETTINGS_KEY]: settings };
+  for (const [key, value] of Object.entries(stored)) {
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      !Object.keys(value).some(isSupposed)
+    ) {
+      continue;
+    }
+    if (key.startsWith(SITE_PREFIX)) {
+      const site = key.slice(SITE_PREFIX.length);
+      items[key] = keptSites.has(site)
+        ? (kept.sites[site] ?? {})
+        : fitCounts(value as SiteCounts);
+    } else if (key.startsWith(ADDRESSES_PREFIX)) {
+      const site = key.slice(ADDRESSES_PREFIX.length);
+      items[key] =
+        addresses.get(site) ?? fitAddresses(value as SiteAddresses, settings);
+    }
+  }
+  await browser.storage.local.set(items);
 }
 
 async function dropAllAddresses(): Promise<void> {

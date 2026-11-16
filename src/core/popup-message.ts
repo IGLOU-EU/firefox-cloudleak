@@ -40,6 +40,10 @@ export interface Settings {
   // How many addresses each row keeps: an integer of at least 1, as large as
   // the user wants.
   readonly recordLimit: number;
+  // The dynamic detection: a request no known provider claims, whose host
+  // has a canonical name that leaves its domain, counts for a supposed
+  // provider, named by the domain of that name. Off by default.
+  readonly dynamic: boolean;
 }
 
 // The recorded addresses of a site, laid out as its counts are: by provider
@@ -96,11 +100,13 @@ export type PopupRequest =
   // Change the settings, answered with the Settings kept. A limit that is
   // not an integer of at least 1 is refused. Turning the recording off,
   // narrowing its levels or lowering its limit drops at once every kept
-  // address the new settings leave out.
+  // address the new settings leave out. Turning the dynamic detection off
+  // drops at once everything kept of the supposed providers.
   | {
       readonly kind: "setSettings";
       readonly record: RecordLevel;
       readonly recordLimit: number;
+      readonly dynamic: boolean;
     }
   // The recorded addresses of a site, answered with SiteAddresses, always
   // empty in a private window, where nothing is recorded.

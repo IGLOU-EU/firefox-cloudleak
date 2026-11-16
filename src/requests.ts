@@ -6,6 +6,7 @@ import { addressOf } from "./core/addresses.js";
 import {
   classifyByCname,
   classifyRequest,
+  classifySupposed,
   type RequestFacts,
 } from "./core/classify.js";
 import {
@@ -15,8 +16,9 @@ import {
   responseSideOf,
 } from "./core/request-facts.js";
 import { ignoredNavigation, navigationAt } from "./core/tab-record.js";
-import { recording, recordsAddressOf } from "./counts.js";
+import { detecting, recording, recordsAddressOf } from "./counts.js";
 import table from "./providers.js";
+import { supposedProviderOf } from "./site.js";
 import { fold, missRequest, navigate, ready, recordOf } from "./tabs.js";
 
 // The request side waits here for its response, joined by request id. Each
@@ -174,12 +176,23 @@ export async function onErrorOccurred(
 }
 
 // The CNAME chain costs a DNS resolution, so it is read only when the address
-// and the response do not already name the provider.
+// and the response do not already name the provider. While the dynamic
+// detection is on, a name no known provider claims supposes one when it
+// leaves the domain of the host, at no further resolution. The settings
+// decide after the wait, since they may have changed meanwhile.
 async function classify(facts: RequestFacts, timeStamp: number) {
   const direct = classifyRequest(facts, table);
   if (direct !== null) {
     return direct;
   }
   const name = await canonicalNameOf(facts.host, timeStamp);
-  return name === null ? null : classifyByCname(facts, name, table);
+  if (name === null) {
+    return null;
+  }
+  const known = classifyByCname(facts, name, table);
+  if (known !== null || !detecting()) {
+    return known;
+  }
+  const supposed = supposedProviderOf(facts.host, name);
+  return supposed === null ? null : classifySupposed(facts, supposed, table);
 }

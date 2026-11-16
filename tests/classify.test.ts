@@ -8,6 +8,7 @@ import {
   type Classification,
   classifyByCname,
   classifyRequest,
+  classifySupposed,
   colourOf,
   type Leak,
   type RequestFacts,
@@ -1036,5 +1037,54 @@ describe("colourOf", () => {
   it("is red for levels 3 and 4 proven", () => {
     assert.equal(colourOf(3, true), "red");
     assert.equal(colourOf(4, true), "red");
+  });
+});
+
+describe("classifySupposed", () => {
+  it("names the supposed provider and gives the request the level of what it carries", () => {
+    assert.deepEqual(
+      classifySupposed(facts({ type: "image" }), "b-cdn.net", TABLE),
+      { provider: "b-cdn.net", proven: false, leak: { level: 2 } },
+    );
+    assert.deepEqual(
+      classifySupposed(facts({ type: "xmlhttprequest" }), "b-cdn.net", TABLE),
+      { provider: "b-cdn.net", proven: false, leak: { level: 3 } },
+    );
+    assert.deepEqual(
+      classifySupposed(facts({ method: "POST" }), "b-cdn.net", TABLE),
+      {
+        provider: "b-cdn.net",
+        proven: false,
+        leak: { level: 4, case: "data-sent", challenge: false },
+      },
+    );
+  });
+
+  it("never proves the decryption under TLS, whatever the response carries, and proves it over plain HTTP", () => {
+    const signed = facts({
+      responseHeaders: [{ name: "x-alpha-id", value: "1" }],
+      setCookies: ["__alpha_bm"],
+    });
+    assert.equal(classifySupposed(signed, "b-cdn.net", TABLE).proven, false);
+    assert.equal(
+      classifySupposed(facts({ tls: false }), "b-cdn.net", TABLE).proven,
+      true,
+    );
+  });
+
+  it("takes every cookie but those of consent for a possible session, since none is its own", () => {
+    assert.deepEqual(
+      classifySupposed(facts({ cookies: ["__alpha_bm"] }), "b-cdn.net", TABLE)
+        .leak,
+      { level: 4, case: "session", possible: true, challenge: false },
+    );
+    assert.deepEqual(
+      classifySupposed(
+        facts({ type: "image", cookies: ["consent_choice", "_measure"] }),
+        "b-cdn.net",
+        TABLE,
+      ).leak,
+      { level: 2 },
+    );
   });
 });

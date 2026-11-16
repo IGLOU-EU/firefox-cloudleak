@@ -120,6 +120,8 @@ interface Options {
   readonly getDomain?: (host: string) => string | null;
   readonly openOptionsPage?: () => Promise<void>;
   readonly createTab?: () => Promise<object>;
+  // Whether the event page keeps the dynamic detection on.
+  readonly dynamic?: boolean;
 }
 
 interface Opened {
@@ -187,6 +189,12 @@ async function open(options: Options): Promise<Opened> {
               ? Promise.reject(answer)
               : Promise.resolve(answer);
           }
+          case "settings":
+            return Promise.resolve({
+              record: "none",
+              recordLimit: 100,
+              dynamic: options.dynamic === true,
+            });
           default:
             return Promise.reject(new Error(`unexpected ${request.kind}`));
         }
@@ -304,7 +312,11 @@ describe("the popup", () => {
     assert.deepEqual(shown(), [false, true, close]);
     page.root.dispatch("keydown", { key: "Escape" });
     assert.deepEqual(shown(), [true, false, help]);
-    assert.equal(page.sent.length, 1);
+    // Each opening asks the settings, and the help asks nothing else.
+    assert.deepEqual(
+      page.sent.map((request) => request.kind),
+      ["popup", "settings", "settings", "settings"],
+    );
   });
 
   it("writes the help as paragraphs, with the levels and the colours in lists", async () => {
@@ -322,10 +334,55 @@ describe("the popup", () => {
         "p helpHttps",
         "p helpProviders",
         "p helpLaw",
+        "p helpSupposed",
         "p helpStates",
         "p helpLevels",
         ["li helpLevel2", "li helpLevel3", "li helpLevel4"],
         "p helpColours",
+      ],
+    );
+  });
+
+  it("says what a supposed provider is only while the dynamic detection is on, asked at each opening", async () => {
+    const supposed = (page: Awaited<ReturnType<typeof open>>) =>
+      page
+        .element("help-text")
+        .children.find((part) => part.textContent === "helpSupposed");
+    const off = await open({});
+    assert.equal(supposed(off)?.hidden, true);
+    off.element("help").click();
+    await settled();
+    assert.equal(supposed(off)?.hidden, true);
+    const on = await open({ dynamic: true });
+    assert.equal(supposed(on)?.hidden, true);
+    on.element("help").click();
+    await settled();
+    assert.equal(supposed(on)?.hidden, false);
+  });
+
+  it("writes the word after the name of a supposed provider, and after no other", async () => {
+    const page = await open({
+      answers: [
+        {
+          ...RED_SITE,
+          totals: {
+            cloudflare: { red4: { "GET image": 1 } },
+            "b-cdn.net": { orange3: { "GET xmlhttprequest": 1 } },
+          },
+        },
+      ],
+    });
+    assert.deepEqual(
+      page
+        .element("totals-rows")
+        .children.filter((part) => part.className === "provider")
+        .map((part) => [
+          part.textContent,
+          part.children.map((mark) => `${mark.className} ${mark.textContent}`),
+        ]),
+      [
+        ["cloudflare", []],
+        ["b-cdn.netsupposed", ["supposed supposed"]],
       ],
     );
   });

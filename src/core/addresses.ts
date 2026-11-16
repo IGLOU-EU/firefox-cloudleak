@@ -15,9 +15,15 @@ import type {
   SiteAddresses,
 } from "./popup-message.js";
 import { schemeOf, WEB_SCHEMES } from "./request-facts.js";
+import { isSupposed } from "./supposed.js";
 
-// Off by default: no address is kept until the user asks for it.
-export const DEFAULT_SETTINGS: Settings = { record: "none", recordLimit: 100 };
+// Off by default: no address is kept, and no provider supposed, until the
+// user asks for it.
+export const DEFAULT_SETTINGS: Settings = {
+  record: "none",
+  recordLimit: 100,
+  dynamic: false,
+};
 
 const RECORD_LEVELS: readonly RecordLevel[] = ["none", "level4", "level3and4"];
 
@@ -96,10 +102,11 @@ export function settingsOf(value: unknown): Settings {
   if (typeof value !== "object" || value === null) {
     return DEFAULT_SETTINGS;
   }
-  const { record, recordLimit } = value as Record<string, unknown>;
+  const { record, recordLimit, dynamic } = value as Record<string, unknown>;
   return {
     record: isRecordLevel(record) ? record : DEFAULT_SETTINGS.record,
     recordLimit: recordLimitOf(recordLimit) ?? DEFAULT_SETTINGS.recordLimit,
+    dynamic: dynamic === true,
   };
 }
 
@@ -142,7 +149,8 @@ export function addAddress(
 }
 
 // What the settings keep of the addresses: the categories of the levels
-// recorded, and in each row the most recent up to the limit. A provider or a
+// recorded, and in each row the most recent up to the limit, and nothing of
+// a supposed provider while the dynamic detection is off. A provider or a
 // category left without a row goes. The addresses given are never changed.
 export function fitAddresses(
   addresses: SiteAddresses,
@@ -150,6 +158,9 @@ export function fitAddresses(
 ): SiteAddresses {
   const fitted: Record<string, SiteAddresses[string]> = {};
   for (const [provider, categories] of Object.entries(addresses)) {
+    if (!settings.dynamic && isSupposed(provider)) {
+      continue;
+    }
     const kept: Partial<Record<Category, Record<string, readonly string[]>>> =
       {};
     for (const [category, rows] of Object.entries(categories) as [

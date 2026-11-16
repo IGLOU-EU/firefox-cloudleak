@@ -252,6 +252,7 @@ describe("the site section of the popup", () => {
     assert.deepEqual(view({ totals: TOTALS }).totals?.providers, [
       {
         name: "Cloudflare",
+        supposed: false,
         rows: [
           row("red", 4, true, 3),
           row("red", 3, true, 1),
@@ -260,6 +261,25 @@ describe("the site section of the popup", () => {
         ],
       },
     ]);
+  });
+
+  it("marks a supposed provider, named by its domain, and no other", () => {
+    const totals: SiteCounts = {
+      akamai: { blue2: { "GET script": 1 } },
+      "cdn-x": { blue2: { "GET script": 1 } },
+      "b-cdn.net": { orange3: { "GET xmlhttprequest": 1 } },
+    };
+    assert.deepEqual(
+      view({ totals }).totals?.providers.map((entry) => [
+        entry.name,
+        entry.supposed,
+      ]),
+      [
+        ["b-cdn.net", true],
+        ["Akamai", false],
+        ["cdn-x", false],
+      ],
+    );
   });
 
   it("names a provider from the table, and by its id when the table does not know it", () => {
@@ -300,7 +320,11 @@ describe("the site section of the popup", () => {
       '{"cloudflare":{"purple9":{"GET script":1},"blue2":{"GET script":1}}}',
     ) as SiteCounts;
     assert.deepEqual(view({ totals }).totals?.providers, [
-      { name: "Cloudflare", rows: [row("blue", 2, null, 1)] },
+      {
+        name: "Cloudflare",
+        supposed: false,
+        rows: [row("blue", 2, null, 1)],
+      },
     ]);
   });
 });

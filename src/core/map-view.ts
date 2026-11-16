@@ -21,6 +21,7 @@ import type {
   RequestKindCounts,
   SiteAddresses,
 } from "./popup-message.js";
+import { isSupposed } from "./supposed.js";
 
 // The column, its headings and the panel follow the order of CATEGORIES.
 function rankOf(category: KnownCategory): number {
@@ -160,10 +161,18 @@ export type MapProviders = readonly {
   readonly parent: { readonly name: string; readonly country: string } | null;
 }[];
 
+// Stands for the country of a supposed provider, which nothing tells: a
+// limit of the map by country takes it as any other.
+export const UNKNOWN_COUNTRY = "?";
+
 // The flag of a country, as the pair of regional indicator symbols of its
 // ISO 3166-1 alpha-2 code, which Firefox draws with its own emoji font: no
-// image to ship. Nothing for a code that is not one.
+// image to ship. A question mark for the unknown country of a supposed
+// provider, and nothing for a code that is not one.
 export function flagOf(country: string): string {
+  if (country === UNKNOWN_COUNTRY) {
+    return "\u2753";
+  }
   if (!/^[A-Z]{2}$/.test(country)) {
     return "";
   }
@@ -204,7 +213,8 @@ export interface MapSite {
 export interface MapProvider {
   readonly id: string;
   readonly name: string;
-  // Empty for a provider this version no longer knows.
+  // Empty for a provider this version no longer knows, and UNKNOWN_COUNTRY
+  // for a supposed provider.
   readonly country: string;
   readonly flag: string;
   readonly parent: { readonly name: string; readonly country: string } | null;
@@ -291,6 +301,9 @@ function providerTitle(
 ): string {
   if (country === "") {
     return name;
+  }
+  if (country === UNKNOWN_COUNTRY) {
+    return formats.message("mapProviderSupposed", [name]);
   }
   const law = formats.message(`mapLawOf${country}`, []);
   if (parent === null || parent.country === country) {
@@ -380,7 +393,7 @@ export function prepare(
     .map(([id, list]) => {
       const entry = known.get(id);
       const name = entry?.name ?? id;
-      const country = entry?.country ?? "";
+      const country = entry?.country ?? (isSupposed(id) ? UNKNOWN_COUNTRY : "");
       const parent = entry?.parent ?? null;
       return {
         id,
@@ -802,6 +815,9 @@ export function placesOf(
   return {
     providers: shown.map((provider, index) => {
       const count = column.byProvider.get(provider.id) ?? 0;
+      const sites = column.filtered
+        ? sitesOf(formats, count, provider.sites.length)
+        : counted(formats, "mapSites", provider.sites.length);
       return {
         key: providerKey(provider.id),
         y: yAt(index),
@@ -810,9 +826,10 @@ export function placesOf(
           provider.flag === ""
             ? provider.name
             : `${provider.flag} ${provider.name}`,
-        sites: column.filtered
-          ? sitesOf(formats, count, provider.sites.length)
-          : counted(formats, "mapSites", provider.sites.length),
+        sites:
+          provider.country === UNKNOWN_COUNTRY
+            ? formats.message("mapSupposedSites", [sites])
+            : sites,
       };
     }),
   };
@@ -903,6 +920,9 @@ export interface Tools {
 }
 
 function countryName(formats: MapFormats, country: string): string {
+  if (country === UNKNOWN_COUNTRY) {
+    return formats.message("mapCountryUnknown", []);
+  }
   return country === "" ? "" : formats.country(country);
 }
 
@@ -1314,7 +1334,9 @@ function overviewOf(map: PreparedMap, column: Column, filters: Filters): Panel {
               country,
               { kind: "flag", flag: flagOf(country), title: null },
               countryName(formats, country),
-              null,
+              country === UNKNOWN_COUNTRY
+                ? formats.message("mapCountryUnknownNote", [])
+                : null,
               false,
             ),
           ),
@@ -1419,7 +1441,12 @@ function sitePanel(
 function providerPanel(map: PreparedMap, provider: MapProvider): Panel {
   const { formats } = map;
   const texts: string[] = [];
-  if (provider.country !== "") {
+  if (provider.country === UNKNOWN_COUNTRY) {
+    texts.push(
+      formats.message("mapSubjectToUnknown", [provider.flag]),
+      formats.message("mapSupposedOrigin", []),
+    );
+  } else if (provider.country !== "") {
     texts.push(
       formats.message("mapSubjectTo", [
         countryName(formats, provider.country),
