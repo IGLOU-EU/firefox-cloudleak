@@ -57,15 +57,24 @@
 </div>
 </div>
 <div id="help-veil" class="veil" hidden>
-  <div class="help-window" role="dialog" aria-modal="true" aria-labelledby="help-title">
+  <!-- The script names it by the name of the question mark that opens it. -->
+  <div id="help-window" class="help-window" role="dialog" aria-modal="true">
+    <!-- Two tabs in place of a title, the cross in the corner. The script
+         chooses the tab and names the cross. -->
     <div class="help-head">
-      <!-- Titled by the name of the question mark that opens it. -->
-      <p id="help-title" class="help-title" data-message="helpOpen"></p>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="help-tab" class="tab" aria-controls="help-text" data-message="helpOpen"></button>
+        <button type="button" role="tab" id="about-tab" class="tab" aria-controls="about-panel" data-message="aboutTitle"></button>
+      </div>
       <button type="button" id="help-close" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
     </div>
-    <!-- Written by the script, a paragraph or a list for each part, then
-         the about section. -->
-    <div id="help-text" class="help-text"></div>
+    <!-- Both panels share one cell: the window keeps the height of the
+         taller, and nothing moves when the tab changes. The script writes
+         them, the help a paragraph or a list for each part. -->
+    <div class="panels">
+      <div role="tabpanel" id="help-text" class="help-text" aria-labelledby="help-tab"></div>
+      <div role="tabpanel" id="about-panel" class="help-text" aria-labelledby="about-tab"></div>
+    </div>
   </div>
 </div>
 </body>

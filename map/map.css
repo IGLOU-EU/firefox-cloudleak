@@ -173,7 +173,7 @@ svg [data-k]:focus-visible {
   background: var(--veil);
 }
 
-/* A text taller than the tab scrolls inside, under the title and the
+/* A text taller than the tab scrolls inside, under the tabs and the
    cross. */
 .help-window {
   display: flex;
@@ -188,27 +188,68 @@ svg [data-k]:focus-visible {
   box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
 }
 
+/* The tabs in place of a title, on a rule, the cross in the corner. */
 .help-head {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   gap: 10px;
   min-height: 32px;
-}
-
-.help-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  border-bottom: 1px solid var(--rule);
 }
 
 .help-head .icon {
+  align-self: center;
   margin-inline-start: auto;
 }
 
-.help-text {
+.tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+}
+
+/* The chosen tab in the colour of the text, over a bar of 2 pixels that
+   covers the rule, the other in grey without a bar. */
+.tab {
+  margin-bottom: -1px;
+  padding: 3px 2px 4px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+
+.tab:hover {
+  color: var(--text);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--text);
+}
+
+/* Both panels in one cell of the grid: the window takes the height of the
+   taller, and keeps it when the tab changes. The panel left unseen keeps its
+   place. A text taller than the window scrolls inside its panel. */
+.panels {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
-  margin-top: 8px;
+  margin-top: 10px;
+}
+
+.help-text {
+  grid-area: 1 / 1;
+  min-height: 0;
   overflow-y: auto;
+}
+
+.help-text.unseen {
+  visibility: hidden;
 }
 
 .help-text > * + * {
@@ -222,23 +263,6 @@ svg [data-k]:focus-visible {
 
 .help-text ul > * + * {
   margin-top: 4px;
-}
-
-/* The about section ends the text of the help, under a rule, its title in
-   the style of the headings of the popup. */
-.help-text > .about-section {
-  margin-top: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--rule);
-}
-
-.about-title {
-  margin-bottom: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--muted);
 }
 
 .help-text .about > * + * {
