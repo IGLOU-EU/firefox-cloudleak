@@ -13,6 +13,7 @@ import {
   type Column,
   type CopyTexts,
   columnOf,
+  cutToFit,
   type DetailLine,
   type Filters,
   formatsOf,
@@ -62,6 +63,7 @@ const LIST_WIDTH = 340;
 const LINKS_MIN_WIDTH = 400;
 const PILL_WIDTH = 200;
 const PILL_MARGIN = 18;
+const PILL_PADDING = 12;
 
 // A cut address scrolls on hover and focus at this speed, in pixels a
 // second, so that the time it takes follows its length.
@@ -421,6 +423,7 @@ function renderColumn(resetScroll: boolean): void {
     drawn.push({ path, slot: link.slot, end });
   }
   right.append(title, links);
+  const named: [SVGTextElement, string][] = [];
   const pill = (
     key: string,
     y: number,
@@ -435,12 +438,13 @@ function renderColumn(resetScroll: boolean): void {
       transform: `translate(${pillX} ${y.toFixed(1)})`,
     });
     const first = svg("text", {
-      x: 12,
+      x: PILL_PADDING,
       y: -3,
       "font-size": 13,
       "font-weight": 600,
     });
     first.textContent = name;
+    named.push([first, name]);
     const second = svg("text", {
       class: "muted",
       x: 12,
@@ -466,6 +470,14 @@ function renderColumn(resetScroll: boolean): void {
     pill(label.key, label.y, label.name, label.sites, label.provider.title);
   }
   drawing.replaceChildren(list, right);
+  // A name too long for its pill is cut at its end, once it is in the page
+  // and can be measured. Its tooltip keeps it whole.
+  for (const [text, name] of named) {
+    text.textContent = cutToFit(name, PILL_WIDTH - 2 * PILL_PADDING, (cut) => {
+      text.textContent = cut;
+      return text.getComputedTextLength();
+    });
+  }
   follow();
 }
 

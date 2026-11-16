@@ -780,6 +780,37 @@ export function columnOf(basis: Basis, filters: Filters): Column {
   };
 }
 
+// A name short enough to fit its pill whatever its letters, which spares
+// the measure of nearly every name.
+export const SURE_TO_FIT = 16;
+
+// The longest start of a text that fits a width with "…" after it, since the
+// start of a domain name says the most, or the text itself when it fits.
+// The width of a text is measured by the page, a few times at most.
+export function cutToFit(
+  text: string,
+  maxWidth: number,
+  widthOf: (text: string) => number,
+): string {
+  const letters = [...text];
+  if (letters.length <= SURE_TO_FIT || widthOf(text) <= maxWidth) {
+    return text;
+  }
+  const cut = (count: number) =>
+    `${letters.slice(0, count).join("").trimEnd()}…`;
+  let fits = 0;
+  let tooLong = letters.length;
+  while (tooLong - fits > 1) {
+    const middle = Math.floor((fits + tooLong) / 2);
+    if (widthOf(cut(middle)) <= maxWidth) {
+      fits = middle;
+    } else {
+      tooLong = middle;
+    }
+  }
+  return cut(fits);
+}
+
 export interface ProviderLabel {
   readonly key: string;
   readonly y: number;
