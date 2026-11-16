@@ -191,7 +191,7 @@ The adapters cover the requests, the tabs and their documents, the site of a doc
 
 The folders copied as they are:
 
-- `icons/`: the toolbar states of the validated mock-up, drawn as SVG, and `logo.svg`, the logo of the about section of the help.
+- `icons/`: the toolbar states of the validated mock-up, drawn as SVG, and `logo.svg`, the logo of the extension, in its ink on each theme. The logo names the extension in the add-ons manager (the `icons` key of the manifest), in the header and the tab of the map and in the about section of the help. It never shows a state: the toolbar and the popup keep their clouds, the neutral one included.
 - `popup/`: the page and the style of the window the toolbar button opens, whose script is `src/popup.ts`.
 - `options/`: the page and the style of the preferences, which Firefox shows in the tab of the extension in the add-ons manager, whose script is `src/options.ts`.
 - `map/`: the page and the style of the map, which the window opens in a tab, whose script is `src/map.ts` and whose view is `src/core/map-view.ts`.
