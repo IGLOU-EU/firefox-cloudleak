@@ -300,7 +300,7 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 
 **Accepted formats.** A published list is one of:
 
-- a text list, one range per line,
+- a text list, one range per line, where a line without a prefix length is a single address, kept as a `/32` or `/128` range,
 - a JSON list of all the provider's ranges in the shape of Fastly's `public-ip-list` (the arrays `addresses` and `ipv6_addresses`),
 - a JSON list in the shape of AWS's `ip-ranges.json`, which mixes all of AWS's services.
 

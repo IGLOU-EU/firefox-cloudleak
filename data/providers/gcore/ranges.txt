@@ -1,0 +1,4 @@
+# Source: none, Gcore publishes no list that covers the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Gcore's two public lists, https://api.gcore.com/cdn/public-ip-list and https://api.gcore.com/cdn/public-net-list, hold the addresses of the CDN servers that pull content from origin servers, for origin servers to allow (https://docs.gcore.com/cdn/getting-started/configure-an-origin/add-cdn-servers-to-the-origin-acl-whitelist). Both are JSON objects with the arrays addresses and addresses_v6.
+# The anycast edge that browsers reached on 2026-11-16 for gcore.com and us-ms.gr-cdn.com (92.223.84.84, 2a03:90c0:9994::9994, AS199524) is in neither list. Gcore is recognised by its headers, cookies and CNAME suffix.

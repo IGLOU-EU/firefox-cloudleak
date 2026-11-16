@@ -1,0 +1,23 @@
+{
+  "name": "Kingsoft Cloud",
+  "country": "CN",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-cache-status",
+        "value": "* from KS-CLOUD-*",
+        "source": "Observed on 2026-11-16 on static.ksyun.com, i1.mifile.cn and i8.mifile.cn (MISS from KS-CLOUD-XG-FOREIGN-12-03, one header per cache tier), served through download.ks-cdn.com and ksyuncdn.com. Not found in Kingsoft Cloud's documentation on 2026-11-16. Other servers send the same name with values of their own, hence the value"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "ksyuncdn.com",
+        "source": "Observed on 2026-11-16 on static.ksyun.com (k1.gslb.ksyuncdn.com), i1.mifile.cn (k1-global-ipv6.gslb.ksyuncdn.com) and i8.mifile.cn (l11-ipv6.gslb.ksyuncdn.com), as the last name of the chain, after <host>.download.ks-cdn.com"
+      },
+      {
+        "suffix": "ks-cdn.com",
+        "source": "https://docs.ksyun.com/documents/173 (the CNAME of an accelerated domain is www.test.com.download.ks-cdn.com). Seen on 2026-11-16 inside the chains of static.ksyun.com, i1.mifile.cn and i8.mifile.cn, which then went on to ksyuncdn.com"
+      }
+    ]
+  }
+}

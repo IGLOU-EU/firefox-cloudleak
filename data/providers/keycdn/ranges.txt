@@ -1,0 +1,4 @@
+# Source: none, KeyCDN publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# KeyCDN says: "We don't disclose the IPs of the edge servers because the IPs frequently change" (https://www.keycdn.com/support/frequently-asked-questions). KeyCDN is recognised by its server header and CNAME suffix.
+# Its only list, https://www.keycdn.com/shield-prefixes.json ({"prefixes": ["68.70.192.0/20", "185.172.148.0/22"]}), holds the ranges of its origin shield servers, in its own AS44239. It covers the North American edges of avatars.discourse-cdn.com (68.70.205.1 to 68.70.205.4) but not the edges rented from OVHcloud (AS16276) that browsers reached on 2026-11-16 in Paris (5.196.193.50, 2001:41d0:26b:3200::) and Singapore (139.99.123.118).

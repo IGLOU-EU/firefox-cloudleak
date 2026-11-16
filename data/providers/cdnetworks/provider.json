@@ -1,0 +1,87 @@
+{
+  "name": "CDNetworks",
+  "country": "US",
+  "parent": { "name": "Wangsu Science & Technology", "country": "CN" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-ws-request-id",
+        "source": "Observed on 2026-11-16 on www.cdnetworks.com, documents.cdnetworks.com, docs.cdnetworks.com, www.wangsu.com, en.wangsu.com, www.jd.com, www.12306.cn, www.douyu.com and www.kugou.com, as <hex time>_<edge node>_<numbers>, the node being the one named in x-via. Not found in CDNetworks' documentation on 2026-11-16"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "FECW",
+        "source": "https://documents.cdnetworks.com/document/cloudsecurity2/1694-webbotdetection (FECW, FECA, FECN and FECG are the cookies added by the cloud security platform during the request phase), and observed on 2026-11-16 on en.wangsu.com, set by the edge together with FECWS"
+      },
+      {
+        "name": "FECA",
+        "source": "https://documents.cdnetworks.com/document/cloudsecurity2/1694-webbotdetection (FECW, FECA, FECN and FECG are the cookies added by the cloud security platform during the request phase)"
+      },
+      {
+        "name": "FECN",
+        "source": "https://documents.cdnetworks.com/document/cloudsecurity2/1694-webbotdetection (FECW, FECA, FECN and FECG are the cookies added by the cloud security platform during the request phase)"
+      },
+      {
+        "name": "FECG",
+        "source": "https://documents.cdnetworks.com/document/cloudsecurity2/1694-webbotdetection (FECW, FECA, FECN and FECG are the cookies added by the cloud security platform during the request phase)"
+      },
+      {
+        "name": "FECWS",
+        "source": "Observed on 2026-11-16 on en.wangsu.com, set by the edge together with FECW, with the same value. Not found in CDNetworks' documentation on 2026-11-16"
+      }
+    ],
+    "server": [
+      {
+        "value": "PWS/*",
+        "source": "Observed on 2026-11-16 on www.cdnetworks.com (PWS/8.3.1.0.8), together with x-ws-request-id"
+      },
+      {
+        "value": "wswaf",
+        "source": "Observed on 2026-11-16 on www.douyu.com (www.douyu.com.wtxcdn.com), together with x-ws-request-id. Not found in CDNetworks' documentation on 2026-11-16"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "wtxcdn.com",
+        "source": "Observed on 2026-11-16 on www.cdnetworks.com (www.cdnetworks.com.wtxcdn.com) and www.douyu.com (www.douyu.com.wtxcdn.com), as the last name of the chain"
+      },
+      {
+        "suffix": "wswebpic.com",
+        "source": "Observed on 2026-11-16 on documents.cdnetworks.com (documents.cdnetworks.com.wswebpic.com), as the last name of the chain"
+      },
+      {
+        "suffix": "qtlcdn.com",
+        "source": "https://docs.cdnetworks.com/en/cdn/docs/release-notes (2022-08-11: edge hostnames of CDN Pro are created in the qtlcdn.com zone), and observed on 2026-11-16 on docs.cdnetworks.com (clkempgz7nw7f7.qtlcdn.com), as the last name of the chain"
+      },
+      {
+        "suffix": "wscdns.com",
+        "source": "Observed on 2026-11-16 on www.wangsu.com (www.wangsu.com.wscdns.com), as the last name of the chain"
+      },
+      {
+        "suffix": "cdn20.com",
+        "source": "Observed on 2026-11-16 on en.wangsu.com (en.wangsu.com.cdn20.com) and www.jd.com (jd-abroad.cdn20.com), as the last name of the chain"
+      },
+      {
+        "suffix": "wswebcdn.com",
+        "source": "Observed on 2026-11-16 on www.kugou.com (www.kugou.com.wswebcdn.com), as the last name of the chain, with x-ws-request-id"
+      },
+      {
+        "suffix": "lxdns.com",
+        "source": "Observed on 2026-11-16 on www.12306.cn (www.12306.cn.lxdns.com), as the last name of the chain"
+      }
+    ],
+    "challengePaths": [
+      {
+        "prefix": "/_fec_sbu/",
+        "source": "https://documents.cdnetworks.com/document/cloudsecurity2/1694-webbotdetection (the JS SDK of Web Bot Detection, inserted into the page in the response phase, is /_fec_sbu/hxk_fec_[version].js)"
+      }
+    ],
+    "challengeQueryNames": [
+      {
+        "name": "FECU",
+        "source": "https://documents.cdnetworks.com/document/cloudsecurity2/1694-webbotdetection (the token FECU is appended to asynchronous requests, as ?id=1&FECU=[value])"
+      }
+    ]
+  }
+}

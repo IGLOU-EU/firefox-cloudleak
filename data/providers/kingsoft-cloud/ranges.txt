@@ -1,0 +1,4 @@
+# Source: none, Kingsoft Cloud publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# No list was found in its CDN documentation: it only offers an API and a console tool that tell whether a given address is one of its nodes (IpCheck, https://docs.ksyun.com/documents/5718).
+# The edges measured on 2026-11-16 sit outside China in addresses registered to Kaopu Cloud HK Limited (103.198.200.5, 2404:a140:3:2::a for i1.mifile.cn), and inside Chinese carriers' networks, China Telecom and China Unicom (218.92.226.3 for static.ksyun.com, 112.92.61.2 for i8.mifile.cn). Kingsoft Cloud is recognised by its header and CNAME suffixes.

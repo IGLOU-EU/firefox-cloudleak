@@ -1,0 +1,4 @@
+# Source: none, CDNsun publishes no public list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# CDNsun gives the ranges of its CDN locations only through its authenticated API (https://cdnsun.com/api/locations/ips), to paying customers and not to trial accounts, for origin servers to allow (https://cdnsun.com/knowledgebase/api/documentation/res/location/act/ips). CDNsun is recognised by its server header and CNAME suffix.
+# The edge that browsers reached on 2026-11-16 for wcdn.cdnsun.com (66.245.212.38, Milan) is a server rented from Vultr (AS20473): a range of Vultr must never be taken for CDNsun.

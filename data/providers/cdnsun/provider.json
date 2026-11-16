@@ -1,0 +1,18 @@
+{
+  "name": "CDNsun",
+  "country": "CZ",
+  "signatures": {
+    "server": [
+      {
+        "value": "CDNsun*",
+        "source": "Observed on 2026-11-16 as server: CDNsun Edge on wcdn.cdnsun.com, CDNsun's own asset host, whose chain ends in cdn-sun.net, on a page and on an image served from the edge cache (x-cache: HIT)"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "cdn-sun.net",
+        "source": "https://cdnsun.com/knowledgebase/get-started/debugging-a-cdn-service (a Service Domain such as cdn.mycompany.com is a CNAME to its Service Identifier, such as 12345.r.cdn-sun.net), and observed on 2026-11-16 on wcdn.cdnsun.com and download-test.cdnsun.com (p8dfed2087646c7cc7184cf098901216c.p.cdn-sun.net), as the last name of the chain"
+      }
+    ]
+  }
+}

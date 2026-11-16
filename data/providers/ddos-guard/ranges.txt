@@ -1,0 +1,3 @@
+# Source: none, DDoS-Guard publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# No list was found on ddos-guard.net nor in its service agreements (https://ddos-guard.net/file/sladdg_en.pdf, https://ddos-guard.net/file/sladdg_ru.pdf). Its networks (AS57724 and AS49612 of DDOS-GUARD LTD, AS59692 of IQWeb FZ-LLC) also carry its hosting, VPS and dedicated server offers, so the prefixes they announce are not a list of proxy edges. DDoS-Guard is recognised by its server header and cookies.

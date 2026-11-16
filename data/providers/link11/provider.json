@@ -1,0 +1,42 @@
+{
+  "name": "Link11",
+  "country": "DE",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-l11-trace",
+        "source": "Observed on 2026-11-16 on www.link11.com, www.strauss-group.com, www.spiegel.de and www.gumtree.com (values ffm7-lb1 and ffm7-lb2), whose edges sit in Link11's AS34309"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "waap_id",
+        "source": "https://waap.docs.link11.com/using-the-product/best-practices/enabling-passive-challenges (once the challenge script runs, the browser should have a cookie named waap_id) and https://waap.docs.link11.com/reference-information/api/api-access-to-traffic-data (cookie set by L11WAAP)"
+      },
+      {
+        "name": "rbzsessionid",
+        "source": "https://waap.docs.link11.com/reference-information/api/api-access-to-traffic-data (cookie set by L11WAAP)"
+      },
+      {
+        "name": "rbzid",
+        "source": "https://waap.docs.link11.com/v5-release-notes (the passive challenge cookies were named rbzid before the Link11 rebranding, and waap_id since)"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "rbzdns.com",
+        "source": "https://waap.docs.link11.com/v2.20/product-walkthrough/settings/dns (every protected domain is mapped to an entry under planetname.d1.rbzdns.com), and observed on 2026-11-16 on www.strauss-group.com (fire-prod-link11-4193.straussgroupajo5.d1.rbzdns.com), as the last name of the chain"
+      }
+    ],
+    "challengePaths": [
+      {
+        "prefix": "/c3650cdf-216a-4ba2-80b0-9d6c540b105e58d2670b-ea0f-484e-b88c-0e2c1499ec9bd71e4b42-8570-44e3-89b6-845326fa43b6",
+        "source": "https://waap.docs.link11.com/using-the-product/best-practices/enabling-passive-challenges (the script of the passive challenge), and observed on 2026-11-16 on www.strauss-group.com"
+      },
+      {
+        "prefix": "/kramericaindustries.ac_v2.lib.js",
+        "source": "Observed on 2026-11-16 on www.strauss-group.com (the script the active challenge page loads, a page answered with status 247)"
+      }
+    ]
+  }
+}

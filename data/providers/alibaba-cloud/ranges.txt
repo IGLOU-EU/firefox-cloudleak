@@ -1,0 +1,4 @@
+# Source: none, Alibaba Cloud publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# For CDN, Alibaba Cloud advises against a fixed list on the origin, as the addresses are assigned dynamically (https://www.alibabacloud.com/help/en/cdn/support/query-ip-addresses-of-pops-for-a-cdn-domain). For ESA, origin protection gives each customer, in its console or through the GetOriginProtection API, the back-to-origin addresses of its site (https://www.alibabacloud.com/help/en/edge-security-acceleration/esa/user-guide/origin-protection), which are addresses that reach origin servers, not edges.
+# The edges measured on 2026-11-16 (163.181.253.198 to 163.181.253.229, 2404:2280:18e:0:3::b, 43.109.215.27) are registered to Alibaba Cloud LLC and Alibaba Cloud (Singapore) Private Limited (RDAP of APNIC). Alibaba Cloud is recognised by its headers, cookies and CNAME suffixes.

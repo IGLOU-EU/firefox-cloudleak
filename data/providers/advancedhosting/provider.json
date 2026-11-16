@@ -1,0 +1,24 @@
+{
+  "name": "Advanced Hosting",
+  "country": "NL",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-cdn-host-id",
+        "value": "DS*",
+        "source": "Observed on 2026-11-16 on img.ahcdn.com (cdn86913159.ahacdn.me) and docs.advancedhosting.com, as DS9615 and DS5962. Advanced Hosting does not document it. Other servers may send the same name, hence the value"
+      },
+      {
+        "name": "x-cdn-host-id",
+        "value": "AH*,DS*",
+        "source": "Observed on 2026-11-16 on static-ah.xhcdn.com (cdn69197141.ahacdn.me) and thumb-ah.flixcdn.com (cdn52130432.ahacdn.me), as AH1747,DS9615 and AH0489,DS9615. Advanced Hosting does not document it"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "ahacdn.me",
+        "source": "https://advancedhosting.atlassian.net/wiki/spaces/docs/pages/878215169/Resource+domains (each custom domain of an Anycast CDN resource is a CNAME to its system domain, without naming it), and observed on 2026-11-16 on static-ah.xhcdn.com (cdn69197141.ahacdn.me), thumb-ah.flixcdn.com (cdn52130432.ahacdn.me) and img.ahcdn.com (cdn86913159.ahacdn.me), as the last name of the chain"
+      }
+    ]
+  }
+}

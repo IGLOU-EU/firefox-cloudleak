@@ -426,6 +426,237 @@ describe("the committed data", () => {
     });
   });
 
+  // Each value was measured on 2026-11-16 on a site the provider serves, as
+  // its provider.json says: a response header or cookie proves that the
+  // provider relayed the response, and the last name of a CNAME chain names
+  // it without proof.
+  describe("the CDN and reverse proxy providers added on 2026-11-16", () => {
+    const signals: Record<
+      string,
+      { headers?: [string, string][]; setCookies?: string[]; cnames?: string[] }
+    > = {
+      advancedhosting: {
+        headers: [
+          ["x-cdn-host-id", "DS9615"],
+          ["x-cdn-host-id", "AH1747,DS9615"],
+        ],
+        cnames: ["cdn52130432.ahacdn.me"],
+      },
+      "alibaba-cloud": {
+        headers: [
+          ["eagleid", "2b6dd6b217948661283423161e"],
+          ["ali-swift-global-savetime", "1794866093"],
+          ["server", "ESA"],
+        ],
+        setCookies: ["acw_tc"],
+        cnames: [
+          "ww1.sinaimg.cn.w.alikunlun.com",
+          "www.163.com.w.kunluncan.com",
+        ],
+      },
+      "azure-front-door": {
+        headers: [
+          [
+            "x-azure-ref",
+            "20261116T215526Z-16f555b7d86fvg8fhC1BCNz0gc00000001c000000000313h",
+          ],
+        ],
+        setCookies: ["ASLBSA"],
+        cnames: ["mr-a03.tm-azurefd.net"],
+      },
+      belugacdn: {
+        headers: [
+          ["x-beluga-trace", "00ea8fa7-a1b9-432d-a95b-aeda0bb22f4d"],
+          ["server", "NuCDN"],
+        ],
+        cnames: ["docs.belugacdn.com.i.belugacdn.com", "edge.nucdn.co"],
+      },
+      bunny: {
+        headers: [
+          ["cdn-pullzone", "1614968"],
+          ["server", "BunnyCDN-FR1-1319"],
+        ],
+        cnames: ["bsky.b-cdn.net"],
+      },
+      byteplus: {
+        headers: [["x-bdcdn-cache-status", "TCP_MISS,TCP_MISS,TCP_MISS"]],
+        cnames: ["edge-hls.doppiocdn.org.bplslb.com"],
+      },
+      cachefly: {
+        headers: [
+          ["cf4ttl", "31536000.000"],
+          ["server", "CFS 0215"],
+        ],
+        cnames: ["odcom.cachefly.net"],
+      },
+      cdn77: {
+        headers: [
+          ["x-77-cache", "HIT"],
+          ["server", "CDN77-Turbo"],
+        ],
+        cnames: ["1004834818.rsc.cdn77.org"],
+      },
+      cdnetworks: {
+        headers: [
+          ["x-ws-request-id", "6afb7a09_PSfgblPAR1ai68_54712-7494"],
+          ["server", "PWS/8.3.1.0.8"],
+        ],
+        cnames: ["clkempgz7nw7f7.qtlcdn.com"],
+      },
+      cdnsun: {
+        headers: [["server", "CDNsun Edge"]],
+        cnames: ["p8dfed2087646c7cc7184cf098901216c.p.cdn-sun.net"],
+      },
+      cdnvideo: {
+        cnames: ["lavlattvef.a.trbcdn.net", "m-data.cdnvideo.ru"],
+      },
+      "ddos-guard": {
+        headers: [["server", "ddos-guard"]],
+        setCookies: ["__ddg1_"],
+      },
+      edgenext: {
+        headers: [
+          ["x-cc-via", "i2315409_c27809[M,41],i1935955_c23471[M,194]"],
+          ["x-ser", "i2020957_c24821, i2315653_c27595"],
+        ],
+        cnames: ["89f45538.edgenext.com.cname.edgenextcname.com"],
+      },
+      "f5-distributed-cloud": {
+        headers: [
+          ["x-volterra-location", "pa4-par"],
+          ["server", "volt-adc"],
+        ],
+        cnames: ["ves-io-414092f7-c275-48e6-929a-869d1fc2028f.ac.vh.ves.io"],
+      },
+      gcore: {
+        headers: [["x-id-fe", "pa5-hw-edge-gc16"]],
+        cnames: ["cl-glbce66526.gcdn.co"],
+      },
+      keycdn: {
+        headers: [["server", "keycdn"]],
+        cnames: ["p-frpa00.kxcdn.com"],
+      },
+      "kingsoft-cloud": {
+        headers: [["x-cache-status", "MISS from KS-CLOUD-XG-FOREIGN-12-03"]],
+        cnames: ["k1.gslb.ksyuncdn.com"],
+      },
+      link11: {
+        headers: [["x-l11-trace", "ffm7-lb1"]],
+        setCookies: ["rbzid"],
+        cnames: ["fire-prod-link11-4193.straussgroupajo5.d1.rbzdns.com"],
+      },
+      medianova: {
+        headers: [
+          ["x-mnrequest-id", "96a1616d4c84e1d721b1f90ca470bfde"],
+          ["server", "MNCDN-174140"],
+        ],
+        cnames: ["dsm.mncdn.com"],
+      },
+      myra: {
+        headers: [["server", "myracloud"]],
+        cnames: ["www-dkb-de.ax4z.com"],
+      },
+      netlify: {
+        headers: [
+          ["cache-status", '"Netlify Edge"; hit; ttl=31517509'],
+          ["server", "Netlify"],
+        ],
+        cnames: ["babel-v7.netlify.app", "netlify.netlifyglobalcdn.com"],
+      },
+      sucuri: {
+        headers: [
+          ["x-sucuri-id", "19002"],
+          ["server", "Sucuri/Cloudproxy"],
+        ],
+      },
+      "tata-cdn": {
+        headers: [["x-tata-request-id", "92dff8ba4bebfc7ecea75fa34d0178c0"]],
+        cnames: ["live-b.bitgravity.com"],
+      },
+      "tencent-cloud": {
+        headers: [
+          ["eo-log-uuid", "11285419925066184674"],
+          ["eo-cache-status", "HIT"],
+        ],
+        cnames: ["36d62c2e.ovslegodl.sched.ovscdns.com"],
+      },
+      vercel: {
+        headers: [
+          ["x-vercel-id", "cdg1::66qlk-1794866616494-3de8b1e41e98"],
+          ["server", "Vercel"],
+        ],
+        cnames: [
+          "2afb4f808650c82c.vercel-dns-013.com",
+          "7db0c515ced5a8a7.vercel-dns.com",
+        ],
+      },
+    };
+
+    for (const [
+      id,
+      { headers = [], setCookies = [], cnames = [] },
+    ] of Object.entries(signals)) {
+      it(`proves ${id} by each measured signal and names it by its CNAME`, () => {
+        for (const [name, value] of headers) {
+          assert.deepEqual(
+            classify({ responseHeaders: [{ name, value }] }),
+            { provider: id, proven: true, leak: { level: 2 } },
+            `${name}: ${value}`,
+          );
+        }
+        for (const name of setCookies) {
+          assert.deepEqual(
+            classify({ setCookies: [name] }),
+            { provider: id, proven: true, leak: { level: 2 } },
+            name,
+          );
+        }
+        for (const name of cnames) {
+          assert.deepEqual(
+            classify({ cnames: [name] }),
+            { provider: id, proven: false, leak: { level: 2 } },
+            name,
+          );
+        }
+      });
+    }
+
+    it("recognises the edges in the published lists by their address, without proof", () => {
+      for (const [ip, provider] of [
+        ["143.244.56.53", "bunny"],
+        ["2400:52e0:1e02::1073:1", "bunny"],
+        ["205.234.175.175", "cachefly"],
+        ["150.171.109.81", "azure-front-door"],
+        ["13.107.246.61", "azure-front-door"],
+      ] as const) {
+        assert.deepEqual(
+          classify({ ip }),
+          { provider, proven: false, leak: { level: 2 } },
+          ip,
+        );
+      }
+    });
+
+    it("takes no common value of a header that a provider bounds by its value", () => {
+      for (const [name, value] of [
+        ["x-cache-status", "HIT"],
+        ["x-cache-status", "MISS from nginx"],
+        ["cache-status", "ExampleCache; hit"],
+        ["x-cdn-host-id", "web1"],
+        ["x-ser", "web-01"],
+        ["server", "nginx"],
+        ["server", "Apache"],
+        ["server", "kws"],
+      ] as const) {
+        assert.equal(
+          classify({ responseHeaders: [{ name, value }] }),
+          null,
+          `${name}: ${value}`,
+        );
+      }
+    });
+  });
+
   it("never takes a cookie of the site that only resembles them for consent or measurement", () => {
     for (const name of [
       "_pk_session",
@@ -471,11 +702,37 @@ function referenceIpv4(text: string): bigint | null {
   return parts.reduce((value, part) => (value << 8n) | BigInt(part), 0n);
 }
 
-// The provider of an address as the classification found it then: every
-// range read from its text, and the address compared with each as BigInts.
+interface ReferenceRange {
+  readonly id: string;
+  readonly family: 4 | 6;
+  readonly start: bigint;
+  readonly hostBits: bigint;
+}
+
+// Every range read from its text as the classification read it then, once
+// for all the addresses compared.
+function referenceRanges(
+  texts: readonly [string, string[]][],
+): ReferenceRange[] {
+  return texts.flatMap(([id, ranges]) =>
+    ranges.map((text) => {
+      const [network = "", prefix = ""] = text.split("/");
+      const family = network.includes(":") ? 6 : 4;
+      const range = parseCidr(text);
+      const start =
+        family === 4 ? referenceIpv4(network) : range.ok && range.value.network;
+      assert.ok(typeof start === "bigint", text);
+      const width = family === 4 ? 32n : 128n;
+      return { id, family, start, hostBits: width - BigInt(prefix) };
+    }),
+  );
+}
+
+// The provider of an address as the classification found it then: the
+// address compared with each range as BigInts.
 function referenceProviderOf(
   ip: string,
-  texts: readonly [string, string[]][],
+  ranges: readonly ReferenceRange[],
 ): string | null {
   const family = ip.includes(":") ? 6 : 4;
   const parsedIp = parseIp(ip);
@@ -488,21 +745,12 @@ function referenceProviderOf(
   if (address === null) {
     return null;
   }
-  const width = family === 4 ? 32n : 128n;
-  for (const [id, ranges] of texts) {
-    for (const text of ranges) {
-      const [network = "", prefix = ""] = text.split("/");
-      if ((family === 4) === network.includes(":")) {
-        continue;
-      }
-      const range = parseCidr(text);
-      const start =
-        family === 4 ? referenceIpv4(network) : range.ok && range.value.network;
-      assert.ok(typeof start === "bigint", text);
-      const hostBits = width - BigInt(prefix);
-      if (address >> hostBits === start >> hostBits) {
-        return id;
-      }
+  for (const range of ranges) {
+    if (
+      range.family === family &&
+      address >> range.hostBits === range.start >> range.hostBits
+    ) {
+      return range.id;
     }
   }
   return null;
@@ -568,13 +816,61 @@ describe("the address ranges of the committed data", () => {
     const texts = rangeTexts();
     const addresses = addressesToCompare(texts);
     assert.ok(addresses.length > 4000, `${addresses.length} addresses`);
+    const ranges = referenceRanges(texts);
     let found = 0;
     for (const ip of addresses) {
-      const expected = referenceProviderOf(ip, texts);
+      const expected = referenceProviderOf(ip, ranges);
       assert.equal(classify({ ip })?.provider ?? null, expected, ip);
       found += expected === null ? 0 : 1;
     }
     // Both outcomes are compared, not only addresses of no provider.
     assert.ok(found > 1000, `${found} addresses of a provider`);
+  });
+
+  // The classification takes the first provider whose ranges hold the
+  // address, so an address in the ranges of two providers would go to the one
+  // whose folder sorts first. Sorted by their start, a range overlaps an
+  // earlier one only if it starts before the furthest end seen so far.
+  it("never give one address to two providers", () => {
+    const ranges = rangeTexts().flatMap(([id, texts]) =>
+      texts.map((text) => {
+        const range = parseCidr(text);
+        assert.ok(range.ok, text);
+        const { family, network, prefixLength } = range.value;
+        const width = family === 4 ? 32n : 128n;
+        const end = network + (1n << (width - BigInt(prefixLength))) - 1n;
+        return { id, text, family, start: network, end };
+      }),
+    );
+    ranges.sort((a, b) =>
+      a.family !== b.family
+        ? a.family - b.family
+        : a.start < b.start
+          ? -1
+          : a.start > b.start
+            ? 1
+            : 0,
+    );
+    let furthest: (typeof ranges)[number] | undefined;
+    for (const range of ranges) {
+      if (
+        furthest !== undefined &&
+        furthest.family === range.family &&
+        range.start <= furthest.end
+      ) {
+        assert.equal(
+          range.id,
+          furthest.id,
+          `${range.text} of ${range.id} overlaps ${furthest.text} of ${furthest.id}`,
+        );
+      }
+      if (
+        furthest === undefined ||
+        furthest.family !== range.family ||
+        range.end > furthest.end
+      ) {
+        furthest = range;
+      }
+    }
   });
 });

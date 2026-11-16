@@ -1,0 +1,4 @@
+# Source: none, CDNetworks publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# No list was found in its documentation (https://documents.cdnetworks.com/document/content-acceleration/, https://docs.cdnetworks.com/en/cdn/docs/release-notes). CDN Pro only offers its customers an API, ipDetails, that tells whether a given address belongs to the platform (release note of 2022-10-05).
+# The edges measured on 2026-11-16 are spread over several networks: 163.171.131.198 (www.cdnetworks.com), 168.235.193.72 (documents.cdnetworks.com), 138.113.8.192 (www.wangsu.com), 2a01:53c0:ff0a::40 (docs.cdnetworks.com), and inside Chinese carriers' networks 222.246.148.206 and 240e:c3:2800::39 (www.12306.cn). CDNetworks is recognised by its headers, cookies and CNAME suffixes.

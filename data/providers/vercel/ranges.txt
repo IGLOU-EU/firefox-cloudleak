@@ -1,0 +1,4 @@
+# Source: none, Vercel publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Vercel assigns anycast addresses per project and names only examples, 76.76.21.21 and 216.198.79.1 (https://vercel.com/docs/domains/troubleshooting#records-for-an-apex-domain-and-www). Its staff says no ranges can be given for its anycast network (https://community.vercel.com/t/ip-range-list-for-vercels-washington-dc-usa-east-iad1-region/4236).
+# The edges that browsers reached on 2026-11-16 fall in /24 blocks registered to Vercel, Inc at ARIN (VERCEL-01, -02, -08, -09, -10, -11), announced by Amazon (AS16509). Vercel is recognised by its headers, server value and CNAME suffixes.

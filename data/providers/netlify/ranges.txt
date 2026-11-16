@@ -1,0 +1,4 @@
+# Source: none, Netlify publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Netlify gives a single load balancer address for apex domains, 75.2.60.5 (https://docs.netlify.com/manage/domains/configure-domains/configure-external-dns/), and its support says the addresses of its points of presence cannot be allow-listed (https://answers.netlify.com/t/how-to-restrict-backend-to-only-serve-requests-from-my-netlify-site/37399).
+# The edges that browsers reached on 2026-11-16 (15.197.167.90, 3.33.186.135, 75.2.60.5, 99.83.231.61, 35.157.26.135, 63.176.8.218) all belong to Amazon (AS16509), whose ranges are shared with every AWS customer and are not Netlify's. Netlify is recognised by its headers, server value and CNAME suffixes.

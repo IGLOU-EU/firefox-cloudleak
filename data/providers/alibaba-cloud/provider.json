@@ -1,0 +1,87 @@
+{
+  "name": "Alibaba Cloud",
+  "country": "SG",
+  "parent": { "name": "Alibaba Group", "country": "CN" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "eagleid",
+        "source": "https://www.alibabacloud.com/help/en/cdn/support/is-my-cdn-in-effect (EagleID is an Alibaba Cloud CDN-specific response header, whose presence means the request reached an Alibaba Cloud CDN node) and https://www.alibabacloud.com/help/en/cdn/user-guide/create-a-custom-http-response-header (EagleId is a system-reserved header that cannot be deleted or modified), and observed on 2026-11-16 on www.alibabacloud.com and www.aliyun.com (ESA), www.163.com, www.sina.com.cn, www.douyin.com, www.lazada.com, www.miravia.es and www.taobao.com (CDN)"
+      },
+      {
+        "name": "ali-swift-global-savetime",
+        "source": "https://www.alibabacloud.com/help/en/cdn/support/is-my-cdn-in-effect (a Unix timestamp of when the resource was first cached on the CDN node, mainly returned by international nodes), and observed on 2026-11-16 on www.163.com, www.sina.com.cn, www.lazada.com, www.miravia.es and www.taobao.com"
+      },
+      {
+        "name": "x-swift-savetime",
+        "source": "https://www.alibabacloud.com/help/en/cdn/support/is-my-cdn-in-effect (the GMT time the resource was first cached on the node), and observed on 2026-11-16 on www.163.com, www.sina.com.cn, www.lazada.com, www.miravia.es and www.taobao.com"
+      },
+      {
+        "name": "x-swift-cachetime",
+        "source": "https://www.alibabacloud.com/help/en/cdn/support/is-my-cdn-in-effect (0 means the response cannot be cached), and observed on 2026-11-16 on www.163.com, www.sina.com.cn, www.lazada.com, www.miravia.es and www.taobao.com"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "acw_tc",
+        "source": "https://www.alibabacloud.com/help/en/edge-security-acceleration/esa/support/http-header (ESA inserts by default a cookie prefixed acw_tc or cdn_sec_tc to identify client sessions) and https://www.alibabacloud.com/help/en/waf/web-application-firewall-3-0/web-application-firewall-3-0-security-compliance-instructions (WAF inserts the acw_tc cookie into the response by default with HTTP flood and scan protection), and observed on 2026-11-16 on www.alibabacloud.com and www.aliyun.com, set by the ESA edge"
+      },
+      {
+        "name": "cdn_sec_tc",
+        "source": "https://www.alibabacloud.com/help/en/edge-security-acceleration/esa/support/http-header (ESA inserts by default a cookie prefixed acw_tc or cdn_sec_tc to identify client sessions), and observed on 2026-11-16 on www.alibabacloud.com and www.aliyun.com, set by the ESA edge"
+      },
+      {
+        "name": "acw_sec*",
+        "source": "https://www.alibabacloud.com/help/en/edge-security-acceleration/esa/support/http-header (when a request triggers an ESA WAF JavaScript or CAPTCHA challenge, ESA also inserts a cookie prefixed acw_sec that records that the client passed it)"
+      },
+      {
+        "name": "acw_sc__v2",
+        "source": "https://www.alibabacloud.com/help/en/waf/web-application-firewall-3-0/web-application-firewall-3-0-security-compliance-instructions (after a JS challenge, WAF inserts the acw_sc__v2 cookie to mark the client as verified)"
+      },
+      {
+        "name": "acw_sc__v3",
+        "source": "https://www.alibabacloud.com/help/en/waf/web-application-firewall-3-0/web-application-firewall-3-0-security-compliance-instructions (after a slider CAPTCHA, WAF inserts the acw_sc__v3 cookie to mark the client as verified)"
+      }
+    ],
+    "server": [
+      {
+        "value": "ESA",
+        "source": "Observed on 2026-11-16 on www.alibabacloud.com and www.aliyun.com (www.alibabacloud.com.a1.initaq.com), together with eagleid and the acw_tc and cdn_sec_tc cookies. Not found in Alibaba Cloud's documentation on 2026-11-16"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "kunlunsl.com",
+        "source": "https://www.alibabacloud.com/help/en/cdn/what-is-a-dns-cname-record (www.example.com.w.kunlunsl.com as the CNAME of an accelerated domain). Not seen on a real chain on 2026-11-16"
+      },
+      {
+        "suffix": "kunlunaq.com",
+        "source": "https://www.alibabacloud.com/help/en/cdn/support/is-my-cdn-in-effect (www.example.com.w.kunlunaq.com as the canonical name of an accelerated domain). Not seen on a real chain on 2026-11-16"
+      },
+      {
+        "suffix": "kunluncan.com",
+        "source": "Observed on 2026-11-16 on www.163.com (www.163.com.w.kunluncan.com), as the last name of the chain"
+      },
+      {
+        "suffix": "alikunlun.com",
+        "source": "https://www.alibabacloud.com/help/en/cdn/getting-started/quick-access-to-alibaba-cloud-cdn (xxx.alikunlun.com as the CNAME shown for a domain), and observed on 2026-11-16 on www.sina.com.cn (ww1.sinaimg.cn.w.alikunlun.com), as the last name of the chain"
+      },
+      {
+        "suffix": "queniuyk.com",
+        "source": "Observed on 2026-11-16 on www.douyin.com (www.douyin.com.w.kunluncan.com, then www.douyin.com.queniuyk.com), as the last name of the chain"
+      },
+      {
+        "suffix": "queniuak.com",
+        "source": "Observed on 2026-11-16 on www.lazada.com and www.miravia.es (www.lazada.com.queniuak.com), as the last name of the chain"
+      },
+      {
+        "suffix": "initaq.com",
+        "source": "Observed on 2026-11-16 on www.alibabacloud.com (www.alibabacloud.com.a1.initaq.com) and www.aliyun.com (www.aliyun.com.a2.initaq.com), served by ESA, as the last name of the chain"
+      },
+      {
+        "suffix": "tbcache.com",
+        "source": "Observed on 2026-11-16 on www.taobao.com (www.taobao.com.danuoyi.tbcache.com), as the last name of the chain, with eagleid and the x-swift headers"
+      }
+    ]
+  }
+}

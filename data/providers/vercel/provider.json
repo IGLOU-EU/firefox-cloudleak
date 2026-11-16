@@ -1,0 +1,44 @@
+{
+  "name": "Vercel",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-vercel-id",
+        "source": "https://vercel.com/docs/headers/response-headers (included in Vercel deployment responses, it lists the Vercel regions the request hit), and observed on 2026-11-16 on vercel.com, nextjs.org, www.11ty.dev, react.dev, www.nuxt.com, www.hashnode.com and www.sonos.com"
+      },
+      {
+        "name": "x-vercel-cache",
+        "source": "https://vercel.com/docs/headers/response-headers (the cache status of the response in Vercel's CDN), and observed on 2026-11-16 on vercel.com, nextjs.org, www.11ty.dev and react.dev"
+      }
+    ],
+    "server": [
+      {
+        "value": "Vercel",
+        "source": "https://vercel.com/docs/headers/response-headers (server: Vercel, in Vercel deployment responses), and observed on 2026-11-16 on vercel.com, nextjs.org, www.11ty.dev, react.dev, www.nuxt.com, www.hashnode.com and www.sonos.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "vercel-dns.com",
+        "source": "Observed on 2026-11-16 on www.11ty.dev, www.react.dev, www.cursor.com and ui.shadcn.com (cname.vercel-dns.com) and www.nextjs.org (7db0c515ced5a8a7.vercel-dns.com), as the last name of the chain"
+      },
+      {
+        "suffix": "vercel-dns-0.com",
+        "source": "https://vercel.com/docs/domains/working-with-domains/add-a-domain (a wildcard domain is a CNAME to cname.vercel-dns-0.com)"
+      },
+      {
+        "suffix": "vercel-dns-013.com",
+        "source": "Observed on 2026-11-16 on www.sonos.com (2afb4f808650c82c.vercel-dns-013.com), as the last name of the chain"
+      },
+      {
+        "suffix": "vercel-dns-016.com",
+        "source": "Observed on 2026-11-16 on www.nuxt.com (9437a7cfd697d5b3.vercel-dns-016.com) and www.hashnode.com (89cac538c2d10d22.vercel-dns-016.com), as the last name of the chain"
+      },
+      {
+        "suffix": "vercel-dns-017.com",
+        "source": "https://vercel.com/docs/domains/working-with-domains/add-a-domain (each project has a unique CNAME record, such as d1d4fc829fe7bc7c.vercel-dns-017.com)"
+      }
+    ]
+  }
+}

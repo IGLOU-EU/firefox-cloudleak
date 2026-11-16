@@ -1,0 +1,43 @@
+{
+  "name": "Netlify",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-nf-request-id",
+        "source": "https://answers.netlify.com/t/support-guide-netlify-support-asked-for-the-x-nf-request-id-header-what-is-it-and-how-do-i-find-it/4385 (Netlify support guide, last reviewed in July 2025: Netlify adds x-nf-request-id to every response it sends, 404 and redirects included), and observed on 2026-11-16 on www.netlify.com, www.gatsbyjs.com, kubernetes.io, www.vuejs.org, www.babeljs.io, www.reactnative.dev and www.prettier.io"
+      },
+      {
+        "name": "cache-status",
+        "value": "*\"Netlify Edge\"*",
+        "source": "https://docs.netlify.com/build/caching/caching-overview/ (example Cache-Status values of the Netlify CDN, such as \"Netlify Edge\"; hit and \"Netlify Edge\"; fwd=miss), and observed on 2026-11-16 on www.netlify.com, www.gatsbyjs.com and kubernetes.io. The pattern lets another cache list its own entry before or after Netlify's"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "nf_ab",
+        "source": "https://docs.netlify.com/manage/monitoring/split-testing/ (Netlify sets the nf_ab cookie so that a visitor of a split test always gets the same branch, and its CDN reads it)"
+      }
+    ],
+    "server": [
+      {
+        "value": "Netlify",
+        "source": "Observed on 2026-11-16 on www.netlify.com, www.gatsbyjs.com, kubernetes.io, www.vuejs.org, www.babeljs.io, www.reactnative.dev and www.prettier.io"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "netlify.app",
+        "source": "https://docs.netlify.com/manage/domains/configure-domains/configure-external-dns/ (a subdomain is a CNAME to the site's Netlify subdomain, such as brave-curie-12345.netlify.app), and observed on 2026-11-16 on www.babeljs.io (babel-v7.netlify.app) and www.reactnative.dev (react-native.netlify.app), as the last name of the chain"
+      },
+      {
+        "suffix": "netlifyglobalcdn.com",
+        "source": "Observed on 2026-11-16 on www.vuejs.org (vuejs.netlifyglobalcdn.com) and www.gatsbyjs.com (netlify.netlifyglobalcdn.com), as the last name of the chain"
+      },
+      {
+        "suffix": "netlify.com",
+        "source": "Observed on 2026-11-16 on www.prettier.io (prettier.netlify.com, a site subdomain of the form Netlify used before netlify.app), as the last name of the chain"
+      }
+    ]
+  }
+}

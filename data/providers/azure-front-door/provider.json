@@ -1,0 +1,32 @@
+{
+  "name": "Azure Front Door",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-azure-ref",
+        "source": "https://learn.microsoft.com/en-us/azure/frontdoor/front-door-http-headers-protocol (Front Door attaches X-Azure-Ref to all responses to the client, a unique reference of the request served by Front Door), and observed on 2026-11-16 on code.visualstudio.com, dotnet.microsoft.com, docs.azure.cn, portal.azure.com, js.monitor.azure.com, api.nuget.org and aadcdn.msauth.net"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "ASLBSA",
+        "source": "https://learn.microsoft.com/en-us/azure/frontdoor/routing-methods (with session affinity enabled, Azure Front Door adds cookies named ASLBSA and ASLBSACORS), and observed on 2026-11-16 on code.visualstudio.com"
+      },
+      {
+        "name": "ASLBSACORS",
+        "source": "https://learn.microsoft.com/en-us/azure/frontdoor/routing-methods (with session affinity enabled, Azure Front Door adds cookies named ASLBSA and ASLBSACORS), and observed on 2026-11-16 on code.visualstudio.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "t-msedge.net",
+        "source": "Observed on 2026-11-16 as the last name of the chain after an azurefd.net or azureedge.net endpoint, the CNAME targets Microsoft documents (https://learn.microsoft.com/en-us/azure/frontdoor/endpoint, https://learn.microsoft.com/en-us/azure/cdn/cdn-map-content-to-custom-domain): dotnet.microsoft.com (dotnetwebsite.azurefd.net, then s-part-0033.t-0009.t-msedge.net), docs.azure.cn (part-0017.t-0009.t-msedge.net) and aadcdn.msauth.net (aadcdnoriginwus2.afd.azureedge.net, then s-part-0017.t-0009.t-msedge.net)"
+      },
+      {
+        "suffix": "tm-azurefd.net",
+        "source": "Observed on 2026-11-16 as the last name of the chain after an azurefd.net endpoint (https://learn.microsoft.com/en-us/azure/frontdoor/endpoint): code.visualstudio.com and js.monitor.azure.com (mr-z01.tm-azurefd.net), techcommunity.microsoft.com (mr-a03.tm-azurefd.net), api.nuget.org (mr-afd-azuredge.tm-azurefd.net)"
+      }
+    ]
+  }
+}

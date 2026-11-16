@@ -1,0 +1,46 @@
+{
+  "name": "Bunny.net",
+  "country": "SI",
+  "signatures": {
+    "headers": [
+      {
+        "name": "cdn-pullzone",
+        "source": "https://bunny.net/docs/cdn/cdn-acceleration (cdn-pullzone, the Pull Zone handling the request: if these headers are present, the content is served through bunny.net's CDN), and observed on 2026-11-16 on bunny.net, www.innogames.com and cdn.bsky.app"
+      },
+      {
+        "name": "cdn-requestcountrycode",
+        "source": "https://bunny.net/docs/cdn/cdn-acceleration (cdn-requestcountrycode, among the headers whose presence shows the content is served through bunny.net's CDN), and observed on 2026-11-16 on bunny.net, www.innogames.com and cdn.bsky.app"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "bunny_shield",
+        "source": "https://bunny.net/docs/shield/cookies (set by Bunny Shield once the visitor has completed its JavaScript proof-of-work challenge)"
+      },
+      {
+        "name": "bunny_shield_chk",
+        "source": "https://bunny.net/docs/shield/cookies (checksum that protects the bunny_shield cookie)"
+      },
+      {
+        "name": "bunny_shield_id",
+        "source": "https://bunny.net/docs/shield/cookies (identifier of the browser session for Bunny Shield's bot detection)"
+      },
+      {
+        "name": "bunny_shield_bd",
+        "source": "https://bunny.net/docs/shield/cookies (fingerprint of the browser environment for Bunny Shield's bot detection)"
+      }
+    ],
+    "server": [
+      {
+        "value": "BunnyCDN-*",
+        "source": "https://bunny.net/docs/cdn/troubleshooting/run-traceroute (every response from Bunny CDN has a Server header BunnyCDN-{PoP Code}-{Server-ID}), and observed on 2026-11-16 on bunny.net (BunnyCDN-FR1-1216), www.innogames.com and cdn.bsky.app"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "b-cdn.net",
+        "source": "https://bunny.net/docs/cdn/custom-hostname (a custom hostname is a CNAME to yourzone.b-cdn.net), and observed on 2026-11-16 on www.innogames.com (backend-www-innogames-com.b-cdn.net) and cdn.bsky.app (bsky.b-cdn.net), as the last name of the chain"
+      }
+    ]
+  }
+}

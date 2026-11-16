@@ -1,0 +1,4 @@
+# Source: none, BytePlus publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# BytePlus CDN only offers its customers APIs: DescribeIPInfo tells whether a given address is one of its nodes (https://docs.byteplus.com/en/docs/byteplus-vod/reference-describeipinfo), and its SDK has DescribeCdnUpperIp, whose name points to the upper-tier nodes that reach origin servers (https://pkg.go.dev/github.com/byteplus-sdk/byteplus-sdk-golang/example/cdn).
+# The edge measured on 2026-11-16 for edge-hls.doppiocdn.org (104.166.134.248, 2a0b:21c0:5005:4e2::a) is registered to Zenlayer, a hosting and network company that also serves other customers, so even a published list would hold rented addresses. BytePlus is recognised by its header and CNAME suffix.

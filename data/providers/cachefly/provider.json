@@ -1,0 +1,28 @@
+{
+  "name": "CacheFly",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-cf-reqid",
+        "source": "Observed on 2026-11-16 on www.cachefly.com, www.overdrive.com (odcom.cachefly.net), storage.ning.com (rvip15.ue.cachefly.net) and www.edgeuno.com (webedgeuno.cachefly.net), a 32-digit hexadecimal id on every response, together with server: CFS and the x-cf1, x-cf2, x-cf3, x-cff, x-cf-tsc, cf4age and cf4ttl headers. CacheFly documents none of them"
+      },
+      {
+        "name": "cf4ttl",
+        "source": "Observed on 2026-11-16 on www.cachefly.com, www.overdrive.com (odcom.cachefly.net), storage.ning.com (rvip15.ue.cachefly.net) and www.edgeuno.com (webedgeuno.cachefly.net), a number of seconds with three decimals, together with x-cf-reqid"
+      }
+    ],
+    "server": [
+      {
+        "value": "CFS *",
+        "source": "Observed on 2026-11-16 on www.cachefly.com, www.overdrive.com (odcom.cachefly.net), storage.ning.com (rvip15.ue.cachefly.net) and www.edgeuno.com (webedgeuno.cachefly.net), as CFS 0215 and CFS 1124, together with x-cf-reqid"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "cachefly.net",
+        "source": "https://kb.cachefly.com/kb/guide/en/starter-guide-0cUBLGI4NQ/Steps/2782627 (the hostname assigned by CacheFly is {ServiceName}.cachefly.net, and the customer's name is a CNAME to it), and observed on 2026-11-16 on www.overdrive.com (odcom.cachefly.net), storage.ning.com (rvip15.ue.cachefly.net) and www.edgeuno.com (webedgeuno.cachefly.net), as the last name of the chain"
+      }
+    ]
+  }
+}

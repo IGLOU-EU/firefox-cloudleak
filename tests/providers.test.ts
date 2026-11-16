@@ -701,6 +701,20 @@ describe("readPublishedList", () => {
     );
   });
 
+  it("reads a bare address of a text list as a range of that address alone", () => {
+    assert.deepEqual(
+      readPublishedList(TEXT, "89.187.188.227\r\n2400:52e0:1500::714:1\r\n"),
+      ["89.187.188.227/32", "2400:52e0:1500::714:1/128"],
+    );
+  });
+
+  it("names the line of a malformed bare address in a text list", () => {
+    assert.throws(
+      () => readPublishedList(TEXT, "89.187.188.227\n89.187.188\n"),
+      /^Error: line 2: /,
+    );
+  });
+
   it("names the line of a malformed range in a text list", () => {
     assert.throws(
       () => readPublishedList(TEXT, "192.0.2.0/24\n192.0.2.1/24\n"),

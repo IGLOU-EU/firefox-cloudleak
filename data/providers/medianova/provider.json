@@ -1,0 +1,24 @@
+{
+  "name": "Medianova",
+  "country": "TR",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-mnrequest-id",
+        "source": "Observed on 2026-11-16 on www.medianova.com, cdn.dsmcdn.com (dsm.mncdn.com) and productimages.hepsiburada.net (img2-hepsiburada.mncdn.com), together with server: MNCDN-174140"
+      }
+    ],
+    "server": [
+      {
+        "value": "MNCDN*",
+        "source": "https://clients.medianova.com/products/performance-cdn/dynamic-content-acceleration/integrating-dynamic-cdn-resource (Server: MNCDN confirms that the request is served through the CDN), and observed on 2026-11-16 as MNCDN-174140 on www.medianova.com, cdn.dsmcdn.com and productimages.hepsiburada.net"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "mncdn.com",
+        "source": "https://clients.medianova.com/products/performance-cdn/static-content-delivery/advanced-configuration/cname-and-ssl (cdn.example.com points to your-resource.mncdn.com), and observed on 2026-11-16 on cdn.dsmcdn.com (dsm.mncdn.com) and productimages.hepsiburada.net (img2-hepsiburada.mncdn.com), as the last name of the chain"
+      }
+    ]
+  }
+}

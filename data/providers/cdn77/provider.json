@@ -1,0 +1,37 @@
+{
+  "name": "CDN77",
+  "country": "GB",
+  "parent": { "name": "Overkill Alpha", "country": "CZ" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-77-pop",
+        "source": "https://client.cdn77.com/support/knowledgebase/caching-and-http-headers/headers-added-by-cdn77 (identifies the CDN77 edge that handled the request, such as pragueCZ), and observed on 2026-11-16 on www.cdn77.com, client.cdn77.com and img.icons8.com (parisFR)"
+      },
+      {
+        "name": "x-77-cache",
+        "source": "https://client.cdn77.com/support/knowledgebase/caching-and-http-headers/headers-added-by-cdn77 (HIT when the edge served the response from its cache, MISS when it fetched it from the origin), and observed on 2026-11-16 on www.cdn77.com and img.icons8.com"
+      },
+      {
+        "name": "x-77-nzt",
+        "source": "https://client.cdn77.com/support/knowledgebase/caching-and-http-headers/headers-added-by-cdn77 (internal header used for debugging), and observed on 2026-11-16 on www.cdn77.com and img.icons8.com"
+      },
+      {
+        "name": "x-77-nzt-ray",
+        "source": "https://client.cdn77.com/support/knowledgebase/caching-and-http-headers/headers-added-by-cdn77 (internal header used for debugging), and observed on 2026-11-16 on www.cdn77.com and img.icons8.com"
+      }
+    ],
+    "server": [
+      {
+        "value": "CDN77-Turbo",
+        "source": "https://client.cdn77.com/support/knowledgebase/caching-and-http-headers/understanding-http-headers (example response of a CDN Resource, with server: CDN77-Turbo next to the x-77 headers), and observed on 2026-11-16 on www.cdn77.com, client.cdn77.com and img.icons8.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "cdn77.org",
+        "source": "https://client.cdn77.com/support/knowledgebase/introduction-to-cdn/getting-started (every CDN Resource has a CDN URL such as 1234567890.rsc.cdn77.org, and a custom name is a CNAME to it), and observed on 2026-11-16 on www.cdn77.com (1669655317.rsc.cdn77.org) and img.icons8.com (1004834818.rsc.cdn77.org), as the last name of the chain"
+      }
+    ]
+  }
+}

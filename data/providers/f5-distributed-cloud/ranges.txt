@@ -1,0 +1,4 @@
+# Source: none, F5 publishes no list that covers the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Its list of Regional Edge subnets (https://docs.cloud.f5.com/docs-v2/platform/reference/network-cloud-ref, also as Markdown text in https://docs.cloud.f5.com/docs-v2/ips-domains.txt) is for origin and Customer Edge firewalls to allow, and that text file mixes it with other F5 services and with ranges of Amazon, Google and Microsoft.
+# The edges that browsers reached on 2026-11-16 on www.f5.com and www.nginx.com (159.60.134.0), account.f5.com (159.60.134.92) and console.ves.volterra.io (159.60.65.3) fall outside the Regional Edge and CDN subnets, in 159.60.128.0/21 (F5-ANYCAST-1) and 159.60.64.0/20, both in AS35280. F5 Distributed Cloud is recognised by its header, server values and CNAME suffix.

@@ -1,0 +1,3 @@
+# Source: none, Myra publishes no public list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Myra gives its IP ranges only through its authenticated API (GET /ip-ranges, https://apiv2.myracloud.com/api/doc, which answers 401 without credentials) and in the Myra IP Ranges tab of the customer's app, for origin servers to allow. Myra is recognised by its server header and CNAME suffixes.

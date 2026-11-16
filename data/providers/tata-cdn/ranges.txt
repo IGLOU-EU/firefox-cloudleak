@@ -1,0 +1,3 @@
+# Source: none, Tata Communications publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# No list was found on its CDN pages (https://www.tatacommunications.com/media-entertainment/content-delivery-network). The edges measured on 2026-11-16 (64.185.181.238, 2607:fc48:bc4b::bc:238, 64.185.179.179) are registered to BitGravity, Inc., the CDN Tata Communications took over, but nothing says that its ranges hold every edge. Tata Communications CDN is recognised by its header and CNAME suffixes.

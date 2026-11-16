@@ -1,0 +1,19 @@
+{
+  "name": "BytePlus",
+  "country": "SG",
+  "parent": { "name": "ByteDance", "country": "CN" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-bdcdn-cache-status",
+        "source": "https://docs.byteplus.com/en/docs/byteplus-cdn/docs-cdn-response-headers (x-bdcdn-cache-status is one of the response headers of BytePlus CDN that a customer cannot set), and observed on 2026-11-16 on edge-hls.doppiocdn.org (TCP_MISS,TCP_MISS,TCP_MISS), served through edge-hls.doppiocdn.org.bplslb.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "bplslb.com",
+        "source": "https://docs.byteplus.com/en/docs/byteplus-cdn/docs-set-up-cname (the CNAME record of a site points to www.example.com.bplslb.com), and observed on 2026-11-16 on edge-hls.doppiocdn.org (edge-hls.doppiocdn.org.bplslb.com), as the last name of the chain"
+      }
+    ]
+  }
+}
