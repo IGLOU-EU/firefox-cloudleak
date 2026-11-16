@@ -1,0 +1,48 @@
+{
+  "name": "Gcore",
+  "country": "LU",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-id-fe",
+        "source": "Shown in a response of api.gcore.com in Gcore's own article https://gcore.com/blog/gcore-api-jetbrains-http-client (X-ID-FE: ed-up-gc38), and observed on 2026-11-16 on gcore.com (pa5-hw-edge-gc18) and us-ms.gr-cdn.com (pa5-hw-edge-gc16), a host whose chain ends in gcdn.co, next to the X-ID header that https://docs.gcore.com/cdn/troubleshooting/content-is-unavailable-after-a-cdn-resource-creation-how-to-solve-the-issue gives as the identifier of the edge that handled the request"
+      },
+      {
+        "name": "x-id-shield",
+        "source": "Observed on 2026-11-16 on gcore.com (fr5-hw-edge-gc40), together with x-id-fe"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "SPSI",
+        "source": "https://docs.gcore.com/waap/frequently-asked-questions/waap-cookies (Gcore WAAP sets it on the websites it protects, a session identifier used for security purposes), and observed on 2026-11-16 on gcore.com"
+      },
+      {
+        "name": "SPSE",
+        "source": "https://docs.gcore.com/waap/frequently-asked-questions/waap-cookies (encrypted session identifier set by Gcore WAAP), and observed on 2026-11-16 on gcore.com"
+      },
+      {
+        "name": "UTGv2",
+        "source": "https://docs.gcore.com/waap/frequently-asked-questions/waap-cookies (random browser identifier set by Gcore WAAP), and observed on 2026-11-16 on gcore.com"
+      },
+      {
+        "name": "sp_lit",
+        "source": "https://docs.gcore.com/waap/frequently-asked-questions/waap-cookies (technical data used by Gcore WAAP to detect automated traffic), and observed on 2026-11-16 on gcore.com"
+      },
+      {
+        "name": "spcsrf",
+        "source": "https://docs.gcore.com/waap/frequently-asked-questions/waap-cookies (token set by Gcore WAAP against cross-site request forgery), and observed on 2026-11-16 on gcore.com"
+      },
+      {
+        "name": "adOtr",
+        "source": "https://docs.gcore.com/waap/frequently-asked-questions/waap-cookies (result of a Gcore WAAP security check), and observed on 2026-11-16 on gcore.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "gcdn.co",
+        "source": "https://docs.gcore.com/cdn/troubleshooting/common-setup-issues (the custom domain of a CDN resource is a CNAME to the *.gcdn.co value of its setup guide), and observed on 2026-11-16 on us-ms.gr-cdn.com (cl-glbce66526.gcdn.co), as the last name of the chain"
+      }
+    ]
+  }
+}

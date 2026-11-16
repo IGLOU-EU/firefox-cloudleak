@@ -1,0 +1,3 @@
+# Source: none, Link11 publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# No list was found in the Link11 WAAP documentation (https://waap.docs.link11.com/) or on link11.com. Link11 WAAP can also run on AWS, Azure or GCP (https://waap.docs.link11.com/user-guide/introduction-to-link11-waap), whose addresses are not Link11's, and Link11's AS34309 also answers without any Link11 signal, as www.schufa.de did on 2026-11-16. Link11 is recognised by its header, cookies and CNAME suffix.

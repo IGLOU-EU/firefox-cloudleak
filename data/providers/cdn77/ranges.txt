@@ -1,0 +1,4 @@
+# Source: none, CDN77 publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# CDN77 gives its address list only on request, by live chat or e-mail, for origin servers to allow (https://client.cdn77.com/support/knowledgebase/security-measures/origin-protection). CDN77 is recognised by its headers and CNAME suffix.
+# Its edges sit in AS60068 (Datacamp Limited), which also holds servers of other companies: on 2026-11-16, 185.93.2.0/24 held both CDN77 edges (185.93.2.8 to 185.93.2.12, www.cdn77.com and img.icons8.com) and Bunny.net edges (185.93.2.243 to 185.93.2.251, in Bunny's own list). A range taken from the AS would name Bunny's edges as CDN77's.

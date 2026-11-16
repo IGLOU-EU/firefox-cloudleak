@@ -1,0 +1,16 @@
+{
+  "name": "CDNvideo",
+  "country": "RU",
+  "signatures": {
+    "cname": [
+      {
+        "suffix": "trbcdn.net",
+        "source": "https://doc.cdnvideo.ru/en/Services_setup/http/ (by default the content is reachable at example.a.trbcdn.net, and a CNAME record points to it), and observed on 2026-11-16 on cdn.petshop.ru (lavlattvef.a.trbcdn.net), as the last name of the chain"
+      },
+      {
+        "suffix": "cdnvideo.ru",
+        "source": "https://doc.cdnvideo.ru/en/api_desc/openapi/cdn-node-list-api-v2.yaml (a CDN domain ends with .cdnvideo.ru or .trbcdn.net), and observed on 2026-11-16 on d.cdn1.cc (m-data.cdnvideo.ru), as the last name of the chain"
+      }
+    ]
+  }
+}

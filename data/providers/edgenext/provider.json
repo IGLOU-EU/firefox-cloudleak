@@ -1,0 +1,28 @@
+{
+  "name": "EdgeNext",
+  "country": "SG",
+  "parent": { "name": "Baishan Cloud", "country": "CN" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-cc-via",
+        "source": "Observed on 2026-11-16 on home.console.edgenext.com (i2315409_c27809[M,41],i1935955_c23471[M,194],…, one entry per cache node), served through trpcdn.net from addresses registered to Edgenext Legend Dynasty Pte. Ltd. Not found in EdgeNext's documentation on 2026-11-16"
+      },
+      {
+        "name": "x-ser",
+        "value": "i*_c*",
+        "source": "Observed on 2026-11-16 on api.edgenext.com (i2020957_c24821, i2315653_c27595) and www.gov.cn (served by the same edges, 2407:2440::/32), the same node ids as in x-cc-via. Not found in EdgeNext's documentation on 2026-11-16. The name is short, hence the value"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "edgenextcname.com",
+        "source": "Observed on 2026-11-16 on www.edgenext.com (89f45538.edgenext.com.cname.edgenextcname.com) and www.chinacache.com (123890a4.chinacache.com.cname.edgenextcname.com), as the last name of the chain"
+      },
+      {
+        "suffix": "trpcdn.net",
+        "source": "Observed on 2026-11-16 on home.console.edgenext.com and api.edgenext.com (rim-internel.v.trpcdn.net), as the last name of the chain, with x-cc-via or x-ser, and on en.baishancloud.com (u168.v.trpcdn.net)"
+      }
+    ]
+  }
+}

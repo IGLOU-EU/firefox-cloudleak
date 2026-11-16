@@ -1,0 +1,33 @@
+{
+  "name": "NuCDN (BelugaCDN)",
+  "country": "US",
+  "parent": { "name": "Cañaveral Group", "country": "PH" },
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-beluga-trace",
+        "source": "Observed on 2026-11-16 on www.belugacdn.com, www.nucdn.co, docs.belugacdn.com (docs.belugacdn.com.i.belugacdn.com) and www.canaveral.group (edge.nucdn.co), a UUID on every response, together with server: NuCDN and the x-beluga-node, x-beluga-cache-status, x-beluga-record, x-beluga-response-time and x-beluga-status headers. Neither BelugaCDN nor NuCDN documents them"
+      },
+      {
+        "name": "x-beluga-node",
+        "source": "Observed on 2026-11-16 on www.belugacdn.com, www.nucdn.co, docs.belugacdn.com (docs.belugacdn.com.i.belugacdn.com) and www.canaveral.group (edge.nucdn.co), a UUID that names the edge server, together with x-beluga-trace"
+      }
+    ],
+    "server": [
+      {
+        "value": "NuCDN*",
+        "source": "Observed on 2026-11-16 on www.belugacdn.com, www.nucdn.co, docs.belugacdn.com (docs.belugacdn.com.i.belugacdn.com) and www.canaveral.group (edge.nucdn.co), as NuCDN, together with x-beluga-trace"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "belugacdn.com",
+        "source": "Observed on 2026-11-16 on docs.belugacdn.com (docs.belugacdn.com.i.belugacdn.com), as the last name of the chain"
+      },
+      {
+        "suffix": "nucdn.co",
+        "source": "Observed on 2026-11-16 on www.canaveral.group, the site of NuCDN's parent group (edge.nucdn.co), as the last name of the chain"
+      }
+    ]
+  }
+}

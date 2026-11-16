@@ -1,0 +1,44 @@
+{
+  "name": "Sucuri",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-sucuri-id",
+        "source": "https://docs.sucuri.net/website-firewall/sucuri-cdn/ (the PoP of the Sucuri CDN that answered, its first two digits naming the data center), and observed on 2026-11-16 on sucuri.net and on webhosting.net, a customer named by Sucuri (https://sucuri.net/customers/webhosting/)"
+      },
+      {
+        "name": "x-sucuri-cache",
+        "source": "https://docs.sucuri.net/website-firewall/sucuri-cdn/ (tells whether the page was served straight from the Sucuri CDN), and observed on 2026-11-16 on sucuri.net and webhosting.net (HIT and MISS)"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "sucuri_cloudproxy_uuid_*",
+        "source": "https://docs.sucuri.net/warnings/hardening/cookies-httponly/ (cookie of the firewall itself, created by the JavaScript of its bot challenge when a visitor passes it)"
+      },
+      {
+        "name": "sucuricp_tf_*",
+        "source": "https://docs.sucuri.net/warnings/hardening/cookies-httponly/ (cookie of the firewall itself, set when a visitor passes a Protected Page or captcha)"
+      },
+      {
+        "name": "sucuricp_tfga_*",
+        "source": "https://docs.sucuri.net/warnings/hardening/cookies-httponly/ (cookie of the firewall itself, set when a visitor passes a Protected Page or captcha)"
+      },
+      {
+        "name": "sucuricp_tfca_*",
+        "source": "https://docs.sucuri.net/warnings/hardening/cookies-httponly/ (cookie of the firewall itself, set when a visitor passes a Protected Page or captcha)"
+      },
+      {
+        "name": "sucuric_prtmpcb",
+        "source": "https://docs.sucuri.net/warnings/hardening/cookies-httponly/ (cookie of the firewall itself, set when a WordPress admin submits a form in /wp-admin/, to bypass the cache for 10 minutes)"
+      }
+    ],
+    "server": [
+      {
+        "value": "Sucuri/Cloudproxy",
+        "source": "https://docs.sucuri.net/website-firewall/sucuri-cdn/ and https://docs.sucuri.net/website-firewall/troubleshooting/investigating-cache-headers/ (example responses), and observed on 2026-11-16 on sucuri.net and webhosting.net"
+      }
+    ]
+  }
+}

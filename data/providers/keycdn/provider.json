@@ -1,0 +1,18 @@
+{
+  "name": "KeyCDN",
+  "country": "CH",
+  "signatures": {
+    "server": [
+      {
+        "value": "keycdn*",
+        "source": "https://www.keycdn.com/support/check-if-cdn-is-working (example response of a KeyCDN Zone with server: keycdn-engine, x-edge-location and x-cache), and observed on 2026-11-16 as server: keycdn on www.keycdn.com and avatars.discourse-cdn.com, a host of Discourse, whose co-founder KeyCDN quotes on www.keycdn.com"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "kxcdn.com",
+        "source": "https://www.keycdn.com/support/create-a-zone-alias (a Zone Alias such as cdn.example.com is a CNAME to the Zone URL, such as example-hexid.kxcdn.com), and observed on 2026-11-16 on www.keycdn.com and avatars.discourse-cdn.com (p-frpa00.kxcdn.com, a-us00.kxcdn.com and p-sgsg00.kxcdn.com depending on the client's region), as the last name of the chain"
+      }
+    ]
+  }
+}

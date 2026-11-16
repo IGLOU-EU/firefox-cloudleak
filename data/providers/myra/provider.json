@@ -1,0 +1,22 @@
+{
+  "name": "Myra Security",
+  "country": "DE",
+  "signatures": {
+    "server": [
+      {
+        "value": "myracloud",
+        "source": "Observed on 2026-11-16 on www.myrasecurity.com, and on www.dkb.de, www.sparkasse.de and www.lidl.de, whose edges sit in AS20546 with Myra's own site"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "ax4z.com",
+        "source": "https://docs.myracloud.com/en/myra-app/configurations/set-up-myra-protection/redirecting-traffic-to-myra/ (a site that keeps its own name server points a CNAME to the CNAME Alternative the Myra App gives), and observed on 2026-11-16 on www.dkb.de (www-dkb-de.ax4z.com) and www.sparkasse.de (www-sparkasse-de.ax4z.com), as the last name of the chain"
+      },
+      {
+        "suffix": "ax4z-s.com",
+        "source": "https://apiv2.myracloud.com/api/doc (alternativeCnameDnsSec: the alternative CNAME in the DNSSEC-signed zone ax4z-s.com that points to the DNS record)"
+      }
+    ]
+  }
+}

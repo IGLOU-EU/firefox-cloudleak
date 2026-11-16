@@ -1,0 +1,22 @@
+{
+  "name": "Tata Communications CDN",
+  "country": "IN",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-tata-request-id",
+        "source": "Observed on 2026-11-16 on catalog.wlimg.com (served through weblink.pc.cdn.bitgravity.com), k7computing.pc.cdn.bitgravity.com and pcvark.pc.cdn.bitgravity.com, a 32-digit hex id, together with x-cache naming the edge node (MISS,v500cdg1). Not found in Tata Communications' documentation on 2026-11-16"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "bitgravity.com",
+        "source": "Observed on 2026-11-16 on catalog.wlimg.com (weblink.pc.cdn.bitgravity.com, then pc-b.bitgravity.com) and pcvark.pc.cdn.bitgravity.com (pc-b.bitgravity.com), as the last name of the chain. BitGravity is the CDN Tata Communications acquired and runs as its own (https://www.cdnplanet.com/cdns/tata-communications/)"
+      },
+      {
+        "suffix": "bitg.net",
+        "source": "Observed on 2026-11-16 on k7computing.pc.cdn.bitgravity.com (k7computing.cdncache.bitg.net, then pc-b-v6.cdncache.bitg.net), as the last name of the chain, with x-tata-request-id"
+      }
+    ]
+  }
+}

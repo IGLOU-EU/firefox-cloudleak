@@ -1,0 +1,30 @@
+{
+  "name": "DDoS-Guard",
+  "country": "RU",
+  "signatures": {
+    "server": [
+      {
+        "value": "ddos-guard",
+        "source": "Observed on 2026-11-16 on ddos-guard.net and ddos-guard.ru, and on www.technesis.ru and tilda-main-page.skillbox.tj, whose edges sit in DDoS-Guard's AS57724"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "__ddg*",
+        "source": "https://ddos-guard.net/file/sladdg_en.pdf (clause 5.13: the provider adds cookies to track site visitors and their sessions in order to protect the site), and observed on 2026-11-16 on ddos-guard.net, www.technesis.ru and tilda-main-page.skillbox.tj (__ddg1_, __ddg8_, __ddg9_, __ddg10_, and __ddg5_, __ddgid_, __ddgmark_ on ddos-guard.net), set by the edge on the site's own domain"
+      }
+    ],
+    "challengeHosts": [
+      {
+        "host": "check.ddos-guard.net",
+        "source": "Observed on 2026-11-16 (https://check.ddos-guard.net/check.js answers with server: ddos-guard and a script), and named as the host of the browser check in https://github.com/mikf/gallery-dl/issues/1779"
+      }
+    ],
+    "challengePaths": [
+      {
+        "prefix": "/.well-known/ddos-guard/",
+        "source": "Observed on 2026-11-16: the page of ddos-guard.net loads the script /.well-known/ddos-guard/check, which technesis.ru also serves with server: ddos-guard, and which sends its results to /.well-known/ddos-guard/mark/"
+      }
+    ]
+  }
+}

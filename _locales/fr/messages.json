@@ -789,6 +789,58 @@
     "message": "d'Israël",
     "description": "Israel, after \"subject to the law\" in the tooltip of a provider on the map."
   },
+  "mapLawOfCH": {
+    "message": "de la Suisse",
+    "description": "Switzerland, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfCN": {
+    "message": "de la Chine",
+    "description": "China, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfCZ": {
+    "message": "de la Tchéquie",
+    "description": "Czechia, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfDE": {
+    "message": "de l'Allemagne",
+    "description": "Germany, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfGB": {
+    "message": "du Royaume-Uni",
+    "description": "The United Kingdom, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfIN": {
+    "message": "de l'Inde",
+    "description": "India, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfLU": {
+    "message": "du Luxembourg",
+    "description": "Luxembourg, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfNL": {
+    "message": "des Pays-Bas",
+    "description": "The Netherlands, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfPH": {
+    "message": "des Philippines",
+    "description": "The Philippines, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfRU": {
+    "message": "de la Russie",
+    "description": "Russia, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfSG": {
+    "message": "de Singapour",
+    "description": "Singapore, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfSI": {
+    "message": "de la Slovénie",
+    "description": "Slovenia, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
+  "mapLawOfTR": {
+    "message": "de la Turquie",
+    "description": "Türkiye, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
   "mapInUS": {
     "message": "aux États-Unis",
     "description": "Where the parent company of a provider is, in its tooltip on the map: the United States."
@@ -800,6 +852,58 @@
   "mapInIL": {
     "message": "en Israël",
     "description": "Where the parent company of a provider is, in its tooltip on the map: Israel."
+  },
+  "mapInCH": {
+    "message": "en Suisse",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Switzerland."
+  },
+  "mapInCN": {
+    "message": "en Chine",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: China."
+  },
+  "mapInCZ": {
+    "message": "en Tchéquie",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Czechia."
+  },
+  "mapInDE": {
+    "message": "en Allemagne",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Germany."
+  },
+  "mapInGB": {
+    "message": "au Royaume-Uni",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: the United Kingdom."
+  },
+  "mapInIN": {
+    "message": "en Inde",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: India."
+  },
+  "mapInLU": {
+    "message": "au Luxembourg",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Luxembourg."
+  },
+  "mapInNL": {
+    "message": "aux Pays-Bas",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: the Netherlands."
+  },
+  "mapInPH": {
+    "message": "aux Philippines",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: the Philippines."
+  },
+  "mapInRU": {
+    "message": "en Russie",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Russia."
+  },
+  "mapInSG": {
+    "message": "à Singapour",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Singapore."
+  },
+  "mapInSI": {
+    "message": "en Slovénie",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Slovenia."
+  },
+  "mapInTR": {
+    "message": "en Turquie",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: Türkiye."
   },
   "mapOverview": {
     "message": "Ensemble",

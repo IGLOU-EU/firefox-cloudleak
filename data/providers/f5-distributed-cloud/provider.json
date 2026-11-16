@@ -1,0 +1,28 @@
+{
+  "name": "F5 Distributed Cloud",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "x-volterra-location",
+        "source": "https://docs.cloud.f5.com/docs-v2/multi-cloud-app-connect/how-to/adv-security/configure-http-header-processing (the optional Add Location setting of an HTTP load balancer adds x-volterra-location to the responses, its value naming the Regional Edge site), and observed on 2026-11-16 on www.f5.com, www.nginx.com and www.shapesecurity.com (pa4-par)"
+      }
+    ],
+    "server": [
+      {
+        "value": "volt-adc",
+        "source": "https://docs.cloud.f5.com/docs-v2/multi-cloud-app-connect/how-to/adv-security/manipulate-server-header-in-https-response (the HTTP load balancer responds with the server value volt-adc by default), and observed on 2026-11-16 on www.f5.com, www.nginx.com, account.f5.com and www.shapesecurity.com"
+      },
+      {
+        "value": "volt-cdn",
+        "source": "https://community.f5.com/kb/technicalarticles/use-f5-distributed-cloud-to-service-chain-waap-and-cdn/303142 (F5 DevCentral, 2022: a response served through the Distributed Cloud CDN carries server: volt-cdn). Not observed"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "vh.ves.io",
+        "source": "https://github.com/f5devcentral/xcwaapdemoguide (F5's demo guide: the host auto-generated for an HTTP load balancer ends in .ac.vh.ves.io), and observed on 2026-11-16 on www.f5.com, www.nginx.com and account.f5.com (ves-io-<uuid>.ac.vh.ves.io), as the last name of the chain"
+      }
+    ]
+  }
+}

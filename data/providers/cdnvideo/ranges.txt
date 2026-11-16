@@ -1,0 +1,4 @@
+# Source: none, CDNvideo publishes no usable list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Its public list (https://api.cdnvideo.ru/app/nodes/v2/ip2origin/) holds the nodes that can access origin servers, in a JSON shape of its own ({"status", "data": [{"IPv4_subnet": ...}]}), IPv4 only. Its list of the nodes that serve users (/{account_name}/ip2user/) needs a customer token (https://doc.cdnvideo.ru/en/api_desc/openapi/cdn-node-list-api-v2.yaml).
+# The edges measured on 2026-11-16 for cdn.petshop.ru (151.236.71.249, 151.236.110.233) fall within the origin list (151.236.64.0/18), but resources served abroad can end at another provider's edge (static.smartplacement.io ended at *.trbcdn.net.whecloud.com, in AS54994, with the x-ws-request-id header of Wangsu's CDN), which no CDNvideo list covers. CDNvideo is recognised by its CNAME suffixes.

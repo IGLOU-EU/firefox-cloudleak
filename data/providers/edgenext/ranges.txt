@@ -1,0 +1,4 @@
+# Source: none, EdgeNext publishes no list of the edge addresses browsers connect to
+# Fetched: 2026-11-16
+# No list was found on www.edgenext.com nor in third-party guides, which only say that an origin shield, on by default, narrows the addresses that reach the origin (https://www.cdnplanet.com/guides/origin-shield/).
+# The edges measured on 2026-11-16 mix addresses registered to Edgenext Legend Dynasty Pte. Ltd. (2407:2440:3::1:1e for home.console.edgenext.com, 103.243.92.222 for console.edgenext.com) with addresses whose registration names no company (156.225.108.9 for www.edgenext.com, 154.85.94.17, 82.27.188.23), which may be rented. EdgeNext is recognised by its headers and CNAME suffixes.

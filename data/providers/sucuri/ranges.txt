@@ -1,0 +1,4 @@
+# Source: none, Sucuri publishes no list that covers the IPv4 edge addresses browsers connect to
+# Fetched: 2026-11-16
+# Its only list (192.88.134.0/23, 185.93.228.0/22, 66.248.200.0/22, 208.109.0.0/22, 2a02:fe80::/29), given inside server configuration examples (https://docs.sucuri.net/website-firewall/troubleshooting/same-ip-for-all-users/), holds the firewall addresses that reach origin servers, for these to trust or allow.
+# The IPv4 edges that browsers reached on 2026-11-16 on sucuri.net (192.124.249.16, 192.124.249.21) and webhosting.net (192.124.249.9) fall outside it, in 192.124.249.0/24 (AS30148, Sucuri), which Sucuri names only in prose as the "Firewall IP address, the one starting with 192.124.249.X" (https://docs.sucuri.net/website-firewall/configuration/getting-started/). Only the IPv6 edge of sucuri.net (2a02:fe80:1010::21) falls within 2a02:fe80::/29. Sucuri is recognised by its headers, server value and cookies.
