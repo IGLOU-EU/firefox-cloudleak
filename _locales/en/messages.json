@@ -1,7 +1,7 @@
 {
   "extensionName": {
     "message": "Cloud Leak",
-    "description": "Name of the extension."
+    "description": "Name of the extension, also shown in the about section of the help."
   },
   "extensionDescription": {
     "message": "Shows when your requests go through an intermediary that decrypts them, such as Cloudflare, Akamai or Imperva.",
@@ -257,11 +257,7 @@
   },
   "helpOpen": {
     "message": "Help",
-    "description": "Accessible name and tooltip of the question mark in a circle, at the top right of the popup and of the map, which opens the help."
-  },
-  "helpTitle": {
-    "message": "The levels and how serious they are",
-    "description": "Title of the help window of the popup and of the map, which explains the leak levels and how serious each one is."
+    "description": "Name of the help: accessible name and tooltip of the question mark in a circle, at the top right of the popup and of the map, which opens the help, and title of the help window it opens."
   },
   "helpClose": {
     "message": "Close the help",
@@ -306,6 +302,40 @@
   "helpColours": {
     "message": "In orange, nothing proves that the service reads what goes through. In red, it is proven, it reads it and can change it.",
     "description": "Help, last paragraph: what orange and red say of the proof."
+  },
+  "aboutTitle": {
+    "message": "About",
+    "description": "Title of the about section, at the end of the text of the help window, under a rule."
+  },
+  "aboutVersion": {
+    "message": "Version $VERSION$",
+    "description": "Line of the about section that gives the version of the extension, read from its manifest.",
+    "placeholders": {
+      "version": {
+        "content": "$1",
+        "example": "1.0.0"
+      }
+    }
+  },
+  "aboutLicence": {
+    "message": "Licence GPL-3.0-or-later",
+    "description": "Line of the about section that gives the licence of the extension, by its SPDX identifier, which stays as it is."
+  },
+  "aboutSource": {
+    "message": "Source code on GitLab",
+    "description": "Link of the about section to the source code of the extension on GitLab."
+  },
+  "aboutListing": {
+    "message": "Page on addons.mozilla.org",
+    "description": "Link of the about section to the page of the extension on addons.mozilla.org, the site of Mozilla's add-ons, whose name stays as it is."
+  },
+  "aboutContribute": {
+    "message": "Is a provider missing, or have its details changed? Would you like the extension in your language, or to fix a translation? You can suggest it on GitLab, which asks for an account.",
+    "description": "Paragraph of the about section that invites the user to suggest a provider, an update of one, or a translation, on GitLab, followed by the link that opens an issue."
+  },
+  "aboutIssue": {
+    "message": "Open an issue on GitLab",
+    "description": "Link of the about section that opens a new issue on GitLab, from the template for providers and translations."
   },
   "popupPreferences": {
     "message": "Preferences",

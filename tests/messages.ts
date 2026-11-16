@@ -17,7 +17,6 @@ const ROOT = fileURLToPath(new URL("../../_locales/", import.meta.url));
 export const POPUP_MESSAGES: readonly string[] = [
   // The help, which the map shares.
   "helpOpen",
-  "helpTitle",
   "helpClose",
   "helpRoute",
   "helpHttps",
@@ -59,6 +58,14 @@ export const POPUP_MESSAGES: readonly string[] = [
   "level4",
   "decryptionProven",
   "decryptionUnproven",
+  // The about section, at the end of the help, which the map shares.
+  "aboutTitle",
+  "aboutVersion",
+  "aboutLicence",
+  "aboutSource",
+  "aboutListing",
+  "aboutContribute",
+  "aboutIssue",
 ];
 
 // The messages of the preferences page.

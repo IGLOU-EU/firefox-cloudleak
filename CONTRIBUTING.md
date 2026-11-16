@@ -184,13 +184,14 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 | `data/consent-cookies.json` | The cookies of known consent and audience-measurement tools (see [Provider data](#provider-data)) |
 | `scripts/` | The build and the maintenance scripts, which run in Node on the development machine only |
 | `tests/` | The tests, run by the Node test runner |
+| `.gitlab/issue_templates/` | The template of the issue that the about section of the help opens, to suggest a provider or a translation |
 | `manifest.json`, `_locales/`, `icons/`, `popup/`, `options/`, `map/` | Copied into the extension as they are |
 
 The adapters cover the requests, the tabs and their documents, the site of a document, the kept counts, the ignored sites, the settings and the recorded addresses, the answers to the pages of the extension, the popup page, the preferences page, the map and what the pages share, the toolbar icon, DNS and the permissions.
 
 The folders copied as they are:
 
-- `icons/`: the toolbar states of the validated mock-up, drawn as SVG.
+- `icons/`: the toolbar states of the validated mock-up, drawn as SVG, and `logo.svg`, the logo of the about section of the help.
 - `popup/`: the page and the style of the window the toolbar button opens, whose script is `src/popup.ts`.
 - `options/`: the page and the style of the preferences, which Firefox shows in the tab of the extension in the add-ons manager, whose script is `src/options.ts`.
 - `map/`: the page and the style of the map, which the window opens in a tab, whose script is `src/map.ts` and whose view is `src/core/map-view.ts`.
