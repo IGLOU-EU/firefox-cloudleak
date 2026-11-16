@@ -329,6 +329,30 @@ function settled(): Promise<void> {
   return new Promise((done) => setImmediate(done));
 }
 
+// What Firefox answers to webNavigation.getFrame: the frame given for a tab,
+// a failure given as an error, and null for any other tab.
+function frames(entries: Record<number, Frame | Error>): void {
+  frameOf = (tabId) => {
+    const frame = entries[tabId] ?? null;
+    return frame instanceof Error
+      ? Promise.reject(frame)
+      : Promise.resolve(frame);
+  };
+}
+
+// Holds every read of storage.local until the returned function is called.
+function slowReads(): () => Promise<void> {
+  let open = () => {};
+  localReadGate = new Promise<void>((done) => {
+    open = done;
+  });
+  return async () => {
+    localReadGate = null;
+    open();
+    await settled();
+  };
+}
+
 // Firefox delivers a webNavigation event to a listener only when its URL
 // passes the filter the listener was added with (ext-webNavigation.js and
 // MatchURLFilters.sys.mjs, Firefox 159.0.1). Only the schemes are read here,
@@ -385,22 +409,26 @@ function nextId(): string {
   return `r${lastId}`;
 }
 
-// The requests go to the host of the site, whose CNAME names no provider.
+// A request of a tab, of a private window when incognito. It goes to the host
+// of the site, whose CNAME names no provider, unless another URL is given.
 async function send(
   tabId: number,
   requestId: string,
   type: string,
   timeStamp: number,
   cookie = false,
+  url = "https://site.example/account",
+  incognito = false,
 ): Promise<void> {
   await requests.onSendHeaders({
     tabId,
     requestId,
     type,
     timeStamp,
-    url: "https://site.example/account",
+    url,
     method: "GET",
     requestHeaders: cookie ? [{ name: "Cookie", value: "sid=1" }] : [],
+    ...(incognito ? { incognito: true } : {}),
   });
 }
 
@@ -440,26 +468,49 @@ async function exchange(
   return requestId;
 }
 
-// An image of a private window through the edge.
+// A request of a private window through the edge, an image unless another
+// type is given.
 async function privateExchange(
   tabId: number,
   requestId: string,
   timeStamp: number,
+  type = "image",
 ): Promise<void> {
-  await requests.onSendHeaders({
+  await send(
     tabId,
     requestId,
-    type: "image",
+    type,
     timeStamp,
-    url: "https://site.example/logo.png",
-    method: "GET",
-    requestHeaders: [],
-    incognito: true,
-  });
+    false,
+    "https://site.example/logo.png",
+    true,
+  );
   await requests.onResponseStarted({
-    ...response(tabId, requestId, "image", timeStamp + 1, EDGE_IP),
+    ...response(tabId, requestId, type, timeStamp + 1, EDGE_IP),
     incognito: true,
   });
+}
+
+// A request of the tab to a host whose canonical name is not known yet, sent
+// apart from the site, such as a library a page loads from a CDN.
+async function exchangeTo(
+  host: string,
+  tabId: number,
+  type: string,
+  timeStamp: number,
+): Promise<void> {
+  const requestId = nextId();
+  await send(
+    tabId,
+    requestId,
+    type,
+    timeStamp,
+    false,
+    `https://${host}/lib.js`,
+  );
+  await requests.onResponseStarted(
+    response(tabId, requestId, type, timeStamp + 1, OTHER_IP),
+  );
 }
 
 async function commit(
@@ -513,6 +564,18 @@ function sentSince(tabId: number, mark: number): Call["kind"][] {
 function iconOf(tabId: number) {
   const { icon, badge } = shown(tabId);
   return { icon, badge };
+}
+
+async function popup(tabId: number, privateWindow = false): Promise<PopupData> {
+  return (await answer({
+    kind: "popup",
+    tabId,
+    privateWindow,
+  })) as PopupData;
+}
+
+function siteCounts(site: string): SiteCounts | undefined {
+  return local.get(`site:${site}`) as SiteCounts | undefined;
 }
 
 const RED = { icon: "/icons/red.svg", badge: "1" };
@@ -722,7 +785,7 @@ describe("a tab restored at the start of the browser", () => {
   // sees the end of the load alone: responses whose requests it missed, then
   // the completion of a document whose commit it missed.
   async function restored(tab: number, url: string): Promise<void> {
-    frameOf = (tabId) => Promise.resolve(tabId === tab ? { url } : null);
+    frames({ [tab]: { url } });
     await requests.onResponseStarted(
       response(tab, nextId(), "image", 1000, OTHER_IP),
     );
@@ -952,11 +1015,10 @@ describe("a page of the browser, without the access to all sites", () => {
 
   it("shows neutral a page of the browser open before the extension started, once Firefox gives its URL", async () => {
     const tab = 740;
-    frameOf = (tabId) =>
-      Promise.resolve(tabId === tab ? { url: "about:newtab" } : null);
+    frames({ [tab]: { url: "about:newtab" } });
     try {
       await statusWithoutUrl(tab);
-      await new Promise((done) => setImmediate(done));
+      await settled();
       mock.timers.runAll();
       assert.deepEqual(iconOf(tab), NEUTRAL);
       assert.equal(shown(tab).title, "titleNeutral");
@@ -995,28 +1057,6 @@ describe("a closed tab", () => {
     assert.equal(session.has(`tab:${CLOSED_AT_WAKE_UP}`), false);
   });
 });
-
-// A host that resolves to the edge, sent apart from the site so that its
-// canonical name is not known yet.
-async function exchangeWith(
-  host: string,
-  tabId: number,
-  timeStamp: number,
-): Promise<void> {
-  const requestId = nextId();
-  await requests.onSendHeaders({
-    tabId,
-    requestId,
-    type: "image",
-    timeStamp,
-    url: `https://${host}/logo.png`,
-    method: "GET",
-    requestHeaders: [],
-  });
-  await requests.onResponseStarted(
-    response(tabId, requestId, "image", timeStamp + 1, OTHER_IP),
-  );
-}
 
 const MINUTE = 60_000;
 
@@ -1092,11 +1132,11 @@ describe("the canonical name of a host", () => {
     resolve = () => Promise.reject(new Error("NS_ERROR_UNKNOWN_HOST"));
     const errors = mock.method(console, "error", () => {});
     try {
-      await exchangeWith("late.example", tab, 1100);
+      await exchangeTo("late.example", tab, "image", 1100);
       resolve = () => Promise.resolve({ canonicalName: "c.edge.example.net" });
-      await exchangeWith("late.example", tab, 1100 + MINUTE - 1);
+      await exchangeTo("late.example", tab, "image", 1100 + MINUTE - 1);
       assert.equal(tabs.recordOf(tab).state.kind, "neutral");
-      await exchangeWith("late.example", tab, 1100 + MINUTE);
+      await exchangeTo("late.example", tab, "image", 1100 + MINUTE);
       assert.equal(tabs.recordOf(tab).state.kind, "seen");
       assert.deepEqual(
         resolved.filter((host) => host === "late.example"),
@@ -1153,18 +1193,6 @@ describe("the site of a document", () => {
 });
 
 describe("the kept counts", () => {
-  function siteCounts(site: string): SiteCounts | undefined {
-    return local.get(`site:${site}`) as SiteCounts | undefined;
-  }
-
-  async function popup(tab: number, privateWindow = false): Promise<PopupData> {
-    return (await answer({
-      kind: "popup",
-      tabId: tab,
-      privateWindow,
-    })) as PopupData;
-  }
-
   it("start when the extension first runs, before anything is counted", async () => {
     assert.equal(local.get("since"), dayOf(INSTALLED_AT));
     assert.equal((await popup(1100)).since, dayOf(INSTALLED_AT));
@@ -1288,20 +1316,7 @@ describe("the kept counts", () => {
     const site = "t1150.example";
     mock.timers.runAll();
     const writes = localWrites.length;
-    await requests.onSendHeaders({
-      tabId: tab,
-      requestId: "private-1",
-      type: "main_frame",
-      timeStamp: 1000,
-      url: "https://site.example/account",
-      method: "GET",
-      requestHeaders: [],
-      incognito: true,
-    });
-    await requests.onResponseStarted({
-      ...response(tab, "private-1", "main_frame", 1001, EDGE_IP),
-      incognito: true,
-    });
+    await privateExchange(tab, "private-1", 1000, "main_frame");
     await commit(tab, "doc-1150", 1010, [], `https://${site}/`);
     mock.timers.runAll();
     assert.equal(siteCounts(site), undefined);
@@ -1466,14 +1481,6 @@ describe("the counts of a site, read when first needed", () => {
     return { edge: { blue2: { "GET image": count } } };
   }
 
-  async function popup(tab: number): Promise<PopupData> {
-    return (await answer({
-      kind: "popup",
-      tabId: tab,
-      privateWindow: false,
-    })) as PopupData;
-  }
-
   // A new run of the event page, which reads storage as a wake-up does.
   async function wake(
     name: string,
@@ -1491,19 +1498,6 @@ describe("the counts of a site, read when first needed", () => {
         session.set("privateCounts", privateBefore);
       }
     }
-  }
-
-  // Holds every read of storage.local until the returned function is called.
-  function slowReads(): () => Promise<void> {
-    let open = () => {};
-    localReadGate = new Promise<void>((done) => {
-      open = done;
-    });
-    return async () => {
-      localReadGate = null;
-      open();
-      await settled();
-    };
   }
 
   it("counts the requests of a burst that wakes the page after the counts stored before, reading them once", async () => {
@@ -1648,34 +1642,8 @@ describe("a tab the extension has not seen navigate", () => {
     frameOf = NO_FRAME;
   });
 
-  function siteCounts(site: string): SiteCounts | undefined {
-    return local.get(`site:${site}`) as SiteCounts | undefined;
-  }
-
   function readsOf(tabId: number) {
     return frameReads.filter((read) => read.tabId === tabId);
-  }
-
-  async function popup(tabId: number): Promise<PopupData> {
-    return (await answer({
-      kind: "popup",
-      tabId,
-      privateWindow: false,
-    })) as PopupData;
-  }
-
-  // Firefox answers getFrame after the request that made the page ask.
-  function answered(): Promise<void> {
-    return new Promise((done) => setImmediate(done));
-  }
-
-  function frames(entries: Record<number, Frame | Error>): void {
-    frameOf = (tabId) => {
-      const frame = entries[tabId] ?? null;
-      return frame instanceof Error
-        ? Promise.reject(frame)
-        : Promise.resolve(frame);
-    };
   }
 
   // A frame Firefox gives only when the test lets it.
@@ -1694,7 +1662,7 @@ describe("a tab the extension has not seen navigate", () => {
     const tab = 1400;
     frames({ [tab]: { url: "https://www.t1400.example/live?channel=1" } });
     await exchange(tab, "image", 1100, EDGE_IP);
-    await answered();
+    await settled();
     await exchange(tab, "script", 1200, EDGE_IP);
     mock.timers.runAll();
     assert.deepEqual(readsOf(tab), [{ tabId: tab, frameId: 0 }]);
@@ -1718,7 +1686,7 @@ describe("a tab the extension has not seen navigate", () => {
     assert.equal(siteCounts("t1401.example"), undefined);
     assert.equal(tabs.recordOf(tab).uncounted.length, 2);
     give({ url: "https://t1401.example/" });
-    await answered();
+    await settled();
     mock.timers.runAll();
     assert.deepEqual(siteCounts("t1401.example"), {
       edge: { blue2: { "GET image": 2 } },
@@ -1733,7 +1701,7 @@ describe("a tab the extension has not seen navigate", () => {
     mock.timers.runAll();
     const writes = localWrites.length;
     await exchange(tab, "image", 1100, EDGE_IP);
-    await answered();
+    await settled();
     mock.timers.runAll();
     assert.equal(tabs.recordOf(tab).page, "browser");
     assert.equal(tabs.recordOf(tab).site, null);
@@ -1775,12 +1743,12 @@ describe("a tab the extension has not seen navigate", () => {
     const tab = 1403;
     frames({});
     await exchange(tab, "image", 1100, EDGE_IP);
-    await answered();
+    await settled();
     mock.timers.runAll();
     assert.equal(tabs.recordOf(tab).site, null);
     assert.deepEqual(tabs.recordOf(tab).uncounted, []);
     await exchange(tab, "image", 1200, EDGE_IP);
-    await answered();
+    await settled();
     assert.equal(readsOf(tab).length, 1);
     const data = await popup(tab);
     assert.equal(data.page, "site");
@@ -1794,9 +1762,9 @@ describe("a tab the extension has not seen navigate", () => {
     const errors = mock.method(console, "error", () => {});
     try {
       await exchange(tab, "image", 1100, EDGE_IP);
-      await answered();
+      await settled();
       await exchange(tab, "image", 1200, EDGE_IP);
-      await answered();
+      await settled();
       mock.timers.runAll();
       assert.equal(errors.mock.callCount(), 1);
       assert.match(
@@ -1816,7 +1784,7 @@ describe("a tab the extension has not seen navigate", () => {
     await exchange(tab, "image", 1100, EDGE_IP);
     await commit(tab, "doc-1405", 1200, [], "https://t1405.example/");
     give({ url: "https://t1405.example/" });
-    await answered();
+    await settled();
     mock.timers.runAll();
     const record = tabs.recordOf(tab);
     assert.equal(record.site, "t1405.example");
@@ -1929,7 +1897,7 @@ describe("the counts of a private session", () => {
     assert.equal(registered.length, 1);
     openWindows = [NORMAL];
     registered[0]?.(5);
-    await new Promise((done) => setImmediate(done));
+    await settled();
     assert.deepEqual(await counts.totals(site, true), {});
   });
 
@@ -2081,37 +2049,6 @@ describe("a site the user ignores", () => {
     return (await answer({ kind: "unignoreSite", site })) as IgnoredData;
   }
 
-  async function popup(tabId: number, privateWindow = false) {
-    return (await answer({
-      kind: "popup",
-      tabId,
-      privateWindow,
-    })) as PopupData;
-  }
-
-  // A request of the tab to a host whose canonical name is not known yet,
-  // such as a library a page loads from a CDN.
-  async function exchangeTo(
-    host: string,
-    tabId: number,
-    type: string,
-    timeStamp: number,
-  ): Promise<void> {
-    const requestId = nextId();
-    await requests.onSendHeaders({
-      tabId,
-      requestId,
-      type,
-      timeStamp,
-      url: `https://${host}/lib.js`,
-      method: "GET",
-      requestHeaders: [],
-    });
-    await requests.onResponseStarted(
-      response(tabId, requestId, type, timeStamp + 1, OTHER_IP),
-    );
-  }
-
   function resolutionsOf(host: string): string[] {
     return resolved.filter((entry) => entry === host);
   }
@@ -2204,15 +2141,14 @@ describe("a site the user ignores", () => {
     const site = "t1512.example";
     await commit(tab, "doc-1512", 1000, [], `https://${site}/`);
     const requestId = nextId();
-    await requests.onSendHeaders({
-      tabId: tab,
+    await send(
+      tab,
       requestId,
-      type: "script",
-      timeStamp: 1100,
-      url: "https://cdn1512.example/lib.js",
-      method: "GET",
-      requestHeaders: [],
-    });
+      "script",
+      1100,
+      false,
+      "https://cdn1512.example/lib.js",
+    );
     await ignore(site);
     await requests.onResponseStarted(
       response(tab, requestId, "script", 1101, OTHER_IP),
@@ -2256,15 +2192,12 @@ describe("a site the user ignores", () => {
     const tab = 1530;
     const site = "t1530.example";
     await ignore(site);
-    frameOf = (tabId) =>
-      Promise.resolve(
-        tabId === tab ? { url: `https://www.${site}/live` } : null,
-      );
+    frames({ [tab]: { url: `https://www.${site}/live` } });
     try {
       mock.timers.runAll();
       const writes = localWrites.length;
       await exchange(tab, "image", 1100, EDGE_IP);
-      await new Promise((done) => setImmediate(done));
+      await settled();
       mock.timers.runAll();
       const record = tabs.recordOf(tab);
       assert.equal(record.site, site);
@@ -2467,14 +2400,6 @@ describe("a site the user ignores", () => {
 describe("the map", () => {
   async function map(privateWindow: boolean): Promise<MapData> {
     return (await answer({ kind: "map", privateWindow })) as MapData;
-  }
-
-  async function popup(tab: number, privateWindow = false): Promise<PopupData> {
-    return (await answer({
-      kind: "popup",
-      tabId: tab,
-      privateWindow,
-    })) as PopupData;
   }
 
   function storedSites(): string[] {
@@ -3150,17 +3075,13 @@ describe("the recording of addresses", () => {
     // The counts of the site are read, and not its addresses.
     await load(tab, `https://${site}/logo.png`, { type: "image" });
     await flush();
-    let open = () => {};
-    localReadGate = new Promise<void>((done) => {
-      open = done;
-    });
+    const finishRead = slowReads();
     try {
       await load(tab, `https://api.${site}/during`, { cookie: true });
       assert.deepEqual(localReads.at(-1), [`addresses:${site}`]);
       await answer({ kind: "clearSite", site, privateWindow: false });
     } finally {
-      localReadGate = null;
-      open();
+      await finishRead();
     }
     await flush();
     assert.equal(local.has(`addresses:${site}`), false);

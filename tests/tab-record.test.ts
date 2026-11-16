@@ -28,6 +28,7 @@ import {
   takeCountable,
 } from "../src/core/tab-record.js";
 import {
+  addRequest,
   IGNORED,
   markMissed,
   markPartial,
@@ -48,6 +49,18 @@ const RED_4: Classification = {
 };
 
 const SITE = "site.example";
+
+// A tab whose first navigation is pending, which showed nothing before it.
+const FIRST_NAVIGATION: TabRecord = {
+  document: null,
+  shownAt: 0,
+  navigation: "1",
+  state: NEUTRAL,
+  page: "site",
+  site: null,
+  uncounted: [],
+  previous: [],
+};
 
 // A request through a provider, as the kept counts take it.
 function sent(
@@ -72,26 +85,14 @@ function fold(
   );
 }
 
+// A tab that saw one request, from a neutral state that was partial or missed
+// requests or neither.
 function seen(
   request: Classification,
   partial = false,
   missed = false,
 ): TabState {
-  const level = request.leak.level;
-  const tallies = [
-    { level, proven: level <= 2 ? null : request.proven, count: 1 },
-  ];
-  const leak = request.leak;
-  const sighting = request.proven ? "proven" : "unproven";
-  return {
-    kind: "seen",
-    request,
-    tallies,
-    session: leak.level === 4 && leak.case === "session" ? sighting : "none",
-    antiBot: leak.level === 4 && leak.challenge ? sighting : "none",
-    partial,
-    missed,
-  };
+  return addRequest({ kind: "neutral", partial, missed }, request);
 }
 
 // A page loaded by a top-level request the extension saw: the request is
@@ -541,17 +542,7 @@ describe("navigationAt", () => {
   });
 
   it("gives a request to a pending navigation when the tab showed nothing before it", () => {
-    const record: TabRecord = {
-      document: null,
-      shownAt: 0,
-      navigation: "1",
-      state: NEUTRAL,
-      page: "site",
-      site: null,
-      uncounted: [],
-      previous: [],
-    };
-    assert.equal(navigationAt(record, 50), "1");
+    assert.equal(navigationAt(FIRST_NAVIGATION, 50), "1");
   });
 
   it("gives a request to the wait for a site out of reach, which the tab shows at once", () => {
@@ -1029,17 +1020,7 @@ describe("displayedDocument", () => {
   });
 
   it("is the pending navigation when the tab showed nothing before it", () => {
-    const record: TabRecord = {
-      document: null,
-      shownAt: 0,
-      navigation: "1",
-      state: NEUTRAL,
-      page: "site",
-      site: null,
-      uncounted: [],
-      previous: [],
-    };
-    assert.equal(displayedDocument(record), record);
+    assert.equal(displayedDocument(FIRST_NAVIGATION), FIRST_NAVIGATION);
   });
 });
 

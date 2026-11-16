@@ -62,6 +62,19 @@ const VALID_RANGES = `# Source: https://example.com/ips-v4
 2001:DB8::/32
 `;
 
+const root = mkdtempSync(join(tmpdir(), "providers-"));
+after(() => rmSync(root, { recursive: true, force: true }));
+
+// A folder of data files, each written at its path, removed after the tests.
+function folder(name: string, files: Record<string, string>): string {
+  const dir = join(root, name);
+  for (const [file, content] of Object.entries(files)) {
+    mkdirSync(join(dir, file, ".."), { recursive: true });
+    writeFileSync(join(dir, file), content);
+  }
+  return dir;
+}
+
 function providerErrors(text: string): DataError[] {
   return parseProviderJson(text, "provider.json").errors;
 }
@@ -789,18 +802,6 @@ describe("readPublishedList", () => {
 });
 
 describe("loadProviders", () => {
-  const root = mkdtempSync(join(tmpdir(), "providers-"));
-  after(() => rmSync(root, { recursive: true, force: true }));
-
-  function folder(name: string, files: Record<string, string>): string {
-    const dir = join(root, name);
-    for (const [file, content] of Object.entries(files)) {
-      mkdirSync(join(dir, file, ".."), { recursive: true });
-      writeFileSync(join(dir, file), content);
-    }
-    return dir;
-  }
-
   it("builds the table from every folder, sorted by id", () => {
     const dir = folder("valid", {
       "zeta/provider.json":
@@ -964,30 +965,17 @@ describe("tableLiteral", () => {
   }
 
   it("writes the table so that the module gives it back, every range parsed", async () => {
-    const dir = mkdtempSync(join(tmpdir(), "cloudleak-literal-"));
-    try {
-      mkdirSync(join(dir, "providers", "example"), { recursive: true });
-      writeFileSync(
-        join(dir, "providers", "example", "provider.json"),
-        VALID_PROVIDER,
-      );
-      writeFileSync(
-        join(dir, "providers", "example", "ranges.txt"),
-        VALID_RANGES,
-      );
-      writeFileSync(join(dir, "consent-cookies.json"), VALID_CONSENT);
-      const { table, errors } = loadTable(dir);
-      assert.deepEqual(errors, []);
-      const loaded = await load(table);
-      assert.deepEqual(loaded, table);
-      assert.equal(
-        typeof loaded.providers[0]?.ranges.ipv6[0]?.network,
-        "bigint",
-      );
-      assert.doesNotMatch(tableLiteral(table), /192\.0\.2\.0|2001:db8/);
-    } finally {
-      rmSync(dir, { recursive: true, force: true });
-    }
+    const dir = folder("literal", {
+      "providers/example/provider.json": VALID_PROVIDER,
+      "providers/example/ranges.txt": VALID_RANGES,
+      "consent-cookies.json": VALID_CONSENT,
+    });
+    const { table, errors } = loadTable(dir);
+    assert.deepEqual(errors, []);
+    const loaded = await load(table);
+    assert.deepEqual(loaded, table);
+    assert.equal(typeof loaded.providers[0]?.ranges.ipv6[0]?.network, "bigint");
+    assert.doesNotMatch(tableLiteral(table), /192\.0\.2\.0|2001:db8/);
   });
 
   it("writes a text as JSON writes it, quotes and line breaks included", async () => {

@@ -348,58 +348,45 @@ describe("the addresses of the panel of a site on the map", () => {
     assert.deepEqual(page.listed(), [...STYLES].sort());
   });
 
-  it("draws the panel once when the tab comes back into view and the addresses kept are the same", async () => {
-    let gate: Promise<void> = Promise.resolve();
-    const page = await open({
-      addresses: async () => {
-        await gate;
-        return ADDRESSES;
+  // What makes the page ask again for the addresses of the site it shows.
+  const askings: [string, (page: Opened) => Promise<void>][] = [
+    ["the tab comes back into view", (page) => page.comeBack()],
+    [
+      "its site is chosen again",
+      async (page) => {
+        page.chooseSite();
+        await settled();
       },
-    });
-    page.chooseSite();
-    await settled();
-    page.kinds()[0]?.click();
-    let release = () => {};
-    gate = new Promise((done) => {
-      release = done;
-    });
-    await page.comeBack();
-    const list = page.element("panel-content").querySelector("ul.addresses");
-    assert.ok(list);
-    release();
-    await settled();
-    assert.equal(
-      page.element("panel-content").querySelector("ul.addresses"),
-      list,
-    );
-  });
+    ],
+  ];
 
-  it("draws the panel once when its site is chosen again and the addresses kept are the same", async () => {
-    let gate: Promise<void> = Promise.resolve();
-    const page = await open({
-      addresses: async () => {
-        await gate;
-        return ADDRESSES;
-      },
+  for (const [name, ask] of askings) {
+    it(`draws the panel once when ${name} and the addresses kept are the same`, async () => {
+      let gate: Promise<void> = Promise.resolve();
+      const page = await open({
+        addresses: async () => {
+          await gate;
+          return ADDRESSES;
+        },
+      });
+      page.chooseSite();
+      await settled();
+      page.kinds()[0]?.click();
+      let release = () => {};
+      gate = new Promise((done) => {
+        release = done;
+      });
+      await ask(page);
+      const list = page.element("panel-content").querySelector("ul.addresses");
+      assert.ok(list);
+      release();
+      await settled();
+      assert.equal(
+        page.element("panel-content").querySelector("ul.addresses"),
+        list,
+      );
     });
-    page.chooseSite();
-    await settled();
-    page.kinds()[0]?.click();
-    let release = () => {};
-    gate = new Promise((done) => {
-      release = done;
-    });
-    page.chooseSite();
-    await settled();
-    const list = page.element("panel-content").querySelector("ul.addresses");
-    assert.ok(list);
-    release();
-    await settled();
-    assert.equal(
-      page.element("panel-content").querySelector("ul.addresses"),
-      list,
-    );
-  });
+  }
 
   it("draws the list again when the addresses kept changed", async () => {
     const more = "https://cdn.example.net/assets/print.css";

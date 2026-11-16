@@ -22,50 +22,38 @@ const { table, errors } = loadTable(DATA);
 
 const CLOUDFLARE_IP = "104.16.0.1";
 
-// A script loaded through a Cloudflare edge, at level 2: each test changes
+// A script fetched from an address no provider publishes: each test changes
 // only the facts it is about.
+function facts(changes: Partial<RequestFacts>): RequestFacts {
+  return {
+    method: "GET",
+    type: "script",
+    tls: true,
+    host: "www.example.org",
+    path: "/app.js",
+    queryNames: [],
+    ip: "192.0.2.1",
+    cookies: [],
+    authorization: false,
+    responseHeaders: [],
+    setCookies: [],
+    ...changes,
+  };
+}
+
+// The same script loaded through a Cloudflare edge, at level 2.
 function leakOf(changes: Partial<RequestFacts>): Leak | null {
   const result = classifyRequest(
-    {
-      method: "GET",
-      type: "script",
-      tls: true,
-      host: "www.example.org",
-      path: "/app.js",
-      queryNames: [],
-      ip: CLOUDFLARE_IP,
-      cookies: [],
-      authorization: false,
-      responseHeaders: [],
-      setCookies: [],
-      ...changes,
-    },
+    facts({ ip: CLOUDFLARE_IP, ...changes }),
     table,
   );
   assert.equal(result?.provider, "cloudflare");
   return result?.leak ?? null;
 }
 
-// A script fetched from an address no provider publishes: each test adds
-// only the signal it is about.
+// The same script, with only the signal a test is about.
 function classify(changes: Partial<RequestFacts>) {
-  return classifyRequest(
-    {
-      method: "GET",
-      type: "script",
-      tls: true,
-      host: "www.example.org",
-      path: "/app.js",
-      queryNames: [],
-      ip: "192.0.2.1",
-      cookies: [],
-      authorization: false,
-      responseHeaders: [],
-      setCookies: [],
-      ...changes,
-    },
-    table,
-  );
+  return classifyRequest(facts(changes), table);
 }
 
 const CHALLENGE: Leak = { level: 4, case: "data-sent", challenge: true };

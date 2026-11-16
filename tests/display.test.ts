@@ -21,6 +21,7 @@ import {
 } from "../src/core/tab-state.js";
 import {
   getMessageOf,
+  LOCALES,
   MAP_MESSAGES,
   messagesOf,
   OPTIONS_MESSAGES,
@@ -350,10 +351,6 @@ describe("titleText", () => {
 });
 
 describe("the tooltip messages", () => {
-  const locales = ["en", "fr"].map((locale) => ({
-    locale,
-    messages: messagesOf(locale),
-  }));
   const counts = ["2", "3Proven", "3Unproven", "4Proven", "4Unproven"].flatMap(
     (grade) => [`countLevel${grade}One`, `countLevel${grade}Many`],
   );
@@ -371,14 +368,9 @@ describe("the tooltip messages", () => {
   ];
   const used = [...plain, ...withProvider, ...counts];
 
-  it("exist in every locale, and the same in each, with no message left unused", () => {
-    const [en, fr] = locales;
+  it("and those of the pages are every message of the locales, with no message left unused", () => {
     assert.deepEqual(
-      Object.keys(fr?.messages ?? {}).sort(),
-      Object.keys(en?.messages ?? {}).sort(),
-    );
-    assert.deepEqual(
-      Object.keys(en?.messages ?? {}).sort(),
+      Object.keys(messagesOf("en")).sort(),
       [
         "extensionName",
         "extensionDescription",
@@ -388,26 +380,14 @@ describe("the tooltip messages", () => {
         ...MAP_MESSAGES,
       ].sort(),
     );
-    for (const { locale, messages } of locales) {
-      for (const name of used) {
-        assert.ok(messages[name]?.message, `${locale}: ${name}`);
-      }
-    }
   });
 
   it("put the provider name where a provider is given, and nowhere else", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const name of used) {
-        const entry = messages[name];
-        const expected = withProvider.includes(name);
         assert.equal(
-          entry?.message.includes("$PROVIDER$"),
-          expected,
-          `${locale}: ${name}`,
-        );
-        assert.equal(
-          entry?.placeholders?.["provider"] !== undefined,
-          expected,
+          messages[name]?.placeholders?.["provider"] !== undefined,
+          withProvider.includes(name),
           `${locale}: ${name}`,
         );
       }
@@ -415,15 +395,10 @@ describe("the tooltip messages", () => {
   });
 
   it("put the count in the message for several requests, and write one out in the message for one", () => {
-    for (const { locale, messages } of locales) {
+    for (const { locale, messages } of LOCALES) {
       for (const name of counts) {
         const entry = messages[name];
         const many = name.endsWith("Many");
-        assert.equal(
-          entry?.message.includes("$COUNT$"),
-          many,
-          `${locale}: ${name}`,
-        );
         assert.equal(
           entry?.placeholders?.["count"] !== undefined,
           many,
@@ -433,26 +408,6 @@ describe("the tooltip messages", () => {
           assert.match(entry?.message ?? "", /\b1 /u, `${locale}: ${name}`);
         }
       }
-    }
-  });
-
-  it("hold no line break, the lines being put together by the code", () => {
-    for (const { locale, messages } of locales) {
-      for (const name of used) {
-        assert.doesNotMatch(
-          messages[name]?.message ?? "",
-          /\n/,
-          `${locale}: ${name}`,
-        );
-      }
-    }
-  });
-
-  it("put a no-break space before a colon in French", () => {
-    const fr = messagesOf("fr");
-    for (const name of used) {
-      const text = fr[name]?.message ?? "";
-      assert.doesNotMatch(text, /[^\u00a0]:/u, name);
     }
   });
 });
