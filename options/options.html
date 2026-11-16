@@ -55,5 +55,17 @@
     <p id="limit-error" class="error" role="alert" data-message="optionsLimitError" hidden></p>
   </div>
 </section>
+<!-- Hidden until the event page gives the settings, as the recording is. -->
+<section id="dynamic" class="record" hidden>
+  <!-- biome-ignore lint/a11y/useHeadingContent: the script writes the title from _locales. -->
+  <h2 data-message="optionsDynamic"></h2>
+  <div class="choices">
+    <!-- biome-ignore lint/a11y/noLabelWithoutControl: the script writes the label from _locales. -->
+    <label><input type="checkbox" id="dynamic-on" aria-describedby="dynamic-text dynamic-help"><span data-message="optionsDynamicOn"></span></label>
+  </div>
+  <p id="dynamic-text" class="intro" data-message="optionsDynamicText"></p>
+  <p id="dynamic-help" class="help" data-message="optionsDynamicHelp"></p>
+  <p id="dynamic-purged" class="status" role="status" data-message="optionsDynamicPurged" hidden></p>
+</section>
 </body>
 </html>

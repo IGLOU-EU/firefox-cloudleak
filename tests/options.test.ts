@@ -117,7 +117,7 @@ async function open(options: Options = {}): Promise<Opened> {
             settings = {
               record: request.record,
               recordLimit: request.recordLimit,
-              dynamic: false,
+              dynamic: request.dynamic,
             };
             return settings;
           default:
@@ -565,5 +565,56 @@ describe("the recording of addresses in the preferences", () => {
     } finally {
       errors.mock.restore();
     }
+  });
+
+  it("shows the dynamic detection as the event page keeps it, off by default", async () => {
+    const off = await open();
+    assert.equal(off.element("dynamic").hidden, false);
+    assert.equal(off.element("dynamic-on").checked, false);
+    assert.equal(off.element("dynamic-purged").hidden, true);
+    const on = await open({
+      settings: { record: "none", recordLimit: 100, dynamic: true },
+    });
+    assert.equal(on.element("dynamic-on").checked, true);
+  });
+
+  it("turns the dynamic detection on and off at once, and says the supposed providers are purged only after it is turned off", async () => {
+    const page = await open({
+      settings: { record: "level4", recordLimit: 30, dynamic: false },
+    });
+    const box = page.element("dynamic-on");
+    box.checked = true;
+    box.dispatch("change");
+    await settled();
+    assert.equal(box.checked, true);
+    assert.equal(page.element("dynamic-purged").hidden, true);
+    box.checked = false;
+    box.dispatch("change");
+    await settled();
+    assert.deepEqual(page.sent.slice(LOADED.length), [
+      { kind: "setSettings", record: "level4", recordLimit: 30, dynamic: true },
+      {
+        kind: "setSettings",
+        record: "level4",
+        recordLimit: 30,
+        dynamic: false,
+      },
+    ]);
+    assert.equal(box.checked, false);
+    assert.equal(page.element("dynamic-purged").hidden, false);
+    // The recording is left as it was.
+    assert.deepEqual(page.record().checked, ["record-level4"]);
+    page.pick("record-level3and4");
+    await settled();
+    assert.equal(page.element("dynamic-purged").hidden, true);
+  });
+
+  it("shows the dynamic detection as kept again when its change fails", async () => {
+    const page = await open({ settingsFail: true });
+    const box = page.element("dynamic-on");
+    box.checked = true;
+    box.dispatch("change");
+    await settled();
+    assert.equal(box.checked, false);
   });
 });

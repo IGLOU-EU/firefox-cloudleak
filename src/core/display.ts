@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Adrien Kara
 
 import type { Colour } from "./classify.js";
+import { isSupposed } from "./supposed.js";
 import {
   colourOfRequest,
   type Sighting,
@@ -52,9 +53,10 @@ export function displayOf(
     return { icon: "neutral", badge: "", title: [[line("titleIgnored")]] };
   }
   const request = state.request;
-  const provider =
-    providers.find((entry) => entry.id === request.provider)?.name ??
-    request.provider;
+  const known = providers.find((entry) => entry.id === request.provider);
+  const provider = known?.name ?? request.provider;
+  // A supposed provider is named by a domain, and the line says it is one.
+  const supposed = known === undefined && isSupposed(request.provider);
   const colour = colourOfRequest(request);
   return {
     icon: colour,
@@ -62,7 +64,7 @@ export function displayOf(
     title: [
       state.tallies.map(countLine),
       [
-        line(MEANING[colour], provider),
+        line(`${MEANING[colour]}${supposed ? "Supposed" : ""}`, provider),
         ...sightingLines("titleSession", state.session),
         ...sightingLines("titleAntiBot", state.antiBot),
         ...partialLines(state),

@@ -32,6 +32,7 @@ import {
   selectionOf,
   toggled,
   toolsOf,
+  UNKNOWN_COUNTRY,
   withoutLimit,
 } from "../src/core/map-view.js";
 import type { MapData, SiteCounts } from "../src/core/popup-message.js";
@@ -1272,6 +1273,89 @@ describe("the map of a private window", () => {
       fastly: 11,
       akamai: 2,
     });
+  });
+});
+
+describe("a supposed provider on the map", () => {
+  const SUPPOSED = prepare(
+    data({
+      "a.example": {
+        cloudflare: { blue2: { "GET script": 1 } },
+        "b-cdn.net": { orange3: { "GET xmlhttprequest": 2 } },
+      },
+      "b.example": { "b-cdn.net": { blue2: { "GET image": 1 } } },
+      "c.example": { "old-cdn": { blue2: { "GET image": 1 } } },
+    }),
+    PROVIDERS,
+    FR,
+  );
+
+  it("has a question mark in place of a flag, and says it is supposed", () => {
+    assert.equal(flagOf(UNKNOWN_COUNTRY), "\u2753");
+    const provider = SUPPOSED.provider.get("b-cdn.net");
+    assert.equal(provider?.name, "b-cdn.net");
+    assert.equal(provider?.country, UNKNOWN_COUNTRY);
+    assert.equal(provider?.flag, "\u2753");
+    assert.equal(
+      provider?.title,
+      "b-cdn.net, fournisseur supposé, droit inconnu",
+    );
+    const label = placesOf(SUPPOSED, SUPPOSED.whole, 700).providers.find(
+      (entry) => entry.provider.id === "b-cdn.net",
+    );
+    assert.equal(label?.name, "\u2753 b-cdn.net");
+    assert.equal(label?.sites, "supposé, 2 sites");
+  });
+
+  it("leaves a provider of the data this version no longer knows without flag or mention", () => {
+    const provider = SUPPOSED.provider.get("old-cdn");
+    assert.equal(provider?.country, "");
+    assert.equal(provider?.flag, "");
+    assert.equal(provider?.title, "old-cdn");
+  });
+
+  it("says in its panel that its law is unknown and where the supposition comes from", () => {
+    const panel = panelOf(SUPPOSED, SUPPOSED.whole, NO_FILTER, "f:b-cdn.net");
+    assert.equal(panel.kind, "provider");
+    if (panel.kind !== "provider") {
+      return;
+    }
+    assert.equal(panel.flag, "\u2753");
+    assert.deepEqual(panel.texts, [
+      "Soumis au droit\u00a0: inconnu \u2753",
+      "Fournisseur supposé d'après le nom DNS final (CNAME) des requêtes. Il peut s'agir d'un simple hébergeur.",
+    ]);
+  });
+
+  it("counts under an unknown country, which limits the map as a country does", () => {
+    const unknown = columnOf(SUPPOSED, filters({ country: UNKNOWN_COUNTRY }));
+    assert.deepEqual(
+      siteRows(unknown).map((row) => row.site.name),
+      ["a.example", "b.example"],
+    );
+    assert.deepEqual(
+      toolsOf(
+        SUPPOSED,
+        unknown,
+        filters({ country: UNKNOWN_COUNTRY }),
+      ).chips.map((chip) => [chip.icon, chip.label]),
+      [[{ kind: "flag", flag: "\u2753", title: null }, "Inconnu"]],
+    );
+    const panel = panelOf(SUPPOSED, SUPPOSED.whole, NO_FILTER, null);
+    assert.equal(panel.kind, "overview");
+    if (panel.kind !== "overview") {
+      return;
+    }
+    const countries = panel.sections.find(
+      (section) => section.heading.title === "Par pays du droit",
+    );
+    assert.deepEqual(
+      countries?.rows.map((row) => [row.label, row.proof]),
+      [
+        ["Inconnu", "fournisseurs supposés"],
+        ["États-Unis", null],
+      ],
+    );
   });
 });
 

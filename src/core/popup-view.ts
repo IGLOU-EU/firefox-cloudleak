@@ -22,6 +22,7 @@ import {
   type TitleLine,
 } from "./display.js";
 import type { CategoryCounts, PopupData, SiteCounts } from "./popup-message.js";
+import { isSupposed } from "./supposed.js";
 import type { Tally } from "./tab-state.js";
 
 // One row of a table of counts: the cloud of its category, the name of its
@@ -38,6 +39,8 @@ export interface Row {
 
 export interface ProviderRows {
   readonly name: string;
+  // A provider the dynamic detection supposes, named by a domain.
+  readonly supposed: boolean;
   // From the most serious category.
   readonly rows: readonly Row[];
 }
@@ -253,10 +256,14 @@ function providerRows(
   providers: Providers,
 ): ProviderRows[] {
   return Object.entries(totals)
-    .map(([id, categories]) => ({
-      name: providers.find((entry) => entry.id === id)?.name ?? id,
-      rows: rowsOf(categories),
-    }))
+    .map(([id, categories]) => {
+      const known = providers.find((entry) => entry.id === id);
+      return {
+        name: known?.name ?? id,
+        supposed: known === undefined && isSupposed(id),
+        rows: rowsOf(categories),
+      };
+    })
     .filter((entry) => entry.rows.length > 0)
     .sort(
       (a, b) =>

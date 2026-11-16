@@ -136,10 +136,23 @@ function renderLimit(): void {
   limitField().setAttribute("aria-invalid", String(!valid));
 }
 
-function show(settings: Settings, purged: boolean): void {
+function dynamicBox(): HTMLInputElement {
+  return element("dynamic-on") as HTMLInputElement;
+}
+
+// The box shows what the event page kept, and the notice says the supposed
+// providers are purged right after the detection is turned off.
+function renderDynamic(settings: Settings, purged: boolean): void {
+  dynamicBox().checked = settings.dynamic;
+  element("dynamic-purged").hidden = !purged;
+  element("dynamic").hidden = false;
+}
+
+function show(settings: Settings, purged: boolean, dropped = false): void {
   kept = settings;
   chosen = settings.record;
   renderRecord(settings, purged);
+  renderDynamic(settings, dropped);
 }
 
 async function loadSettings(): Promise<void> {
@@ -155,9 +168,14 @@ async function keep(
   previous: Settings,
   next: Settings,
   purging: boolean,
+  dropping = false,
 ): Promise<void> {
   try {
-    show(await ask<Settings>({ kind: "setSettings", ...next }), purging);
+    show(
+      await ask<Settings>({ kind: "setSettings", ...next }),
+      purging,
+      dropping,
+    );
   } catch (error: unknown) {
     limitField().value = String(previous.recordLimit);
     renderLimit();
@@ -192,6 +210,19 @@ function cancel(): void {
   }
 }
 
+// Turning the dynamic detection off purges at once what the supposed
+// providers left, which the line under the box says beforehand, so the page
+// asks nothing.
+function toggleDynamic(): void {
+  if (kept === null) {
+    return;
+  }
+  const dynamic = dynamicBox().checked;
+  if (dynamic !== kept.dynamic) {
+    report(keep(kept, { ...kept, dynamic }, false, !dynamic));
+  }
+}
+
 // Kept once the user leaves the field or steps it, not at each keystroke:
 // typing 250 would pass through 2, and a lower limit drops at once the
 // addresses beyond it.
@@ -215,6 +246,7 @@ for (const [level, id] of LEVELS) {
 }
 element("record-purge").addEventListener("click", purge);
 element("record-cancel").addEventListener("click", cancel);
+dynamicBox().addEventListener("change", toggleDynamic);
 limitField().addEventListener("input", renderLimit);
 limitField().addEventListener("change", changeLimit);
 report(load());

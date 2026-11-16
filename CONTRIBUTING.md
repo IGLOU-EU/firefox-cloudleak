@@ -45,7 +45,7 @@ A branch is merged into `main` with `--no-ff`.
 These four rules settle every design choice. They are not negotiable, and only the owner can change one.
 
 1. **Everything local.** The extension makes no request to anyone on its own initiative, downloads no list and sends nothing to anyone. Accepted consequence: the provider lists are embedded and change only with a new version of the extension. One exception, which Firefox imposes: to read the canonical name of a host that neither its IP nor its HTTP signals tie to a provider, the extension asks Firefox's own resolver, through `dns.resolve`, for a name the page has just resolved. Firefox keeps the page's answer in its DNS cache under the site's partition key and the extension's request under an empty one, so the request misses the cache and the resolver sees the same name once more, about once a minute ([bug 2051290](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290)). The resolver learns nothing it did not already know, so the step stays.
-2. **No address kept, unless the user turns on the recording.** Only aggregated counts are kept: site, method, request type, provider, level. No address is kept, unless the user turns on the recording of addresses in the preferences, which is off by default, and then only the reduced address of the requests of the chosen levels, outside private windows, up to the limit, purged with the counts of its site and when the recording is turned off (see [User data the extension receives](#user-data-the-extension-receives)).
+2. **No address kept, unless the user turns on the recording.** Only aggregated counts are kept: site, method, request type, provider, level. A provider is one of the data or, while the user turns on the dynamic detection, off by default, a domain read from the DNS (see [Canonical name of a host](#canonical-name-of-a-host)). No address is kept, unless the user turns on the recording of addresses in the preferences, which is off by default, and then only the reduced address of the requests of the chosen levels, outside private windows, up to the limit, purged with the counts of its site and when the recording is turned off (see [User data the extension receives](#user-data-the-extension-receives)).
 3. **Never claim more than what is observed.** When the extension cannot know, the display says so, and a doubt is never resolved on the reassuring side.
 4. **Never slow down browsing.** No blocking listener: the extension receives the event, returns at once and does its work afterwards.
 
@@ -89,6 +89,16 @@ For example `https://cdn.example.net/assets/app.css?v=…&token=…`.
 - Lowering the limit trims every kept list at once.
 
 **Display.** The map shows the kept addresses of a site only in the panel of that site, which asks the event page for them when it opens, never in a private window, and copies one to the clipboard only when the user clicks it.
+
+### Canonical name of a host
+
+To find the provider of a request that neither its IP nor its HTTP signals name, the extension reads the canonical name of its host, the last name of its CNAME chain (design rule 1). That name is compared to the CNAME suffixes of the providers and is never kept.
+
+**Dynamic detection.** Unless the user turns on the dynamic detection in the preferences, which is off by default, nothing more is done with the name. While it is on, a name that no provider claims and that leaves the domain of the host names a supposed provider (see [Vocabulary](#vocabulary)), with no further DNS request.
+
+- Of the name, only a domain goes further, reduced at once in a single function, `supposedOf` in `src/core/supposed.ts`: its registrable domain by Firefox's `publicSuffix` API, or its known suffix itself when that suffix has several labels under a generic top-level domain, where such suffixes are those hosting providers register (`customer.b-cdn.net` gives `b-cdn.net`). The rest of the name, which may hold the name of a customer, is never kept.
+- That domain is kept as the id of the provider, wherever the id of a known provider is: in the record of the tab, in `storage.session`, and in the kept counts and the recorded addresses, in `storage.local`.
+- Turning the detection off drops at once everything kept under a supposed provider, counts and addresses, in the same write as the settings. A tab already open keeps what its icon shows until its next navigation.
 
 ### URL of a document
 
@@ -152,6 +162,7 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 ## Vocabulary
 
 - **Provider**: a third-party service that a site places between its visitors and its own server, such as Cloudflare, Akamai or Imperva, sold as a reverse proxy, a CDN or a WAF.
+- **Supposed provider**: a third party the dynamic detection names from the canonical name of a host alone, by a domain such as `b-cdn.net`. It may be a mere hosting company, it has no signature, so its decryption is never proven under TLS, and its country is unknown: the display shows ❓ in place of a flag.
 - **Edge**: the provider's server that the browser actually connects to.
 - **Origin**: the site's own server, behind the provider.
 - **Leak level**: what a provider learns from a request. The levels are cumulative.

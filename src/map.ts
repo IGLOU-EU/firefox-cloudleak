@@ -36,6 +36,7 @@ import {
   selectionOf,
   toggled,
   toolsOf,
+  UNKNOWN_COUNTRY,
   withoutLimit,
   yOf,
 } from "./core/map-view.js";
@@ -926,6 +927,10 @@ async function load(resetScroll: boolean): Promise<void> {
   lastMessages = messages;
   messages = new Map();
   map = prepare(data, table.providers, formats);
+  // The legend explains the question mark only when the map shows one.
+  element("legend-supposed").hidden = !map.providers.some(
+    (provider) => provider.country === UNKNOWN_COUNTRY,
+  );
   render(resetScroll);
   await askAddresses();
 }
