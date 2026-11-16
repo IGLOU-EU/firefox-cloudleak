@@ -6,9 +6,9 @@ Quand vous naviguez, une partie de ce que vous envoyez et lisez passe par des in
 
 ## Règles du projet
 
-1. **Tout se passe en local.** L'extension n'envoie rien à personne et ne télécharge aucune liste. Les listes de fournisseurs sont livrées dans l'extension et ne changent qu'avec une nouvelle version.
+1. **Tout se passe en local.** L'extension n'envoie rien à personne et ne télécharge aucune liste. Seule exception, due à un [bug passager de Firefox](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290) : elle redemande au résolveur DNS du navigateur un nom que la page vient de résoudre. Les listes de fournisseurs sont livrées dans l'extension et ne changent qu'avec une nouvelle version.
 2. **Aucun historique.** Vous conservez seulement des statistiques agrégées, par site, méthode, type de requête, fournisseur et niveau. Une option d'enregistrement partiel des adresses est disponible dans les préférences, pour une mise en contexte de l'usage du service tiers.
-3. **Pas d'affirmations hâtives.** Seuls les services qui laissent une trace de leur interception sont classés en niveau 4, les autres sont en 3, ou en niveau 2 quand aucune information sensible ne semble transiter.
+3. **Pas d'affirmations hâtives.** Le niveau dit ce qui passe par le fournisseur et, quand c'est sensible, la couleur dit s'il est prouvé qu'il le lit : rouge si oui, orange sinon.
 
 Ce sont les règles de base pour la conception de ce projet, dont vous trouverez plus de détails dans [CONTRIBUTING.md](CONTRIBUTING.md#design-rules), avec ce que l'extension fait des valeurs de cookies que Firefox lui transmet.
 

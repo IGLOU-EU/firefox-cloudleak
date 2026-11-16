@@ -6,9 +6,9 @@ When you browse, part of what you send and read goes through intermediaries such
 
 ## Project rules
 
-1. **Everything happens locally.** The extension sends nothing to anyone and downloads no list. The provider lists ship inside the extension and change only with a new version.
+1. **Everything happens locally.** The extension sends nothing to anyone and downloads no list. One exception, due to a [temporary Firefox bug](https://bugzilla.mozilla.org/show_bug.cgi?id=2051290): it asks the browser's DNS resolver again for a name the page has just resolved. The provider lists ship inside the extension and change only with a new version.
 2. **No history.** You keep only aggregated statistics, by site, method, request type, provider and level. An option to partially record addresses is available in the preferences, to put the use of the third-party service into context.
-3. **No hasty claims.** Only the services that leave a trace of their interception are ranked level 4, the others are level 3, or level 2 when no sensitive information seems to pass through.
+3. **No hasty claims.** The level says what goes through the provider and, when that is sensitive, the colour says whether the provider is proven to read it: red if so, orange if not.
 
 These are the basic rules for the design of this project, detailed further in [CONTRIBUTING.md](CONTRIBUTING.md#design-rules), along with what the extension does with the cookie values Firefox hands it.
 
