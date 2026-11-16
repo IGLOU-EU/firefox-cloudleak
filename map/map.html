@@ -5,6 +5,7 @@
 <head>
 <meta charset="utf-8">
 <title data-message="mapTitle"></title>
+<link rel="icon" href="/icons/logo.svg" type="image/svg+xml">
 <link rel="stylesheet" href="map.css">
 <script type="module" src="../map.js"></script>
 </head>
@@ -12,7 +13,7 @@
 <!-- Inert while the help is open over it. -->
 <div id="content" class="content">
 <header class="header">
-  <img src="/icons/neutral.svg" alt="" width="24" height="24">
+  <img src="/icons/logo.svg" alt="" width="24" height="24">
   <div class="title"><b data-message="mapTitle"></b><span id="subtitle"></span></div>
   <div class="actions">
     <!-- Hidden until the event page says something is kept, the only case it purges anything. -->
@@ -58,10 +59,12 @@
 <div id="help-veil" class="veil" hidden>
   <div class="help-window" role="dialog" aria-modal="true" aria-labelledby="help-title">
     <div class="help-head">
-      <p id="help-title" class="help-title" data-message="helpTitle"></p>
+      <!-- Titled by the name of the question mark that opens it. -->
+      <p id="help-title" class="help-title" data-message="helpOpen"></p>
       <button type="button" id="help-close" class="icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4.5 4.5L11.5 11.5M11.5 4.5L4.5 11.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
     </div>
-    <!-- Written by the script, a paragraph or a list for each part. -->
+    <!-- Written by the script, a paragraph or a list for each part, then
+         the about section. -->
     <div id="help-text" class="help-text"></div>
   </div>
 </div>

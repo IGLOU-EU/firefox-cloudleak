@@ -5,6 +5,7 @@
 // by a stand-in for Firefox's browser object and for the DOM of popup.html.
 
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { describe, it, mock } from "node:test";
 import type { Classification } from "../src/core/classify.js";
 import type { PopupData, PopupRequest } from "../src/core/popup-message.js";
@@ -24,7 +25,7 @@ import {
   installPage,
   settled,
 } from "./dom.js";
-import { POPUP_MESSAGES } from "./messages.js";
+import { getMessageOf, LOCALES, POPUP_MESSAGES } from "./messages.js";
 
 writeTable();
 
@@ -109,6 +110,8 @@ const TOTALS_ROWS = [
 ];
 const BUCHER = (host: string) =>
   host === "xn--bcher-kva.example" ? "bücher.example" : null;
+// The version of the manifest of the stand-in.
+const VERSION = "9.8.7";
 
 interface Options {
   readonly tab?:
@@ -167,6 +170,7 @@ async function open(options: Options): Promise<Opened> {
     },
     runtime: {
       getURL: (path: string) => `moz-extension://uuid/${path}`,
+      getManifest: () => ({ version: VERSION }),
       sendMessage: (request: PopupRequest) => {
         sent.push(request);
         switch (request.kind) {
@@ -235,6 +239,35 @@ function footer(page: Opened): boolean[] {
   );
 }
 
+const SOURCE = "https://gitlab.com/iglou.eu/firefox-cloudleak";
+const LISTING = "https://addons.mozilla.org/firefox/addon/cloud-leak/";
+const ISSUE =
+  "https://gitlab.com/iglou.eu/firefox-cloudleak/-/issues/new?issuable_template=provider-or-translation";
+
+// What the about section shows, in order: each text with its tag and class,
+// the image by its source, its text alternative and its size, and each link
+// by its text, its address, where it opens and its referrer policy.
+function aboutOf(page: Opened): string[] {
+  const section = page.element("help-text").children.at(-1);
+  return [...(section?.all() ?? [])].flatMap((part) => {
+    const attribute = (name: string) => part.getAttribute(name) ?? "";
+    switch (part.tagName) {
+      case "img":
+        return [
+          `img ${attribute("src")} alt=${attribute("alt")} ${attribute("width")}x${attribute("height")}`,
+        ];
+      case "a":
+        return [
+          `a ${part.textContent} ${attribute("href")} ${attribute("target")} ${attribute("rel")}`,
+        ];
+      default:
+        return part.ownText === ""
+          ? []
+          : [`${part.tagName} ${part.className} ${part.ownText}`];
+    }
+  });
+}
+
 describe("the popup", () => {
   it("asks the event page about the active tab, and shows its answer", async () => {
     const page = await open({ getDomain: BUCHER });
@@ -293,6 +326,8 @@ describe("the popup", () => {
     assert.equal(help.attributes.get("title"), "helpOpen");
     assert.equal(close.attributes.get("aria-label"), "helpClose");
     assert.equal(close.attributes.get("title"), "helpClose");
+    // Titled by the name of the question mark that opens it.
+    assert.equal(page.text("help-title"), "helpOpen");
     const shown = () => [veil.hidden, content.inert, focusedElement()];
     assert.deepEqual(shown().slice(0, 2), [true, false]);
     help.click();
@@ -319,16 +354,21 @@ describe("the popup", () => {
     );
   });
 
-  it("writes the help as paragraphs, with the levels and the colours in lists", async () => {
+  it("writes the help as paragraphs, with the levels and the colours in lists, and the about section last", async () => {
     const page = await open({});
     assert.deepEqual(
-      page
-        .element("help-text")
-        .children.map((part) =>
-          part.tagName === "ul"
-            ? part.children.map((item) => `${item.tagName} ${item.textContent}`)
-            : `${part.tagName} ${part.textContent}`,
-        ),
+      page.element("help-text").children.map((part) => {
+        switch (part.tagName) {
+          case "ul":
+            return part.children.map(
+              (item) => `${item.tagName} ${item.textContent}`,
+            );
+          case "section":
+            return `${part.tagName} ${part.className}`;
+          default:
+            return `${part.tagName} ${part.textContent}`;
+        }
+      }),
       [
         "p helpRoute",
         "p helpHttps",
@@ -339,8 +379,75 @@ describe("the popup", () => {
         "p helpLevels",
         ["li helpLevel2", "li helpLevel3", "li helpLevel4"],
         "p helpColours",
+        "section about-section",
       ],
     );
+  });
+
+  it("says in the about section the logo, the name, the version of the manifest and the licence, then the links, each to a new tab that gets no referrer", async () => {
+    const page = await open({});
+    assert.deepEqual(aboutOf(page), [
+      "p about-title aboutTitle",
+      "img /icons/logo.svg alt= 48x48",
+      "p name extensionName",
+      `p meta aboutVersion ${VERSION}`,
+      "p meta aboutLicence",
+      `a aboutSource ${SOURCE} _blank noreferrer`,
+      `a aboutListing ${LISTING} _blank noreferrer`,
+      "p  aboutContribute",
+      `a aboutIssue ${ISSUE} _blank noreferrer`,
+    ]);
+    const section = page.element("help-text").children.at(-1);
+    for (const selector of [
+      "section.about-section > div.about > div.identity > img",
+      "div.identity > div > p.name",
+      "div.about > ul.links > li > a",
+      "div.about > p.issue > a",
+    ]) {
+      assert.ok(section?.querySelector(selector), selector);
+    }
+    // The whole address in the tooltip of each link.
+    for (const link of section?.querySelectorAll("a") ?? []) {
+      assert.equal(link.getAttribute("title"), link.getAttribute("href"));
+    }
+  });
+
+  it("opens the issue from a template that the repository has", async () => {
+    const page = await open({});
+    const issue = page.element("help-text").querySelector("p.issue > a");
+    const template = new URL(
+      issue?.getAttribute("href") ?? "",
+    ).searchParams.get("issuable_template");
+    assert.ok(template, "the address names no template");
+    assert.ok(
+      existsSync(
+        new URL(
+          `../../.gitlab/issue_templates/${template}.md`,
+          import.meta.url,
+        ),
+      ),
+      template,
+    );
+  });
+
+  it("puts the version in its line, in each locale, and in no other message of the popup", () => {
+    assert.equal(
+      getMessageOf("fr")("aboutVersion", ["1.0.0"]),
+      "Version 1.0.0",
+    );
+    assert.equal(
+      getMessageOf("en")("aboutVersion", ["1.0.0"]),
+      "Version 1.0.0",
+    );
+    for (const { locale, messages } of LOCALES) {
+      for (const name of POPUP_MESSAGES) {
+        assert.equal(
+          messages[name]?.placeholders?.["version"]?.content,
+          name === "aboutVersion" ? "$1" : undefined,
+          `${locale}: ${name}`,
+        );
+      }
+    }
   });
 
   it("says what a supposed provider is only while the dynamic detection is on, asked at each opening", async () => {

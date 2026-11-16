@@ -1433,7 +1433,6 @@ describe("a name too long for its pill", () => {
 describe("the map messages", () => {
   const shared = [
     "helpOpen",
-    "helpTitle",
     "helpClose",
     "popupSite",
     "popupSitePrivate",

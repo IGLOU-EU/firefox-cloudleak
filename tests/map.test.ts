@@ -114,6 +114,7 @@ async function open(options: Options = {}): Promise<Opened> {
   (globalThis as Record<string, unknown>)["browser"] = {
     extension: { inIncognitoContext: privateWindow },
     runtime: {
+      getManifest: () => ({ version: "9.8.7" }),
       sendMessage: async (
         request: PopupRequest,
       ): Promise<MapData | SiteAddresses | Settings> => {
@@ -211,6 +212,7 @@ describe("the help of the map", () => {
     const help = page.element("help");
     const veil = page.element("help-veil");
     assert.equal(help.attributes.get("title"), "helpOpen");
+    assert.equal(page.element("help-title").textContent, "helpOpen");
     assert.equal(veil.hidden, true);
     help.click();
     assert.deepEqual(
@@ -222,6 +224,17 @@ describe("the help of the map", () => {
       [veil.hidden, page.element("content").inert, focusedElement()],
       [true, false, help],
     );
+  });
+
+  it("ends with the about section of the popup, with the version of the manifest", async () => {
+    const page = await open();
+    const last = page.element("help-text").children.at(-1);
+    assert.equal(last?.className, "about-section");
+    assert.equal(
+      last?.querySelectorAll("p.meta").map((line) => line.textContent)[0],
+      "aboutVersion 9.8.7",
+    );
+    assert.equal(last?.querySelectorAll("a").length, 3);
   });
 });
 

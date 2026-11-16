@@ -5,7 +5,7 @@
 // over the page, under a veil, and the cross, Escape or a click on the veil
 // closes it. Meanwhile the page under the veil is inert, so that the keyboard
 // stays in the help. In the popup, Escape may close the popup itself, which
-// is Firefox's choice.
+// is Firefox's choice. The text ends with the about section of the extension.
 
 import type { Settings } from "./core/popup-message.js";
 import { ask, element } from "./page.js";
@@ -29,10 +29,95 @@ const TEXT: readonly (string | readonly string[])[] = [
 const SUPPOSED = "helpSupposed";
 const SUPPOSED_AFTER = "helpLaw";
 
-function written(tagName: string, message: string): HTMLElement {
+// The addresses of the about section live here rather than in _locales,
+// where a test refuses a colon in French without a no-break space before it.
+const SOURCE = "https://gitlab.com/iglou.eu/firefox-cloudleak";
+const LISTING = "https://addons.mozilla.org/firefox/addon/cloud-leak/";
+// GitLab fills the new issue from the template of that name, a file of
+// .gitlab/issue_templates/ on the default branch.
+const ISSUE = `${SOURCE}/-/issues/new?issuable_template=provider-or-translation`;
+
+function written(
+  tagName: string,
+  message: string,
+  className = "",
+  substitutions: string[] = [],
+): HTMLElement {
   const node = document.createElement(tagName);
-  node.textContent = browser.i18n.getMessage(message);
+  node.className = className;
+  node.textContent = browser.i18n.getMessage(message, substitutions);
   return node;
+}
+
+function holding(
+  tagName: string,
+  className: string,
+  ...children: HTMLElement[]
+): HTMLElement {
+  const node = document.createElement(tagName);
+  node.className = className;
+  node.append(...children);
+  return node;
+}
+
+// A link in a new tab of the same window, where Firefox opens a link with
+// target="_blank" from the popup as well as from the map: the browser of the
+// popup takes the handler of new windows of the window that holds it
+// (nsFrameLoader.cpp, ContentParent.cpp and BrowserDOMWindow.sys.mjs,
+// Firefox 159.0.1). No referrer, so that the site does not learn the address
+// of the page of the extension. The whole address is in its tooltip.
+function link(address: string, message: string): HTMLElement {
+  const anchor = written("a", message);
+  anchor.setAttribute("href", address);
+  anchor.setAttribute("title", address);
+  anchor.setAttribute("target", "_blank");
+  anchor.setAttribute("rel", "noreferrer");
+  return anchor;
+}
+
+// The logo beside the name, the version read from the manifest, so that
+// the build stamps nothing, and the licence, then the links. The logo is
+// decorative: the name beside it says it.
+function about(): HTMLElement {
+  const logo = document.createElement("img");
+  for (const [name, value] of [
+    ["src", "/icons/logo.svg"],
+    ["alt", ""],
+    ["width", "48"],
+    ["height", "48"],
+  ] as const) {
+    logo.setAttribute(name, value);
+  }
+  const version = browser.runtime.getManifest().version;
+  return holding(
+    "section",
+    "about-section",
+    written("p", "aboutTitle", "about-title"),
+    holding(
+      "div",
+      "about",
+      holding(
+        "div",
+        "identity",
+        logo,
+        holding(
+          "div",
+          "",
+          written("p", "extensionName", "name"),
+          written("p", "aboutVersion", "meta", [version]),
+          written("p", "aboutLicence", "meta"),
+        ),
+      ),
+      holding(
+        "ul",
+        "links",
+        holding("li", "", link(SOURCE, "aboutSource")),
+        holding("li", "", link(LISTING, "aboutListing")),
+      ),
+      written("p", "aboutContribute"),
+      holding("p", "issue", link(ISSUE, "aboutIssue")),
+    ),
+  );
 }
 
 export function setUpHelp(): void {
@@ -53,6 +138,7 @@ export function setUpHelp(): void {
       list.append(...part.map((message) => written("li", message)));
       return [list];
     }),
+    about(),
   );
   for (const [button, message] of [
     [open, "helpOpen"],
