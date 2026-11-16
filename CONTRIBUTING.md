@@ -41,7 +41,8 @@ Life cycle of documents:
 | --- | --- |
 | Code, identifiers, comments | English |
 | Commit messages | English |
-| README, CONTRIBUTING | English |
+| README | English as the source in `README.en.md`, French translation in `README.fr.md`, both changed in the same commit |
+| CONTRIBUTING | English |
 | User-facing strings | Through `_locales`, English as the source in `_locales/en`, French translation in `_locales/fr` |
 
 Every string shown to the user goes through `_locales` from the moment it is written, never as a literal in the code.
