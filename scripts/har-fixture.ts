@@ -10,6 +10,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import type { RequestFacts } from "../src/core/classify.js";
+import { requestSideOf, responseSideOf } from "../src/core/request-facts.js";
 
 interface HarHeader {
   name: string;
@@ -58,50 +59,34 @@ function responseValue(name: string, value: string): string {
   return name === "location" ? (value.split(/[?#]/)[0] ?? "") : value;
 }
 
-// A pair without "=" is a value with an empty name, as browsers read it, so
-// the value never passes for a name.
-function cookieName(pair: string): string {
-  const equals = pair.indexOf("=");
-  return equals === -1 ? "" : pair.slice(0, equals).trim();
-}
-
-function values(headers: HarHeader[], name: string): string[] {
-  return headers
-    .filter((header) => header.name.toLowerCase() === name)
-    .map((header) => header.value);
-}
-
+// The facts are read as the extension reads them, so that the fixture holds
+// what the classification would be given.
 function toFacts(entry: HarEntry, index: number): FixtureEntry | null {
-  const url = new URL(entry.request.url);
+  const destination = entry.request.headers.find(
+    (header) => header.name.toLowerCase() === "sec-fetch-dest",
+  );
+  const request = requestSideOf({
+    url: entry.request.url,
+    method: entry.request.method,
+    type: TYPES[destination?.value ?? ""] ?? "other",
+    requestHeaders: entry.request.headers,
+  });
   // A data: URL has no server behind it, so no provider sees it.
-  if (!["http:", "https:", "ws:", "wss:"].includes(url.protocol)) {
+  if (request === null) {
     return null;
   }
-  const request = entry.request.headers;
-  const response = entry.response.headers;
+  const response = responseSideOf({
+    ip: entry.serverIPAddress || null,
+    responseHeaders: entry.response.headers,
+  });
   return {
     entry: index + 1,
-    method: entry.request.method,
-    type: TYPES[values(request, "sec-fetch-dest")[0] ?? ""] ?? "other",
-    tls: url.protocol === "https:" || url.protocol === "wss:",
-    host: url.hostname,
-    path: url.pathname,
-    queryNames: [...url.searchParams.keys()],
-    ip: entry.serverIPAddress || null,
-    cookies: values(request, "cookie")
-      .flatMap((value) => value.split(";"))
-      .filter((pair) => pair.trim() !== "")
-      .map(cookieName),
-    authorization: values(request, "authorization").length > 0,
-    responseHeaders: response
-      .filter((header) => header.name.toLowerCase() !== "set-cookie")
-      .map(({ name, value }) => ({
-        name,
-        value: responseValue(name.toLowerCase(), value),
-      })),
-    setCookies: values(response, "set-cookie")
-      .flatMap((value) => value.split("\n"))
-      .map((line) => cookieName(line.split(";")[0] ?? "")),
+    ...request,
+    ...response,
+    responseHeaders: response.responseHeaders.map(({ name, value }) => ({
+      name,
+      value: responseValue(name.toLowerCase(), value),
+    })),
   };
 }
 
