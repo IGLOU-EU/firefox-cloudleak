@@ -1,8 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Copyright (C) 2026 Adrien Kara
 
-import { cidrContains, ipv4Of, ipv4RangeContains, parseIp } from "./cidr.js";
 import { matchesPattern } from "./pattern.js";
+import {
+  byAddress,
+  byCname,
+  bySignal,
+  bySiteConnectorCookie,
+  indexOf,
+  NONE,
+} from "./provider-index.js";
 import type { ProviderEntry, ProviderTable } from "./provider-table.js";
 
 export interface ResponseHeader {
@@ -72,62 +79,18 @@ export function findProvider(
   facts: RequestFacts,
   table: ProviderTable,
 ): ProviderEntry | null {
-  return (
-    findByAddress(facts.ip, table.providers) ??
-    table.providers.find((provider) => hasHttpSignal(facts, provider)) ??
-    table.providers.find((provider) =>
-      setsSiteConnectorCookie(facts, provider),
-    ) ??
-    findByCname(facts.cnames ?? [], table.providers) ??
-    null
-  );
-}
-
-function findByCname(
-  names: readonly string[],
-  providers: readonly ProviderEntry[],
-): ProviderEntry | undefined {
-  return providers.find((provider) =>
-    names.some((name) => endsWithSuffix(name, provider.cname)),
-  );
-}
-
-// A suffix counts on a label boundary only, so that "xcdn.example.net" is not
-// taken for a host of "cdn.example.net".
-function endsWithSuffix(name: string, suffixes: readonly string[]): boolean {
-  const host = name.toLowerCase();
-  return suffixes.some((text) => {
-    const suffix = text.toLowerCase();
-    return host === suffix || host.endsWith(`.${suffix}`);
-  });
-}
-
-// An IPv4 address, the most common, is read and compared as a number. An
-// IPv4 address mapped in IPv6 is an IPv6 address, which no IPv4 range holds.
-function findByAddress(
-  ip: string | null,
-  providers: readonly ProviderEntry[],
-): ProviderEntry | undefined {
-  if (ip === null) {
-    return undefined;
+  const index = indexOf(table);
+  let position = byAddress(facts.ip, index);
+  if (position === NONE) {
+    position = bySignal(facts.responseHeaders, facts.setCookies, index);
   }
-  if (!ip.includes(":")) {
-    const address = ipv4Of(ip);
-    return address === undefined
-      ? undefined
-      : providers.find((provider) =>
-          provider.ranges.ipv4.some((range) =>
-            ipv4RangeContains(range, address),
-          ),
-        );
+  if (position === NONE) {
+    position = bySiteConnectorCookie(facts.setCookies, index);
   }
-  const address = parseIp(ip);
-  if (!address.ok) {
-    return undefined;
+  if (position === NONE) {
+    position = byCname(facts.cnames ?? [], index);
   }
-  return providers.find((provider) =>
-    provider.ranges.ipv6.some((range) => cidrContains(range, address.value)),
-  );
+  return position === NONE ? null : (table.providers[position] ?? null);
 }
 
 function matchesAny(patterns: readonly string[], text: string): boolean {
@@ -166,18 +129,6 @@ export function hasHttpSignal(
   return (
     facts.responseHeaders.some((header) => isSignal(header, provider)) ||
     facts.setCookies.some((name) => matchesAny(provider.cookies, name))
-  );
-}
-
-// Some anti-bot products also hand their cookies to a connector installed at
-// the site, which sets them without the provider ever being in the path. Such
-// a cookie shows the provider saw the request, not that it read the traffic.
-function setsSiteConnectorCookie(
-  facts: RequestFacts,
-  provider: ProviderEntry,
-): boolean {
-  return facts.setCookies.some((name) =>
-    matchesAny(provider.siteConnectorCookies, name),
   );
 }
 
@@ -272,7 +223,8 @@ export function classifyByCname(
   name: string,
   table: ProviderTable,
 ): Classification | null {
-  const provider = findByCname([name], table.providers);
+  const position = byCname([name], indexOf(table));
+  const provider = position === NONE ? undefined : table.providers[position];
   return provider === undefined
     ? null
     : classificationOf({ ...facts, cnames: [name] }, provider, table);
