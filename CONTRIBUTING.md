@@ -230,9 +230,7 @@ The extension requires Firefox 153 or later, set by `strict_min_version` in `man
 - Biome (formatting and lint), held at zero warnings,
 - the build with its data checks,
 - `web-ext lint` on the built extension, held at zero warnings,
-- `npm audit` for known vulnerabilities in the dependencies.
-
-**The audit threshold.** `npm audit` runs with `--audit-level=moderate`, so a low-severity finding does not fail the check. The only finding is GHSA-gcqx-w48m-w2h4 (low) in `deepmerge`, pulled by `addons-linter` inside `web-ext`. It sits in a development tool that is never shipped in the package, no fixed version of `deepmerge` exists, and the only fix npm offers downgrades `web-ext` to 3.2.1. As soon as a `web-ext` release no longer depends on a vulnerable `deepmerge`, the threshold returns to the default.
+- `npm audit` for known vulnerabilities in the dependencies, failing at any severity.
 
 **The speed of the map.** `npm run measure-map` times the view of the map on the 900 sites of its validated mock-up, at each keystroke of the search and for each answer of the event page. It prints the times and judges none, since they depend on the machine: a keystroke of the whole page, drawing included, stays under 100 ms.
 
