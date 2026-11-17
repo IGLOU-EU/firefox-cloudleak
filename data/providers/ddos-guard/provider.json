@@ -1,6 +1,7 @@
 {
   "name": "DDoS-Guard",
-  "country": "RU",
+  "country": "AE",
+  "countrySource": "Chosen over Russia, where its other company serves Russian residents only, because IQWeb FZ-LLC of Dubai says in the agreement every other customer signs under the laws of the UAE that it \"is a legal entity and managing company operating under well-known brand name DDoS-Guard\" (https://ddos-guard.net/file/sladdg_en.pdf, header and clause 4.18).",
   "signatures": {
     "server": [
       {

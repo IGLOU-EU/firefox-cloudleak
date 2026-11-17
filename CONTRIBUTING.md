@@ -255,6 +255,7 @@ Adding or updating a provider is a change of data, never of code. A provider is 
 | `name` | Yes | The provider's name |
 | `country` | Yes | ISO 3166-1 alpha-2 code, in capitals, of the country whose law the service is subject to, which is not only the law of the entity that signs the contract |
 | `parent` | No | Parent company, as `{ "name": ..., "country": ... }` |
+| `countrySource` | No | Why `country` was chosen, in one sentence with its source, when the provider's companies leave the choice open. The extension never shows it |
 | `signatures.headers` | No | Response headers: `name`, optional `value`, `source` |
 | `signatures.cookies` | No | Cookies the provider sets or uses itself: `name`, `source` |
 | `signatures.siteConnectorCookies` | No | Cookies of a provider's product that a connector installed at the site can also set, without the provider being in the network path: `name`, `source` |
