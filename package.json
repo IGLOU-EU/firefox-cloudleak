@@ -12,7 +12,7 @@
     "test": "node -e \"fs.rmSync('build', { recursive: true, force: true })\" && tsc -p tsconfig.tools.json && tsc -p tsconfig.json --outDir build/extension && node --test build/tests/*.test.js",
     "lint": "biome ci --error-on-warnings && npm run build && web-ext lint --source-dir dist --warnings-as-errors",
     "format": "biome check --write",
-    "check": "npm test && npm run lint && npm audit --audit-level=moderate",
+    "check": "npm test && npm run lint && npm audit",
     "start": "web-ext run --source-dir dist",
     "refresh-ranges": "tsc -p tsconfig.tools.json && node build/scripts/refresh-ranges.js",
     "measure-map": "tsc -p tsconfig.tools.json && node build/scripts/measure-map.js"
