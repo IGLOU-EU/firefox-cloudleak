@@ -146,6 +146,26 @@ describe("parseProviderJson", () => {
     assert.equal(provider?.parent, null);
   });
 
+  it("accepts the source of a country that had to be chosen, and keeps it out of the table", () => {
+    const { provider, errors } = parseProviderJson(
+      '{ "name": "A", "country": "AE", "countrySource": "Its agreement says so.", "signatures": {} }',
+      "p",
+    );
+    assert.deepEqual(errors, []);
+    assert.equal(provider?.country, "AE");
+    assert.ok(provider !== null && !Object.hasOwn(provider, "countrySource"));
+  });
+
+  it("refuses an empty source of the country", () => {
+    assertOneFieldError(
+      providerErrors(
+        '{ "name": "A", "country": "AE", "countrySource": " ", "signatures": {} }',
+      ),
+      "countrySource",
+      /non-empty string/,
+    );
+  });
+
   it("gives the parser message for a JSON syntax error", () => {
     assertOneFieldError(providerErrors('{\n  "name": "A",\n}'), null, /JSON/);
   });

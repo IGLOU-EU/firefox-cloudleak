@@ -284,10 +284,16 @@ export function parseProviderJson(
   readObject(
     root,
     "",
-    { required: ["name", "country", "signatures"], optional: ["parent"] },
+    {
+      required: ["name", "country", "signatures"],
+      optional: ["parent", "countrySource"],
+    },
     report,
   );
   const company = readCompany(root, "", report);
+  // Why a country was chosen is for the people who read the data: the
+  // extension never shows it, so it stays out of the table.
+  readString(root["countrySource"], "countrySource", report);
   const parentObject =
     root["parent"] === undefined
       ? null

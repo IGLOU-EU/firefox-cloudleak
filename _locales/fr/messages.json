@@ -819,6 +819,10 @@
     "message": "d'Israël",
     "description": "Israel, after \"subject to the law\" in the tooltip of a provider on the map."
   },
+  "mapLawOfAE": {
+    "message": "des Émirats arabes unis",
+    "description": "The United Arab Emirates, after \"subject to the law\" in the tooltip of a provider on the map."
+  },
   "mapLawOfCH": {
     "message": "de la Suisse",
     "description": "Switzerland, after \"subject to the law\" in the tooltip of a provider on the map."
@@ -882,6 +886,10 @@
   "mapInIL": {
     "message": "en Israël",
     "description": "Where the parent company of a provider is, in its tooltip on the map: Israel."
+  },
+  "mapInAE": {
+    "message": "aux Émirats arabes unis",
+    "description": "Where the parent company of a provider is, in its tooltip on the map: the United Arab Emirates."
   },
   "mapInCH": {
     "message": "en Suisse",
