@@ -10,12 +10,21 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadTable, parseRangesFile } from "../scripts/providers.js";
-import { parseCidr, parseIp } from "../src/core/cidr.js";
+import {
+  cidrContains,
+  ipv4Of,
+  ipv4RangeContains,
+  parseCidr,
+  parseIp,
+} from "../src/core/cidr.js";
 import {
   classifyRequest,
+  findProvider,
   type Leak,
   type RequestFacts,
 } from "../src/core/classify.js";
+import { matchesPattern } from "../src/core/pattern.js";
+import type { ProviderEntry } from "../src/core/provider-table.js";
 
 const DATA = fileURLToPath(new URL("../../data", import.meta.url));
 const { table, errors } = loadTable(DATA);
@@ -872,5 +881,141 @@ describe("the address ranges of the committed data", () => {
         furthest = range;
       }
     }
+  });
+});
+
+// The search of a request's provider as it was written before the index: each
+// step compares the request with every provider in the order of the table,
+// and the first that answers wins.
+function referenceProvider(facts: RequestFacts): string | null {
+  const any = (patterns: readonly string[], text: string) =>
+    patterns.some((pattern) => matchesPattern(pattern, text));
+  const header = (
+    signatures: ProviderEntry["headers"],
+    { name, value }: { name: string; value: string },
+  ) =>
+    signatures.some(
+      (signature) =>
+        matchesPattern(signature.name, name) &&
+        (signature.value === null || matchesPattern(signature.value, value)),
+    );
+  const byAddress = (provider: ProviderEntry) => {
+    if (facts.ip === null) {
+      return false;
+    }
+    if (!facts.ip.includes(":")) {
+      const address = ipv4Of(facts.ip);
+      return (
+        address !== undefined &&
+        provider.ranges.ipv4.some((range) => ipv4RangeContains(range, address))
+      );
+    }
+    const address = parseIp(facts.ip);
+    return (
+      address.ok &&
+      provider.ranges.ipv6.some((range) => cidrContains(range, address.value))
+    );
+  };
+  const bySignal = (provider: ProviderEntry) =>
+    facts.responseHeaders.some(
+      (h) =>
+        (h.name.toLowerCase() === "server" && any(provider.server, h.value)) ||
+        header(provider.headers, h),
+    ) || facts.setCookies.some((name) => any(provider.cookies, name));
+  const byConnector = (provider: ProviderEntry) =>
+    facts.setCookies.some((name) => any(provider.siteConnectorCookies, name));
+  const byCname = (provider: ProviderEntry) =>
+    (facts.cnames ?? []).some((name) =>
+      provider.cname.some((suffix) => {
+        const host = name.toLowerCase();
+        const end = suffix.toLowerCase();
+        return host === end || host.endsWith(`.${end}`);
+      }),
+    );
+  for (const step of [byAddress, bySignal, byConnector, byCname]) {
+    const found = table.providers.find(step);
+    if (found !== undefined) {
+      return found.id;
+    }
+  }
+  return null;
+}
+
+// A text that a pattern of the data matches, and one it does not.
+function matching(pattern: string): string {
+  return pattern.replaceAll("*", "a1");
+}
+
+describe("the search of a request's provider", () => {
+  it("finds the provider that a comparison with every provider in order finds", () => {
+    const headers: { name: string; value: string }[] = [
+      { name: "server", value: "nginx" },
+      { name: "x-cache", value: "HIT" },
+      { name: "via", value: "1.1 varnish" },
+    ];
+    const cookies: string[] = ["session", "PHPSESSID"];
+    const ips: string[] = ["192.0.2.1", "2001:db8::1", "::ffff:104.16.0.1"];
+    const cnames: string[] = ["www.example.org"];
+    for (const provider of table.providers) {
+      for (const { name, value } of [
+        ...provider.headers,
+        ...provider.challengeHeaders,
+      ]) {
+        headers.push({ name: matching(name), value: matching(value ?? "x") });
+        headers.push({ name: matching(name).toUpperCase(), value: "other" });
+      }
+      for (const value of provider.server) {
+        headers.push({ name: "Server", value: matching(value) });
+        headers.push({ name: "server", value: `${matching(value)} other` });
+      }
+      for (const name of [
+        ...provider.cookies,
+        ...provider.siteConnectorCookies,
+      ]) {
+        cookies.push(matching(name), `x${matching(name)}`);
+      }
+      for (const { network } of provider.ranges.ipv4.slice(0, 20)) {
+        const text = [24, 16, 8, 0].map((s) => (network >>> s) & 255).join(".");
+        ips.push(text, `::ffff:${text}`);
+      }
+      for (const { network } of provider.ranges.ipv6.slice(0, 20)) {
+        ips.push(ipv6Text(network), ipv6Text(network + 1n));
+      }
+      for (const suffix of provider.cname) {
+        cnames.push(suffix, `a.${suffix}`.toUpperCase(), `a${suffix}`);
+      }
+    }
+    // Requests that carry signals of several providers, drawn the same way
+    // on every run, so that the first one in the table must win.
+    let seed = 0x90dc239;
+    const draw = <T>(list: readonly T[]): T => {
+      seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+      return list[seed % list.length] as T;
+    };
+    let named = 0;
+    for (let round = 0; round < 20000; round += 1) {
+      const facts: RequestFacts = {
+        method: "GET",
+        type: "script",
+        tls: true,
+        host: "www.example.org",
+        path: "/",
+        queryNames: [],
+        ip: round % 3 === 0 ? draw(ips) : null,
+        cookies: [],
+        authorization: false,
+        responseHeaders: [draw(headers), draw(headers), draw(headers)],
+        setCookies: round % 2 === 0 ? [draw(cookies), draw(cookies)] : [],
+        cnames: round % 4 === 0 ? [] : [draw(cnames)],
+      };
+      const expected = referenceProvider(facts);
+      assert.equal(
+        findProvider(facts, table)?.id ?? null,
+        expected,
+        JSON.stringify(facts),
+      );
+      named += expected === null ? 0 : 1;
+    }
+    assert.ok(named > 10000, `${named} requests with a provider`);
   });
 });

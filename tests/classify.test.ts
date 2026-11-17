@@ -312,6 +312,39 @@ describe("classifyRequest, the provider", () => {
     );
   });
 
+  it("takes the first provider of the table whether its pattern has a wildcard or not", () => {
+    const exact = provider("exact", {
+      headers: [{ name: "x-alpha-id", value: null }],
+      cookies: ["__alpha_id"],
+      server: ["AlphaCDN-1"],
+      cname: ["alpha.example"],
+    });
+    const wild = provider("wild", {
+      headers: [{ name: "x-alpha-*", value: null }],
+      cookies: ["__alpha_*"],
+      server: ["AlphaCDN-*"],
+      cname: ["example"],
+    });
+    const orders: [ProviderTable, string][] = [
+      [{ ...TABLE, providers: [wild, exact] }, "wild"],
+      [{ ...TABLE, providers: [exact, wild] }, "exact"],
+    ];
+    for (const [table, first] of orders) {
+      for (const changes of [
+        { responseHeaders: [{ name: "X-Alpha-Id", value: "1" }] },
+        { responseHeaders: [{ name: "server", value: "alphacdn-1" }] },
+        { setCookies: ["__alpha_id"] },
+        { cnames: ["cdn.alpha.example"] },
+      ]) {
+        assert.equal(
+          classifyRequest(facts(changes), table)?.provider,
+          first,
+          `${first}: ${JSON.stringify(changes)}`,
+        );
+      }
+    }
+  });
+
   it("takes the first provider of the table when several match the same step", () => {
     const overlap = provider("overlap", { ranges: ["192.0.2.0/28"] });
     const table = { ...TABLE, providers: [ALPHA, overlap] };
@@ -1006,6 +1039,13 @@ describe("classifyByCname", () => {
       providers: [BETA, entry],
       consentCookies: [],
     };
+    // The first request of a table reads the ranges once, into its index.
+    assert.equal(
+      classifyRequest(facts({ ip: "192.0.2.7" }), table)?.provider,
+      "counted",
+    );
+    const first = reads();
+    assert.ok(first > 0);
     assert.equal(
       classifyByCname(
         facts({
@@ -1017,7 +1057,8 @@ describe("classifyByCname", () => {
       )?.provider,
       "counted",
     );
-    assert.equal(reads(), 0);
+    classifyRequest(facts({ ip: "192.0.2.8" }), table);
+    assert.equal(reads(), first);
   });
 });
 
