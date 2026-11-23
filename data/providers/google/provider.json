@@ -1,0 +1,48 @@
+{
+  "name": "Google",
+  "country": "US",
+  "signatures": {
+    "headers": [
+      {
+        "name": "via",
+        "value": "*1.1 google",
+        "source": "https://docs.cloud.google.com/load-balancing/docs/https (the global, classic and regional external Application Load Balancers set Via: 1.1 google in requests and responses, and coalesce several Via values into one comma-separated list), and observed on 2026-11-23 on www.blablacar.fr, www.dm.de, www.intermarche.com, www.auchan.fr, www.sharechat.com, www.wix.com, pokemongo.com, pub.dev, osv.dev, pkg.go.dev and deps.dev (1.1 google), www.snapchat.com (1.1 google, 1.1 google) and wpt.fyi, over HTTP/1.1, HTTP/2 and HTTP/3. The pattern lets the hops of proxies on the origin side stand before it"
+      },
+      {
+        "name": "via",
+        "value": "*1.1 google, *",
+        "source": "https://docs.cloud.google.com/load-balancing/docs/https (Via: 1.1 google, coalesced with other Via values into one comma-separated list), and observed on 2026-11-23 behind Fastly on www.spotify.com (HTTP/2 edgeproxy, 1.1 google, 1.1 varnish) and behind CloudFront on www.repubblica.it (1.1 google, 1.1 <id>.cloudfront.net (CloudFront)). The pattern lets a proxy closer to the browser append its own hop, without taking a proxy whose name only starts with google"
+      }
+    ],
+    "cookies": [
+      {
+        "name": "GCLB",
+        "source": "https://docs.cloud.google.com/load-balancing/docs/https/request-distribution (with generated cookie affinity, the global external and classic Application Load Balancers set a cookie named GCLB), and observed on 2026-11-23 on www.intermarche.com and www.auchan.fr"
+      },
+      {
+        "name": "GCILB",
+        "source": "https://docs.cloud.google.com/load-balancing/docs/https/request-distribution (with generated cookie affinity, the regional external Application Load Balancer sets a cookie named GCILB)"
+      },
+      {
+        "name": "GAESA",
+        "source": "Observed on 2026-11-23 on distillate-frontend-x26zqukapq-ue.a.run.app, a Cloud Run service, whose session affinity sets a cookie that https://docs.cloud.google.com/run/docs/configuring/session-affinity does not name. https://docs.replit.com/help/deployment-and-publishing names it GAESA, set by Google's serving infrastructure to route requests"
+      }
+    ],
+    "server": [
+      {
+        "value": "Google Frontend",
+        "source": "https://docs.cloud.google.com/appengine/docs/standard/reference/request-headers (App Engine sets the Server response header to Google Frontend), and observed on 2026-11-23 on Cloud Run services (cloud-run-showcase-240730567588.us-central1.run.app, leadpilot-demo-865877702597.europe-west1.run.app, distillate-frontend-x26zqukapq-ue.a.run.app), on sites mapped to App Engine or Cloud Run (pokemongolive.com, www.pokemongolive.com, go.dev, lit.dev, chromestatus.com) and behind the load balancer (pkg.go.dev, osv.dev)"
+      },
+      {
+        "value": "sffe",
+        "source": "Observed on 2026-11-23 on Google's public CDNs fonts.gstatic.com, ajax.googleapis.com (Hosted Libraries), www.gstatic.com, ssl.gstatic.com, maps.gstatic.com, t0.gstatic.com, encrypted-tbn0.gstatic.com and gstatic.com. The same value is sent by the static files of apis.google.com, i.ytimg.com, tpc.googlesyndication.com, www.youtube.com/s/player and www.google.com/images, and fonts.googleapis.com sends ESF instead"
+      }
+    ],
+    "cname": [
+      {
+        "suffix": "ghs.googlehosted.com",
+        "source": "Observed on 2026-11-23 as the last name of the chain of sites mapped to App Engine or Cloud Run, whose responses carry server: Google Frontend: www.pokemongolive.com, www.lit.dev, www.chromestatus.com, www.wpt.fyi and bugs.chromium.org. The DNS records of a mapping are given by the console (https://docs.cloud.google.com/run/docs/mapping-custom-domains, https://docs.cloud.google.com/appengine/docs/standard/mapping-custom-domains)"
+      }
+    ]
+  }
+}

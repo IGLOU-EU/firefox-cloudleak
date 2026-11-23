@@ -18,7 +18,7 @@ L'icône de la barre d'outils prend la couleur du niveau le plus élevé de l'on
 
 Une carte relie l'ensemble des sites utilisant ces services à leurs fournisseurs et au pays dont dépendent les données transitant par chacun. En navigation privée, rien n'est gardé après la fermeture de la dernière fenêtre privée.
 
-L'extension ne connaît pas tous les fournisseurs, et bien qu'elle tente de deviner, il est impossible d'avoir une vision exhaustive. Une détection dynamique, à activer dans les préférences, suppose un fournisseur absent de sa liste d'après le nom DNS final (CNAME) d'une requête : il s'affiche sous son nom de domaine, avec un ❓ à la place du drapeau, et ce n'est qu'une supposition, qui peut désigner un simple hébergeur. Cependant, cela permet de se faire une idée de la problématique de confidentialité et de souveraineté des données, mais aussi de quels pays peuvent décider du droit d'accéder à un service en ligne.
+L'extension ne connaît pas tous les fournisseurs, et bien qu'elle tente de deviner, il est impossible d'avoir une vision exhaustive. Quand plusieurs intermédiaires se suivent sur le chemin d'une requête, elle n'en nomme qu'un, celui qui l'a le plus sûrement reçue. Une détection dynamique, à activer dans les préférences, suppose un fournisseur absent de sa liste d'après le nom DNS final (CNAME) d'une requête : il s'affiche sous son nom de domaine, avec un ❓ à la place du drapeau, et ce n'est qu'une supposition, qui peut désigner un simple hébergeur. Cependant, cela permet de se faire une idée de la problématique de confidentialité et de souveraineté des données, mais aussi de quels pays peuvent décider du droit d'accéder à un service en ligne.
 
 ## Compiler, tester et lancer
 

@@ -368,6 +368,77 @@ describe("classifyRequest, the provider", () => {
     );
   });
 
+  // A provider seen only in Via, first in the table, as a load balancer
+  // behind another intermediary that writes no Via of its own.
+  const HOP = provider("hop", {
+    headers: [
+      { name: "via", value: "*1.1 hop" },
+      { name: "VIA", value: "*1.1 hop, *" },
+    ],
+  });
+  const WITH_HOP: ProviderTable = { ...TABLE, providers: [HOP, ALPHA, BETA] };
+  const HOP_VIA = { name: "Via", value: "1.1 hop" };
+
+  function providerWithHop(changes: Partial<RequestFacts>): string | null {
+    return classifyRequest(facts(changes), WITH_HOP)?.provider ?? null;
+  }
+
+  it("takes a provider named by another signal before one named only in Via", () => {
+    for (const changes of [
+      { responseHeaders: [HOP_VIA, { name: "x-beta", value: "1" }] },
+      { responseHeaders: [{ name: "server", value: "beta" }, HOP_VIA] },
+      { responseHeaders: [HOP_VIA], setCookies: ["beta_session_guard"] },
+      {
+        responseHeaders: [
+          { name: "via", value: "1.1 hop, 1.1 varnish" },
+          { name: "x-beta", value: "1" },
+        ],
+      },
+    ]) {
+      assert.equal(providerWithHop(changes), "beta", JSON.stringify(changes));
+    }
+  });
+
+  it("takes a provider named only in Via when no other signal answers, and proves it", () => {
+    const changes = { responseHeaders: [HOP_VIA] };
+    assert.equal(providerWithHop(changes), "hop");
+    assert.equal(classifyRequest(facts(changes), WITH_HOP)?.proven, true);
+  });
+
+  it("takes a provider named in Via before a site connector cookie or the CNAME chain", () => {
+    assert.equal(
+      providerWithHop({
+        responseHeaders: [HOP_VIA],
+        setCookies: ["alphabot_1"],
+      }),
+      "hop",
+    );
+    assert.equal(
+      providerWithHop({
+        responseHeaders: [HOP_VIA],
+        cnames: ["site.edge.beta.example"],
+      }),
+      "hop",
+    );
+  });
+
+  it("keeps the order of the table between providers named only in Via", () => {
+    const other = provider("other", {
+      headers: [{ name: "via", value: "*1.1 other*" }],
+    });
+    const responseHeaders = [{ name: "via", value: "1.1 hop, 1.1 other" }];
+    const orders: [ProviderTable, string][] = [
+      [{ ...TABLE, providers: [HOP, other] }, "hop"],
+      [{ ...TABLE, providers: [other, HOP] }, "other"],
+    ];
+    for (const [table, first] of orders) {
+      assert.equal(
+        classifyRequest(facts({ responseHeaders }), table)?.provider,
+        first,
+      );
+    }
+  });
+
   it("skips a range it cannot read and keeps the others", () => {
     const broken = provider("broken", {
       ranges: ["not a range", "192.0.2.0/24"],

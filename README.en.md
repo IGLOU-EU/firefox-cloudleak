@@ -18,7 +18,7 @@ The toolbar icon takes the colour of the highest level of the tab and shows the 
 
 A map links all the sites using these services to their providers and to the country the data going through each of them depends on. In private browsing, nothing is kept after the last private window closes.
 
-The extension does not know every provider, and although it tries to guess, a complete view is impossible. A dynamic detection, to turn on in the preferences, supposes a provider absent from its list from the final DNS name (CNAME) of a request: it shows under its domain name, with a ❓ in place of the flag, and it is only a supposition, which may name a mere hosting company. Still, it gives an idea of the privacy and data sovereignty issue, and also of which countries can decide on the right to access an online service.
+The extension does not know every provider, and although it tries to guess, a complete view is impossible. When several intermediaries follow one another on the path of a request, it names only one, the one surest to have received it. A dynamic detection, to turn on in the preferences, supposes a provider absent from its list from the final DNS name (CNAME) of a request: it shows under its domain name, with a ❓ in place of the flag, and it is only a supposition, which may name a mere hosting company. Still, it gives an idea of the privacy and data sovereignty issue, and also of which countries can decide on the right to access an online service.
 
 ## Build, test and run
 
