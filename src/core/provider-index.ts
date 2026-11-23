@@ -40,8 +40,12 @@ export interface ProviderIndex {
   readonly ipv4: readonly Ipv4Networks[];
   readonly ipv6: readonly Ipv6Networks[];
   // Response headers by name, with their value pattern or null for presence.
-  // A server value is a header named "server".
+  // A server value is a header named "server". The signatures of the Via
+  // header are kept apart: every proxy of the path may add itself to Via,
+  // and a gateway may also not, so a provider seen in it may stand behind
+  // another one that leaves only its own headers.
   readonly headers: PatternIndex<string | null>;
+  readonly via: PatternIndex<string | null>;
   readonly cookies: PatternIndex<null>;
   readonly siteConnectorCookies: PatternIndex<null>;
   readonly cname: Map<string, number>;
@@ -83,6 +87,7 @@ function buildIndex(providers: readonly ProviderEntry[]): ProviderIndex {
   const ipv6 = new Map<number, Map<bigint, number>>();
   const index = {
     headers: patternIndex<string | null>(),
+    via: patternIndex<string | null>(),
     cookies: patternIndex<null>(),
     siteConnectorCookies: patternIndex<null>(),
     cname: new Map<string, number>(),
@@ -99,7 +104,8 @@ function buildIndex(providers: readonly ProviderEntry[]): ProviderIndex {
       keep(networks, network >> BigInt(128 - prefixLength), position);
     }
     for (const { name, value } of provider.headers) {
-      add(index.headers, position, name, value);
+      const headers = name.toLowerCase() === "via" ? index.via : index.headers;
+      add(headers, position, name, value);
     }
     for (const value of provider.server) {
       add(index.headers, position, "server", value);
@@ -202,24 +208,38 @@ function firstMatch<T>(
   return best;
 }
 
-export function bySignal(
-  headers: readonly { readonly name: string; readonly value: string }[],
-  setCookies: readonly string[],
-  index: ProviderIndex,
+type Headers = readonly { readonly name: string; readonly value: string }[];
+
+function byHeaders(
+  headers: Headers,
+  index: PatternIndex<string | null>,
+  bound: number,
 ): number {
-  let best = NONE;
+  let best = bound;
   for (const { name, value } of headers) {
     best = firstMatch(
-      index.headers,
+      index,
       name,
       (pattern) => pattern === null || matchesPattern(pattern, value),
       best,
     );
   }
+  return best;
+}
+
+// A provider seen only in Via comes after one that another of its signals
+// names, the provider surest to have received the request. The order of the
+// table settles the rest.
+export function bySignal(
+  headers: Headers,
+  setCookies: readonly string[],
+  index: ProviderIndex,
+): number {
+  let best = byHeaders(headers, index.headers, NONE);
   for (const name of setCookies) {
     best = firstMatch(index.cookies, name, () => true, best);
   }
-  return best;
+  return best === NONE ? byHeaders(headers, index.via, NONE) : best;
 }
 
 // Some anti-bot products also hand their cookies to a connector installed at

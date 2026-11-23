@@ -886,7 +886,8 @@ describe("the address ranges of the committed data", () => {
 
 // The search of a request's provider as it was written before the index: each
 // step compares the request with every provider in the order of the table,
-// and the first that answers wins.
+// and the first that answers wins. The signatures of the Via header make a
+// step of their own, after the other signals.
 function referenceProvider(facts: RequestFacts): string | null {
   const any = (patterns: readonly string[], text: string) =>
     patterns.some((pattern) => matchesPattern(pattern, text));
@@ -916,12 +917,21 @@ function referenceProvider(facts: RequestFacts): string | null {
       provider.ranges.ipv6.some((range) => cidrContains(range, address.value))
     );
   };
+  const isVia = ({ name }: ProviderEntry["headers"][number]) =>
+    name.toLowerCase() === "via";
   const bySignal = (provider: ProviderEntry) =>
     facts.responseHeaders.some(
       (h) =>
         (h.name.toLowerCase() === "server" && any(provider.server, h.value)) ||
-        header(provider.headers, h),
+        header(
+          provider.headers.filter((signature) => !isVia(signature)),
+          h,
+        ),
     ) || facts.setCookies.some((name) => any(provider.cookies, name));
+  const byVia = (provider: ProviderEntry) =>
+    facts.responseHeaders.some((h) =>
+      header(provider.headers.filter(isVia), h),
+    );
   const byConnector = (provider: ProviderEntry) =>
     facts.setCookies.some((name) => any(provider.siteConnectorCookies, name));
   const byCname = (provider: ProviderEntry) =>
@@ -932,7 +942,7 @@ function referenceProvider(facts: RequestFacts): string | null {
         return host === end || host.endsWith(`.${end}`);
       }),
     );
-  for (const step of [byAddress, bySignal, byConnector, byCname]) {
+  for (const step of [byAddress, bySignal, byVia, byConnector, byCname]) {
     const found = table.providers.find(step);
     if (found !== undefined) {
       return found.id;
