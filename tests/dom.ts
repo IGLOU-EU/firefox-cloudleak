@@ -216,6 +216,18 @@ export class Element {
     focused = this;
   }
 
+  blur(): void {
+    if (focused === this) {
+      focused = null;
+    }
+    this.dispatch("blur");
+  }
+
+  // A text 7 pixels wide a letter, as a measure of the page would give one.
+  getComputedTextLength(): number {
+    return [...this.textContent].length * 7;
+  }
+
   *all(): Generator<Element> {
     yield this;
     for (const child of this.children) {

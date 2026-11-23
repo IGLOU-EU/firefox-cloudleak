@@ -25,8 +25,6 @@ import { getMessageOf } from "../tests/messages.js";
 // The keystrokes the mock-up timed, three passes of them.
 const KEYSTROKES = ["l", "la", "lac", "la", "l", "", "v", "ve", "vel", "velo"];
 const PASSES = 3;
-// The height of the column in a tab of 1280 by 800 pixels.
-const VIEW_HEIGHT = 640;
 
 const formats = formatsOf("fr", getMessageOf("fr"), (site) => site);
 const data = largeSample();
@@ -53,7 +51,7 @@ function keystrokes(limits: Filters): number[] {
       const start = performance.now();
       const filters = { ...limits, text };
       const column = columnOf(map, filters);
-      placesOf(map, column, VIEW_HEIGHT);
+      placesOf(map, column);
       toolsOf(map, column, filters);
       panelOf(map, column, filters, null);
       times.push(performance.now() - start);

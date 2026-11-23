@@ -86,7 +86,8 @@ button.danger {
 input:focus-visible,
 button:focus-visible,
 a:focus-visible,
-svg [data-k]:focus-visible {
+svg [data-k]:focus-visible,
+svg .corridor-focus:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 1px;
 }
@@ -549,6 +550,55 @@ button.text-link {
   fill: var(--blue);
 }
 
+/* A provider of the rows in view without a pill: a hollow point, in the grey
+   of the borders of the pills, which reads as no arrival of a provider
+   named. */
+.hollow {
+  fill: var(--background);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+/* The corridor of the hollow points runs on a rail in the grey of the rules,
+   which says nothing the points do not, and in the colour of the text while
+   the arrows go through it. */
+.drawing .rail {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.drawing .corridor-active .rail {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.drawing .reach,
+.drawing .corridor-focus {
+  fill: transparent;
+}
+
+.drawing .corridor-focus {
+  pointer-events: none;
+}
+
+/* Pointing at a provider without a pill, or reaching it with the arrows,
+   lights its links and its point, and opens its pill, outlined in the colour
+   of the text as the one chosen, tied to its point. */
+.drawing .hollow.hovered {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.drawing .tie {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.drawing .floating .pill {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
 /* A link: the tint of its category, as thick as its level, and dashed when
    the decryption is not proven. Blue depends on no proof, so it stays solid. */
 .link {
@@ -581,6 +631,14 @@ button.text-link {
 .link.blue2 {
   stroke: var(--blue);
   stroke-width: 1;
+}
+
+.drawing svg.hovering .link:not(.hovered) {
+  opacity: 0.2;
+}
+
+.drawing svg.hovering .link.hovered {
+  opacity: 1;
 }
 
 /* The panel, in the words and the shapes of the popup. */

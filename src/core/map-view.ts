@@ -90,14 +90,11 @@ function suffixOf(category: KnownCategory): string {
   return `${category.charAt(0).toUpperCase()}${category.slice(1)}`;
 }
 
-// The geometry of the column, in pixels: a row of each site or group, a
-// heading above each category, and the providers at least a pill apart.
+// The geometry of the column, in pixels: a row of each site or group, and a
+// heading above each category.
 export const LIST_TOP = 32;
 export const ROW_HEIGHT = 24;
 const LIST_BOTTOM = 12;
-const PROVIDERS_TOP = 44;
-const PROVIDERS_BOTTOM = 10;
-const PROVIDERS_MIN_STEP = 48;
 
 // The blue sites through the same providers make one row past three, since
 // hundreds of them would push the others out of sight.
@@ -780,10 +777,6 @@ export function columnOf(basis: Basis, filters: Filters): Column {
   };
 }
 
-// A name short enough to fit its pill whatever its letters, which spares
-// the measure of nearly every name.
-export const SURE_TO_FIT = 16;
-
 // The longest start of a text that fits a width with "…" after it, since the
 // start of a domain name says the most, or the text itself when it fits.
 // The width of a text is measured by the page, a few times at most.
@@ -792,10 +785,10 @@ export function cutToFit(
   maxWidth: number,
   widthOf: (text: string) => number,
 ): string {
-  const letters = [...text];
-  if (letters.length <= SURE_TO_FIT || widthOf(text) <= maxWidth) {
+  if (widthOf(text) <= maxWidth) {
     return text;
   }
+  const letters = [...text];
   const cut = (count: number) =>
     `${letters.slice(0, count).join("").trimEnd()}…`;
   let fits = 0;
@@ -811,68 +804,216 @@ export function cutToFit(
   return cut(fits);
 }
 
-// The providers the rows in view link to, with the one chosen, take their
-// place from the top of the column, in their order, and the others leave
-// it: with every provider drawn, those beyond the height of the view would
-// never show. They spread over the height when few, up to twice the least
-// step, so that their links fan out without setting the pills far apart.
+// The geometry of the providers, in pixels: their pills from the top, at
+// least a step apart, and on their left the corridor of the points.
+const PROVIDERS_TOP = 44;
+const PROVIDERS_BOTTOM = 10;
+export const PILL_HEIGHT = 24;
+const PILL_STEP = 28;
+// Points that would come closer are set this far apart, or closer when the
+// corridor has no room for it.
+const POINT_STEP = 8;
+
+// A link the map draws, from the middle of its row in the view.
+export interface LinkInView {
+  readonly provider: string;
+  readonly y: number;
+  readonly category: KnownCategory;
+}
+
+export interface ProvidersInView {
+  // The middle of the pill of each provider named, in the order of the
+  // column.
+  readonly pills: ReadonlyMap<string, number>;
+  // The middle of the point of each of the others, from the top.
+  readonly points: ReadonlyMap<string, number>;
+  readonly radius: number;
+  // The corridor, which its points never leave.
+  readonly top: number;
+  readonly bottom: number;
+}
+
+// As many pills as fit from the top of the column to 10 pixels above the
+// bottom of the view, at the least step, and always one, for the provider
+// chosen.
+function pillsIn(viewHeight: number): number {
+  return Math.max(
+    1,
+    Math.floor(
+      (viewHeight - PROVIDERS_TOP - PROVIDERS_BOTTOM - PILL_HEIGHT) / PILL_STEP,
+    ) + 1,
+  );
+}
+
+interface Target {
+  readonly id: string;
+  readonly y: number;
+  readonly rank: number;
+}
+
+// Each point as near its target as it can be, a step apart at least from the
+// next, between top and bottom: those that would come closer gather into a
+// run, centred on what its points aim at.
+function nearest(
+  targets: readonly Target[],
+  step: number,
+  top: number,
+  bottom: number,
+): Map<string, number> {
+  interface Run {
+    readonly members: Target[];
+    start: number;
+  }
+  const settle = (run: Run) => {
+    const size = run.members.length;
+    const mean =
+      run.members.reduce(
+        (sum, target, index) => sum + target.y - index * step,
+        0,
+      ) / size;
+    run.start = Math.min(Math.max(mean, top), bottom - (size - 1) * step);
+  };
+  const runs: Run[] = [];
+  const sorted = targets
+    .map((target) => ({
+      ...target,
+      y: Math.min(Math.max(target.y, top), bottom),
+    }))
+    .sort((a, b) => a.y - b.y || a.rank - b.rank);
+  for (const target of sorted) {
+    let run: Run = { members: [target], start: 0 };
+    settle(run);
+    let above = runs.at(-1);
+    while (
+      above !== undefined &&
+      above.start + above.members.length * step > run.start + 1e-6
+    ) {
+      above.members.push(...run.members);
+      runs.pop();
+      run = above;
+      settle(run);
+      above = runs.at(-1);
+    }
+    runs.push(run);
+  }
+  return new Map(
+    runs.flatMap((run) =>
+      run.members.map((target, index): [string, number] => [
+        target.id,
+        run.start + index * step,
+      ]),
+    ),
+  );
+}
+
+// The providers the rows in view link to, with the one chosen, never go
+// beyond the view, however many they are. Those that fit have their pill,
+// from the top in the order of the column, spread over the height when few,
+// up to twice the least step. Each of the others has a point on a corridor,
+// in front of its rows, so that its links stay drawn and end on what stands
+// for their provider, never on a pill. The pills go first to the one chosen,
+// then to the providers of the data before the supposed ones, which a single
+// site may add, then to the most links in view, then to the most serious of
+// them, then to the order of the column.
 export function placesInView(
   order: readonly string[],
-  linked: ReadonlySet<string>,
+  links: readonly LinkInView[],
+  chosen: string | null,
+  supposed: (provider: string) => boolean,
   viewHeight: number,
-): Map<string, number> {
-  const shown = order.filter((id) => linked.has(id));
-  const room = viewHeight - PROVIDERS_BOTTOM - PROVIDERS_TOP;
-  const step = Math.min(
-    2 * PROVIDERS_MIN_STEP,
-    Math.max(PROVIDERS_MIN_STEP, room / (shown.length || 1)),
+): ProvidersInView {
+  const count = new Map<string, number>();
+  const sum = new Map<string, number>();
+  const worst = new Map<string, number>();
+  for (const link of links) {
+    add(count, link.provider);
+    add(sum, link.provider, link.y);
+    worst.set(
+      link.provider,
+      Math.min(
+        worst.get(link.provider) ?? CATEGORIES.length,
+        rankOf(link.category),
+      ),
+    );
+  }
+  const rank = new Map(order.map((id, index) => [id, index]));
+  const shown = order.filter((id) => id === chosen || count.has(id));
+  const named = new Set(
+    [...shown]
+      .sort(
+        (a, b) =>
+          Number(b === chosen) - Number(a === chosen) ||
+          Number(supposed(a)) - Number(supposed(b)) ||
+          (count.get(b) ?? 0) - (count.get(a) ?? 0) ||
+          (worst.get(a) ?? 0) - (worst.get(b) ?? 0) ||
+          (rank.get(a) ?? 0) - (rank.get(b) ?? 0),
+      )
+      .slice(0, pillsIn(viewHeight)),
   );
-  return new Map(
-    shown.map((id, index) => [id, PROVIDERS_TOP + step * (index + 0.5)]),
+  const pills = shown.filter((id) => named.has(id));
+  const room = viewHeight - PROVIDERS_TOP - PROVIDERS_BOTTOM;
+  const pillStep = Math.min(
+    2 * PILL_STEP,
+    Math.max(PILL_STEP, room / (pills.length || 1)),
   );
+  // The pill a point opens on hover, at its height, stays within the view.
+  const top = PROVIDERS_TOP;
+  const bottom = Math.max(top, viewHeight - PILL_HEIGHT / 2);
+  const others = shown.filter((id) => !named.has(id));
+  const pointStep = Math.min(
+    POINT_STEP,
+    (bottom - top) / Math.max(1, others.length - 1),
+  );
+  return {
+    pills: new Map(
+      pills.map((id, index) => [id, PROVIDERS_TOP + pillStep * (index + 0.5)]),
+    ),
+    points: nearest(
+      others.map((id) => ({
+        id,
+        y: (sum.get(id) ?? 0) / (count.get(id) ?? 1),
+        rank: rank.get(id) ?? 0,
+      })),
+      pointStep,
+      top,
+      bottom,
+    ),
+    radius: Math.max(1.5, Math.min(3, pointStep / 2 - 1)),
+    top,
+    bottom,
+  };
 }
 
 export interface ProviderLabel {
   readonly key: string;
-  readonly y: number;
   readonly provider: MapProvider;
   readonly name: string;
   // Its sites, or how many of them stay under a filter.
   readonly sites: string;
+  // What a screen reader hears of it: its law and its sites.
+  readonly spoken: string;
 }
 
 export interface Places {
   readonly providers: readonly ProviderLabel[];
 }
 
-// The providers keep their order and the step they have without filter.
-// Under a filter, those that keep links close up from the top, and those
-// left without any leave the column.
-export function placesOf(
-  map: PreparedMap,
-  column: Column,
-  viewHeight: number,
-): Places {
+// The providers keep the order they have without filter. Under a filter,
+// those left without a link leave the column.
+export function placesOf(map: PreparedMap, column: Column): Places {
   const { formats } = map;
   const shown = map.order
     .filter((id) => (column.byProvider.get(id) ?? 0) > 0)
     .map((id) => map.provider.get(id))
     .filter((entry) => entry !== undefined);
-  const bottom = Math.min(viewHeight, heightOf(map.whole)) - PROVIDERS_BOTTOM;
-  const step = Math.max(
-    PROVIDERS_MIN_STEP,
-    (bottom - PROVIDERS_TOP) / (map.order.length || 1),
-  );
-  const yAt = (index: number) => PROVIDERS_TOP + step * (index + 0.5);
   return {
-    providers: shown.map((provider, index) => {
+    providers: shown.map((provider) => {
       const count = column.byProvider.get(provider.id) ?? 0;
       const sites = column.filtered
         ? sitesOf(formats, count, provider.sites.length)
         : counted(formats, "mapSites", provider.sites.length);
       return {
         key: providerKey(provider.id),
-        y: yAt(index),
         provider,
         name:
           provider.flag === ""
@@ -882,6 +1023,7 @@ export function placesOf(
           provider.country === UNKNOWN_COUNTRY
             ? formats.message("mapSupposedSites", [sites])
             : sites,
+        spoken: formats.message("mapProviderSpoken", [provider.title, sites]),
       };
     }),
   };
@@ -901,6 +1043,9 @@ export interface MapHeader {
   readonly sitesHeading: string;
   readonly unit: string;
   readonly providersHeading: string;
+  // The name of the corridor of the providers without a pill, which says
+  // its keys.
+  readonly corridor: string;
   readonly search: string;
 }
 
@@ -913,6 +1058,7 @@ export function headerOf(map: PreparedMap): MapHeader {
     sitesHeading: formats.message("mapSitesHeading", []),
     unit: formats.message("mapUnit", []),
     providersHeading: formats.message("mapProvidersHeading", []),
+    corridor: formats.message("mapCorridor", []),
     search: formats.message("mapSearch", []),
   };
   if (map.privateWindow) {
