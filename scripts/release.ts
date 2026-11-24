@@ -82,7 +82,7 @@ function release(tag: string, out: string, dryRun: boolean): void {
     (!process.env["WEB_EXT_API_KEY"] || !process.env["WEB_EXT_API_SECRET"])
   ) {
     throw new Error(
-      "WEB_EXT_API_KEY or WEB_EXT_API_SECRET is not set: protected CI/CD variables only reach the pipeline of a protected tag (pattern v*)",
+      "WEB_EXT_API_KEY or WEB_EXT_API_SECRET is not set: in the pipeline, they come from the CI/CD variables that the header of .gitlab-ci.yml describes",
     );
   }
 

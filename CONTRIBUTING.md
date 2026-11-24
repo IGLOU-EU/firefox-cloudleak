@@ -43,7 +43,7 @@ A branch is merged into `main` with `--no-ff`.
 
 ## Releasing a version
 
-A version is published by its tag: the pipeline of a tag `vX.Y.Z` submits it to the listed channel of addons.mozilla.org. `.gitlab-ci.yml` holds the jobs and the CI/CD variables they need, `scripts/release.ts` the steps of the submission and what it sends.
+A version is published by its tag: the pipeline of a tag `vX.Y.Z` submits it to the listed channel of addons.mozilla.org. `.gitlab-ci.yml` holds the jobs and the CI/CD variables they need, `scripts/release.ts` the steps of the submission and what it sends. The keys of addons.mozilla.org reach the job that submits and no other: their variables are protected, so only the pipeline of a protected tag `v*` gets them, and scoped to the environment `addons.mozilla.org`, which that job alone declares.
 
 1. On a branch, raise `version` in `manifest.json` and write the release notes of the version in `amo/release-notes/`, one file per language: `<version>.en-US.md` and `<version>.fr.md`. They are the notes of the listing, at most 3,000 characters each, in the reduced Markdown of addons.mozilla.org (lists, bold, italics, links). They go in the commit of the version, `🙈 chore: version X.Y.Z`, and `npm run check` fails without them.
 2. Merge the branch, push `main` and wait for its pipeline to pass: a pushed tag is never moved, and a tag whose pipeline fails is repaired by a new version.

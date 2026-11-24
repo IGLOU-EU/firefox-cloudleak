@@ -11,15 +11,17 @@
 # with --dry-run. How to release a version: CONTRIBUTING.md, section
 # "Releasing a version".
 #
-# Required CI/CD variables (Settings > CI/CD > Variables), both Protected and
-# "Masked and hidden", from the API keys of the account that owns the add-on,
+# Required CI/CD variables (Settings > CI/CD > Variables), from the API keys
+# of the account that owns the add-on,
 # https://addons.mozilla.org/en-US/developers/addon/api/key/ :
 #   WEB_EXT_API_KEY     the JWT issuer, of the form user:12345:67
 #   WEB_EXT_API_SECRET  the JWT secret
-# web-ext sign reads them under these names. Protected, they only reach the
-# pipeline of a protected tag: the tags v* are protected (Settings >
-# Repository > Protected tags), otherwise the submission stops on a missing
-# key.
+# web-ext sign reads them under these names. Each is Protected, "Masked and
+# hidden", with the environment scope addons.mozilla.org instead of All: it
+# only reaches a job of that environment, the publish job, in the pipeline of
+# a protected tag. No other job, nor the tools it runs, ever holds the keys.
+# The tags v* are protected (Settings > Repository > Protected tags),
+# otherwise the submission stops on a missing key.
 
 stages:
   - check
@@ -58,6 +60,12 @@ publish:
   stage: publish
   rules:
     - *on_version_tag
+  # The environment the keys of addons.mozilla.org are scoped to. GitLab
+  # creates it on the first submission, and lists each version submitted
+  # under Operate > Environments.
+  environment:
+    name: addons.mozilla.org
+    url: https://addons.mozilla.org/firefox/addon/cloud-leak/
   script:
     - npm ci --no-audit --no-fund
     - npm run release -- "$CI_COMMIT_TAG" submission
