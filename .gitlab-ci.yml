@@ -1,0 +1,112 @@
+# CI of Cloud Leak.
+#
+# On the default branch and on merge requests: npm run check, the check
+# required before every commit, and nothing else.
+# On a version tag: the same check, then the submission of the version to
+# the listed channel of addons.mozilla.org, then a GitLab release that keeps
+# the files sent.
+#
+# The submission is scripts/release.ts, run by npm run release: it holds the
+# order of the steps and what is sent, and shows it without sending anything
+# with --dry-run. How to release a version: CONTRIBUTING.md, section
+# "Releasing a version".
+#
+# Required CI/CD variables (Settings > CI/CD > Variables), from the API keys
+# of the account that owns the add-on,
+# https://addons.mozilla.org/en-US/developers/addon/api/key/ :
+#   WEB_EXT_API_KEY     the JWT issuer, of the form user:12345:67
+#   WEB_EXT_API_SECRET  the JWT secret
+# web-ext sign reads them under these names. Each is Protected, "Masked and
+# hidden", with the environment scope addons.mozilla.org instead of All: it
+# only reaches a job of that environment, the publish job, in the pipeline of
+# a protected tag. No other job, nor the tools it runs, ever holds the keys.
+# The tags v* are protected (Settings > Repository > Protected tags),
+# otherwise the submission stops on a missing key.
+
+stages:
+  - check
+  - publish
+  - release
+
+default:
+  # The Node and npm with which the reviewers of addons.mozilla.org build the
+  # source archive again and compare it with the package
+  # (https://extensionworkshop.com/documentation/publish/source-code-submission/).
+  image: node:24.14.0
+
+variables:
+  # web-ext asks the npm registry for a newer version of itself at every
+  # command otherwise.
+  NO_UPDATE_NOTIFIER: "1"
+
+# A version tag, the only thing that ever publishes anything. The rule is
+# loose on purpose: a tag that only resembles a version starts the
+# submission, whose first step refuses it with the reason, instead of being
+# ignored in silence.
+.on_version_tag: &on_version_tag
+  if: $CI_COMMIT_TAG =~ /^v?\d+\.\d+/
+
+check:
+  stage: check
+  script:
+    - npm ci
+    - npm run check
+  rules:
+    - *on_version_tag
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+publish:
+  stage: publish
+  rules:
+    - *on_version_tag
+  # The environment the keys of addons.mozilla.org are scoped to. GitLab
+  # creates it on the first submission, and lists each version submitted
+  # under Operate > Environments.
+  environment:
+    name: addons.mozilla.org
+    url: https://addons.mozilla.org/firefox/addon/cloud-leak/
+  script:
+    - npm ci --no-audit --no-fund
+    - npm run release -- "$CI_COMMIT_TAG" submission
+    # Read back by the release job, which names the files it links to.
+    - printf 'VERSION=%s\nPUBLISH_JOB_ID=%s\n' "${CI_COMMIT_TAG#v}" "$CI_JOB_ID" > build.env
+  artifacts:
+    # Kept even when addons.mozilla.org refuses the version: the package and
+    # the source archive are then what is needed to understand why, or to
+    # submit them by hand.
+    when: always
+    paths:
+      - submission/*.xpi
+      - submission/*-src.zip
+      - submission/amo-metadata.json
+    reports:
+      dotenv: build.env
+    expire_in: never
+
+release:
+  stage: release
+  # The release keyword runs glab, which this image holds.
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  needs:
+    - job: publish
+      artifacts: true
+  rules:
+    - *on_version_tag
+  script:
+    - echo "release $CI_COMMIT_TAG"
+  release:
+    tag_name: $CI_COMMIT_TAG
+    description: >-
+      Submitted to addons.mozilla.org, which signs this version and offers it
+      at https://addons.mozilla.org/firefox/addon/cloud-leak/ once approved.
+      The files below are the package sent for signing, unsigned, and the
+      source archive of the tag, sent with it.
+    assets:
+      links:
+        - name: "firefox-cloudleak-$VERSION.xpi"
+          url: "$CI_PROJECT_URL/-/jobs/$PUBLISH_JOB_ID/artifacts/file/submission/firefox-cloudleak-$VERSION.xpi"
+          link_type: package
+        - name: "firefox-cloudleak-$VERSION-src.zip"
+          url: "$CI_PROJECT_URL/-/jobs/$PUBLISH_JOB_ID/artifacts/file/submission/firefox-cloudleak-$VERSION-src.zip"
+          link_type: other
