@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadTable } from "../scripts/providers.js";
+import type { KnownCategory } from "../src/core/counts.js";
 import {
   type Column,
   columnOf,
@@ -21,6 +22,7 @@ import {
   heightOf,
   highlightOf,
   type LimitRow,
+  type LinkInView,
   type MapFormats,
   NO_FILTER,
   type Panel,
@@ -38,6 +40,7 @@ import {
   withoutLimit,
 } from "../src/core/map-view.js";
 import type { MapData, SiteCounts } from "../src/core/popup-message.js";
+import { isSupposed } from "../src/core/supposed.js";
 import { htmlOf } from "./dom.js";
 import {
   COMMON_START,
@@ -69,6 +72,8 @@ const FIXED = {
   sitesHeading: "Sites, du plus grave au moins grave",
   unit: "requêtes",
   providersHeading: "Fournisseurs",
+  corridor:
+    "Fournisseurs pas encore nommés\u00a0: flèches haut et bas pour les parcourir, Entrée pour choisir, Échap pour quitter",
   search: "Chercher un site",
 };
 
@@ -141,7 +146,7 @@ describe("the flag of a provider", () => {
   });
 
   it("is the one of each provider, beside its name", () => {
-    const label = placesOf(SMALL, SMALL.whole, 700).providers.find(
+    const label = placesOf(SMALL, SMALL.whole).providers.find(
       (entry) => entry.provider.id === "radware",
     );
     assert.equal(label?.name, "\u{1f1ee}\u{1f1f1} Radware");
@@ -343,10 +348,7 @@ describe("the search", () => {
     const [group] = groupRows(column);
     assert.equal(`${group?.label}${group?.suffix}`, "4 sites sur 7, niveau 2");
     assert.equal(group?.title, "4 sites sur 7 tout bleus, par Cloudflare");
-    assert.equal(
-      placesOf(map, column, 700).providers[0]?.sites,
-      "4 sites sur 7",
-    );
+    assert.equal(placesOf(map, column).providers[0]?.sites, "4 sites sur 7");
     const panel = panelOf(map, column, four, "g:cloudflare");
     assert.equal(panel.kind === "group" && panel.name, "4 sites sur 7");
     const three = columnOf(map, filters({ text: "1" }));
@@ -663,27 +665,28 @@ describe("the overview", () => {
 });
 
 describe("the providers of the map", () => {
-  it("keep the place they have without filter, and under a filter close up from the top, without those left without a link", () => {
-    const places = placesOf(LARGE, LARGE.whole, 690);
+  it("keep their order, and under a filter leave the column when left without a link", () => {
+    const places = placesOf(LARGE, LARGE.whole);
     assert.deepEqual(
       places.providers.map((label) => label.provider.id),
       LARGE.order,
     );
-    const step = Math.max(48, (690 - 10 - 44) / 7);
-    assert.deepEqual(
-      places.providers.map((label) => label.y),
-      LARGE.order.map((_, index) => 44 + step * (index + 0.5)),
-    );
     assert.equal(places.providers[0]?.sites.endsWith(" sites"), true);
     const fastly = columnOf(LARGE, filters({ provider: "fastly" }));
-    const limited = placesOf(LARGE, fastly, 690);
+    const limited = placesOf(LARGE, fastly);
     assert.deepEqual(
-      limited.providers.map((label) => [
-        label.provider.id,
-        label.y,
-        label.sites,
-      ]),
-      [["fastly", 44 + step * 0.5, "190 sites"]],
+      limited.providers.map((label) => [label.provider.id, label.sites]),
+      [["fastly", "190 sites"]],
+    );
+  });
+
+  it("say to a screen reader the law of each and its sites", () => {
+    const cloudflare = placesOf(SMALL, SMALL.whole).providers.find(
+      (label) => label.provider.id === "cloudflare",
+    );
+    assert.equal(
+      cloudflare?.spoken,
+      `Cloudflare, soumis au droit des États-Unis, ${cloudflare?.sites}`,
     );
   });
 
@@ -717,7 +720,7 @@ describe("the providers of the map", () => {
       [gone?.name, gone?.flag, gone?.country, gone?.title],
       ["gone", "", "", "gone"],
     );
-    assert.equal(placesOf(map, map.whole, 600).providers[0]?.name, "gone");
+    assert.equal(placesOf(map, map.whole).providers[0]?.name, "gone");
     assert.deepEqual(overview(map, map.whole, NO_FILTER).sections[1]?.rows, []);
   });
 });
@@ -1302,11 +1305,15 @@ describe("a supposed provider on the map", () => {
       provider?.title,
       "b-cdn.net, fournisseur supposé, droit inconnu",
     );
-    const label = placesOf(SUPPOSED, SUPPOSED.whole, 700).providers.find(
+    const label = placesOf(SUPPOSED, SUPPOSED.whole).providers.find(
       (entry) => entry.provider.id === "b-cdn.net",
     );
     assert.equal(label?.name, "\u2753 b-cdn.net");
     assert.equal(label?.sites, "supposé, 2 sites");
+    assert.equal(
+      label?.spoken,
+      "b-cdn.net, fournisseur supposé, droit inconnu, 2 sites",
+    );
   });
 
   it("leaves a provider of the data this version no longer knows without flag or mention", () => {
@@ -1363,34 +1370,264 @@ describe("a supposed provider on the map", () => {
 
 describe("the providers of the rows in view", () => {
   const ORDER = ["a", "b", "c", "d"];
+  const none = () => false;
+
+  // A link of a row in view, from the middle of its row.
+  function at(
+    provider: string,
+    y: number,
+    category: KnownCategory = "red4",
+  ): LinkInView {
+    return { provider, y, category };
+  }
+
+  // The most pills a view holds: from 44 pixels to 10 above its bottom, each
+  // 24 high and 28 apart at least.
+  function most(height: number): number {
+    return Math.floor((height - 54 - 24) / 28) + 1;
+  }
 
   it("take their place from the top, in their order, and the others leave the column", () => {
-    const places = placesInView(ORDER, new Set(["d", "b"]), 148);
+    const places = placesInView(
+      ORDER,
+      [at("d", 100), at("b", 60)],
+      null,
+      none,
+      148,
+    );
+    const step = (148 - 54) / 2;
     assert.deepEqual(
-      [...places],
+      [...places.pills],
       [
-        ["b", 44 + 48 * 0.5],
-        ["d", 44 + 48 * 1.5],
+        ["b", 44 + step * 0.5],
+        ["d", 44 + step * 1.5],
       ],
     );
-    assert.deepEqual([...placesInView(ORDER, new Set(), 700)], []);
-    assert.deepEqual([...placesInView(ORDER, new Set(["z"]), 700)], []);
+    assert.deepEqual([...places.points], []);
+    assert.deepEqual([...placesInView(ORDER, [], null, none, 700).pills], []);
+    const unknown = placesInView(ORDER, [at("z", 100)], null, none, 700);
+    assert.deepEqual([...unknown.pills, ...unknown.points], []);
   });
 
   it("spread over the height when few, up to twice the least step, and keep the least step when many", () => {
+    const all = ORDER.map((id) => at(id, 100));
     assert.deepEqual(
-      [...placesInView(ORDER, new Set(["a"]), 700).values()],
-      [44 + 96 * 0.5],
+      [...placesInView(ORDER, [at("a", 100)], null, none, 700).pills.values()],
+      [44 + 56 * 0.5],
     );
-    const room = 10 + 44 + 4 * 60;
+    const room = 10 + 44 + 4 * 40;
     assert.deepEqual(
-      [...placesInView(ORDER, new Set(ORDER), room).values()],
-      [0.5, 1.5, 2.5, 3.5].map((index) => 44 + 60 * index),
+      [...placesInView(ORDER, all, null, none, room).pills.values()],
+      [0.5, 1.5, 2.5, 3.5].map((index) => 44 + 40 * index),
     );
     assert.deepEqual(
-      [...placesInView(ORDER, new Set(ORDER), 100).values()],
-      [0.5, 1.5, 2.5, 3.5].map((index) => 44 + 48 * index),
+      [...placesInView(ORDER, all, null, none, 162).pills.values()],
+      [0.5, 1.5, 2.5, 3.5].map((index) => 44 + 28 * index),
     );
+  });
+
+  it("keep the one chosen in the column, even without a link in view", () => {
+    assert.deepEqual(
+      [...placesInView(ORDER, [at("a", 100)], "c", none, 700).pills.keys()],
+      ["a", "c"],
+    );
+  });
+
+  // Links as the map draws them: a row every 24 pixels, from 24 pixels under
+  // the top of the view to 4 above its bottom, and on them nine providers of
+  // the data, then supposed ones, each on a single row but one in eight on
+  // two, as the mock-up sets them.
+  function crowd(count: number, height: number): LinkInView[] {
+    const rows: number[] = [];
+    for (let y = 36; y <= height - 4; y += 24) {
+      rows.push(y);
+    }
+    const cycle: KnownCategory[] = ["orange4", "blue2", "orange3"];
+    const links: LinkInView[] = [];
+    for (let index = 0; index < count; index += 1) {
+      const provider = index < 9 ? `known${index}` : `s${index}.example`;
+      const category = index < 9 ? "red4" : (cycle[index % 3] ?? "blue2");
+      links.push(at(provider, rows[(index * 11) % rows.length] ?? 0, category));
+      if (index % 8 === 7) {
+        links.push(at(provider, rows[(index * 11 + 5) % rows.length] ?? 0));
+      }
+    }
+    return links;
+  }
+
+  for (const height of [643, 940]) {
+    for (const count of [19, 60, 120]) {
+      it(`never go beyond a view of ${height} pixels with ${count} providers, whose pill opens within it`, () => {
+        const links = crowd(count, height);
+        const order = [...new Set(links.map((link) => link.provider))];
+        for (const chosen of [null, order.at(-1) ?? null]) {
+          const places = placesInView(order, links, chosen, isSupposed, height);
+          assert.equal(places.pills.size, Math.min(count, most(height)));
+          assert.deepEqual(
+            [...places.pills.keys(), ...places.points.keys()].sort(),
+            [...order].sort(),
+          );
+          if (chosen !== null) {
+            assert.equal(places.pills.has(chosen), true);
+          }
+          const pills = [...places.pills.values()];
+          pills.forEach((y, index) => {
+            assert.ok(y - 12 >= 0 && y + 12 <= height, `pill at ${y}`);
+            assert.ok(index === 0 || y - (pills[index - 1] ?? 0) >= 28);
+          });
+          for (const y of places.points.values()) {
+            assert.ok(y >= 44 - 1e-9 && y <= height - 12 + 1e-9, `${y}`);
+            assert.ok(y + places.radius <= height);
+            // The pill of the point, which its hover opens at its height.
+            assert.ok(y - 12 >= 24 && y + 12 <= height + 1e-9, `${y}`);
+          }
+        }
+      });
+    }
+  }
+
+  // Eight providers of the data, two links each, which take the eight pills
+  // of a view of 300 pixels, and supposed ones of a link each.
+  const NAMED = Array.from({ length: 8 }, (_, index) => `known${index}`);
+  const FULL = NAMED.flatMap((id) => [at(id, 50), at(id, 60)]);
+
+  it("put the point of a provider without a pill in front of its rows", () => {
+    assert.equal(most(300), 8);
+    const places = placesInView(
+      [...NAMED, "a.example", "b.example"],
+      [
+        ...FULL,
+        at("a.example", 150),
+        at("b.example", 200),
+        at("b.example", 240),
+      ],
+      null,
+      isSupposed,
+      300,
+    );
+    assert.deepEqual([...places.pills.keys()], NAMED);
+    assert.deepEqual(
+      [...places.points],
+      [
+        ["a.example", 150],
+        ["b.example", 220],
+      ],
+    );
+    assert.equal(places.radius, 3);
+    assert.deepEqual([places.top, places.bottom], [44, 288]);
+  });
+
+  it("set the points that would come closer 8 pixels apart, together, and keep them in the corridor", () => {
+    const places = placesInView(
+      [...NAMED, "c.example", "d.example", "e.example", "f.example"],
+      [
+        ...FULL,
+        at("d.example", 100),
+        at("c.example", 100),
+        at("e.example", 10),
+        at("f.example", 299),
+      ],
+      null,
+      isSupposed,
+      300,
+    );
+    assert.deepEqual(
+      [...places.points],
+      [
+        ["e.example", 44],
+        ["c.example", 96],
+        ["d.example", 104],
+        ["f.example", 288],
+      ],
+    );
+  });
+
+  it("set them closer when the corridor has no room for 8 pixels between them, and never out of it", () => {
+    const crowded = Array.from({ length: 60 }, (_, index) => `p${index}.x`);
+    const places = placesInView(
+      [...NAMED, ...crowded],
+      [...FULL, ...crowded.map((id) => at(id, 150))],
+      null,
+      isSupposed,
+      300,
+    );
+    const points = [...places.points.values()];
+    const step = (288 - 44) / 59;
+    assert.equal(points.length, 60);
+    assert.ok(Math.abs((points[0] ?? 0) - 44) < 1e-9);
+    assert.ok(Math.abs((points.at(-1) ?? 0) - 288) < 1e-9);
+    points.slice(1).forEach((y, index) => {
+      assert.ok(Math.abs(y - (points[index] ?? 0) - step) < 1e-9);
+    });
+    assert.equal(places.radius, 1.5);
+  });
+
+  it("give the pills first to the one chosen, even when it falls beyond their place", () => {
+    assert.equal(most(106), 2);
+    const places = placesInView(
+      ORDER,
+      [
+        ...["a", "b", "c"].flatMap((id) => [
+          at(id, 40),
+          at(id, 60),
+          at(id, 80),
+        ]),
+        at("d", 90, "blue2"),
+      ],
+      "d",
+      none,
+      106,
+    );
+    assert.deepEqual([...places.pills.keys()], ["a", "d"]);
+    assert.deepEqual([...places.points.keys()].sort(), ["b", "c"]);
+  });
+
+  it("give them to a provider of the data of a single site before a supposed one of two", () => {
+    assert.equal(most(100), 1);
+    const places = placesInView(
+      ["s.example", "k"],
+      [
+        at("s.example", 50, "orange4"),
+        at("s.example", 70, "orange4"),
+        at("k", 60, "blue2"),
+      ],
+      null,
+      isSupposed,
+      100,
+    );
+    assert.deepEqual([...places.pills.keys()], ["k"]);
+    assert.deepEqual([...places.points.keys()], ["s.example"]);
+  });
+
+  it("then to the most links in view, then to the most serious of them, then to the order of the column", () => {
+    const first = (links: LinkInView[]) => [
+      ...placesInView(["a", "b"], links, null, none, 100).pills.keys(),
+    ];
+    assert.deepEqual(
+      first([at("a", 50), at("b", 60, "blue2"), at("b", 70, "blue2")]),
+      ["b"],
+    );
+    assert.deepEqual(first([at("a", 50, "blue2"), at("b", 60, "red3")]), ["b"]);
+    assert.deepEqual(first([at("b", 50), at("a", 60)]), ["a"]);
+  });
+
+  it("range the pills kept in the order of the column, whatever their priority", () => {
+    const places = placesInView(
+      ["a", "b", "c"],
+      [
+        at("c", 40),
+        at("c", 60),
+        at("c", 80),
+        at("a", 40),
+        at("a", 60),
+        at("b", 40),
+      ],
+      null,
+      none,
+      106,
+    );
+    assert.deepEqual([...places.pills.keys()], ["a", "c"]);
+    assert.ok((places.pills.get("a") ?? 0) < (places.pills.get("c") ?? 0));
   });
 });
 
@@ -1406,18 +1643,18 @@ describe("a name too long for its pill", () => {
     assert.equal(cutToFit(LONG, 190, widthOf), "\u2753 us-west-2.elb.am…");
   });
 
-  it("stays whole when it fits, and is not even measured when it is short", () => {
-    assert.equal(cutToFit(LONG, 290, widthOf), LONG);
+  it("stays whole when it fits, measured once", () => {
     let measured = 0;
     const counting = (text: string) => {
       measured += 1;
       return widthOf(text);
     };
-    assert.equal(
-      cutToFit("\u2753 b-cdn.net", 10, counting),
-      "\u2753 b-cdn.net",
-    );
-    assert.equal(measured, 0);
+    assert.equal(cutToFit(LONG, 290, counting), LONG);
+    assert.equal(measured, 1);
+  });
+
+  it("is cut however short it is, when the sites beside it leave it little room", () => {
+    assert.equal(cutToFit("\u2753 b-cdn.net", 60, widthOf), "\u2753 b-c…");
   });
 
   it("leaves no space before the ellipsis, and never cuts a flag in two", () => {

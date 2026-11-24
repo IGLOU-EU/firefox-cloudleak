@@ -91,6 +91,14 @@ export class Element {
     }
   }
 
+  prepend(...nodes: (Element | string)[]): void {
+    const rest = this.children.splice(0);
+    this.append(...nodes);
+    this.children.push(
+      ...rest.filter((child) => !this.children.includes(child)),
+    );
+  }
+
   replaceChildren(...nodes: (Element | string)[]): void {
     for (const child of this.children) {
       child.parent = null;
@@ -214,6 +222,18 @@ export class Element {
 
   focus(): void {
     focused = this;
+  }
+
+  blur(): void {
+    if (focused === this) {
+      focused = null;
+    }
+    this.dispatch("blur");
+  }
+
+  // A text 7 pixels wide a letter, as a measure of the page would give one.
+  getComputedTextLength(): number {
+    return [...this.textContent].length * 7;
   }
 
   *all(): Generator<Element> {

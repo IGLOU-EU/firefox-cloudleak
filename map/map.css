@@ -20,6 +20,9 @@
   --red: #e03050;
   /* The text of the light theme at half opacity, on both themes. */
   --veil: rgb(21 20 26 / 50%);
+  /* The pill opened over the others: a lighter ground, lifted by a shadow. */
+  --lifted: #ffffff;
+  --lift-shadow: rgb(21 20 26 / 35%);
   color-scheme: light dark;
 }
 
@@ -31,6 +34,8 @@
     --rule: #52525e;
     --button: #45444f;
     --field: #1c1b22;
+    --lifted: #4d4c58;
+    --lift-shadow: rgb(0 0 0 / 80%);
   }
 }
 
@@ -86,7 +91,8 @@ button.danger {
 input:focus-visible,
 button:focus-visible,
 a:focus-visible,
-svg [data-k]:focus-visible {
+svg [data-k]:focus-visible,
+svg .corridor-focus:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: 1px;
 }
@@ -458,6 +464,10 @@ button.text-link {
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  /* The room of the scrollbar is kept before the sites outgrow the plan, so
+     that the width of the drawing, read at its first render while the plan
+     is still empty, does not run under the scrollbar once they do. */
+  scrollbar-gutter: stable;
 }
 
 .plan,
@@ -549,6 +559,71 @@ button.text-link {
   fill: var(--blue);
 }
 
+/* A provider of the rows in view without a pill: a hollow point, in the grey
+   of the borders of the pills, which reads as no arrival of a provider
+   named. */
+.hollow {
+  fill: var(--background);
+  stroke: var(--border);
+  stroke-width: 1.5;
+}
+
+/* The corridor of the hollow points runs on a rail in the grey of the rules,
+   which says nothing the points do not, and in the colour of the text while
+   the arrows go through it. */
+.drawing .rail {
+  stroke: var(--rule);
+  stroke-width: 1;
+}
+
+.drawing .corridor-active .rail {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.drawing .reach,
+.drawing .corridor-focus {
+  fill: transparent;
+}
+
+.drawing .corridor-focus {
+  pointer-events: none;
+}
+
+/* Pointing at a provider without a pill, or reaching it with the arrows,
+   lights its links and its point, and opens its pill, outlined in the colour
+   of the text as the one chosen, tied to its point. */
+.drawing .hollow.hovered {
+  stroke: var(--text);
+  stroke-width: 2;
+}
+
+.drawing .tie {
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+/* The pill opened stands out of the column: shifted to the right, on a
+   lighter ground, cut out of the pills under it by a halo in the colour of
+   the ground and lifted by a shadow, while the pills named step back. */
+.drawing .floating {
+  filter: drop-shadow(0 4px 6px var(--lift-shadow));
+}
+
+.drawing .floating .halo {
+  fill: var(--background);
+}
+
+.drawing .floating .pill {
+  fill: var(--lifted);
+  stroke: var(--text);
+  stroke-width: 1.5;
+}
+
+.drawing svg.hovering > g.fades {
+  opacity: 0.4;
+}
+
 /* A link: the tint of its category, as thick as its level, and dashed when
    the decryption is not proven. Blue depends on no proof, so it stays solid. */
 .link {
@@ -581,6 +656,14 @@ button.text-link {
 .link.blue2 {
   stroke: var(--blue);
   stroke-width: 1;
+}
+
+.drawing svg.hovering .link:not(.hovered) {
+  opacity: 0.2;
+}
+
+.drawing svg.hovering .link.hovered {
+  opacity: 1;
 }
 
 /* The panel, in the words and the shapes of the popup. */

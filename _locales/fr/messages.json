@@ -1373,12 +1373,34 @@
   },
   "mapSupposedSites": {
     "message": "supposé, $SITES$",
-    "description": "Second line of the pill of a supposed provider on the map, before its number of sites as mapSites gives it.",
+    "description": "Right of the pill of a supposed provider on the map, in grey after its name, before its number of sites as mapSites gives it.",
     "placeholders": {
       "sites": {
         "content": "$1",
         "example": "3 sites"
       }
     }
+  },
+  "mapCorridor": {
+    "message": "Fournisseurs pas encore nommés\u00a0: flèches haut et bas pour les parcourir, Entrée pour choisir, Échap pour quitter",
+    "description": "Accessible name of the corridor of the map, left of the pills of the providers, where each provider without a pill has a hollow point: one stop of the Tab key, whose keys it says."
+  },
+  "mapProviderSpoken": {
+    "message": "$PROVIDER$, $SITES$",
+    "description": "What a screen reader hears when the arrows of the corridor of the map reach the point of a provider: the provider and its law, then its number of sites.",
+    "placeholders": {
+      "provider": {
+        "content": "$1",
+        "example": "Cloudflare, soumis au droit des États-Unis"
+      },
+      "sites": {
+        "content": "$2",
+        "example": "26 sites"
+      }
+    }
+  },
+  "mapLegendHollow": {
+    "message": "fournisseur pas encore nommé, nommé au survol",
+    "description": "Legend of the map, after a hollow point: a provider of the rows in view that has no pill, whose pill opens when the pointer is over the point or one of its links."
   }
 }

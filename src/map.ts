@@ -5,7 +5,7 @@
 // for the counts of every site and puts them into the page through the view
 // of core/map-view.ts, which decides everything that is shown.
 
-import { colourOfCategory } from "./core/counts.js";
+import { colourOfCategory, type KnownCategory } from "./core/counts.js";
 import {
   type AddressRow,
   type CategoryLine,
@@ -25,10 +25,15 @@ import {
   keyPartsOf,
   type LimitList,
   type LimitRow,
+  type LinkInView,
   NO_FILTER,
   type Panel,
+  PILL_HEIGHT,
   type PreparedMap,
+  type ProviderLabel,
+  type ProvidersInView,
   panelOf,
+  pillsIn,
   placesInView,
   placesOf,
   prepare,
@@ -62,9 +67,21 @@ const SVG = "http://www.w3.org/2000/svg";
 // some, the providers then cut at the right as in the mock-up.
 const LIST_WIDTH = 340;
 const LINKS_MIN_WIDTH = 400;
-const PILL_WIDTH = 200;
+// A pill holds one line: the flag and the name of its provider on the left,
+// its sites in grey on the right, at least NOTE_GAP apart.
+const PILL_WIDTH = 248;
 const PILL_MARGIN = 18;
 const PILL_PADDING = 12;
+const NOTE_GAP = 8;
+// The corridor of the providers without a pill, on the left of the pills,
+// and how far on each side of it the pointer reaches its points.
+const CORRIDOR_GAP = 16;
+const CORRIDOR_REACH = 8;
+// The pill a point opens, shifted into the margin on the right so that the
+// pill under it and the links that end there keep showing on its left, cut
+// out of them by a halo in the colour of the ground.
+const LIFT_X = 8;
+const HALO = 3;
 
 // A cut address scrolls on hover and focus at this speed, in pixels a
 // second, so that the time it takes follows its length.
@@ -125,10 +142,43 @@ let selection: string | null = null;
 let confirming = false;
 let column: Column | null = null;
 // Each link with what places it, so that a scroll moves it without a lookup.
-let drawn: { path: SVGPathElement; slot: number; provider: string }[] = [];
-// The pill of each provider drawn, in the order of the column.
-let pills = new Map<string, SVGGElement>();
+let drawn: {
+  path: SVGPathElement;
+  slot: number;
+  provider: string;
+  category: KnownCategory;
+}[] = [];
+// The provider of each link, which pointing at the link points at.
+let linkProvider = new Map<Element, string>();
+// The pill of each provider drawn, in the order of the column, with its
+// texts, and the point it has on the corridor while it has no pill.
+interface ProviderMarks {
+  readonly label: ProviderLabel;
+  readonly pill: SVGGElement;
+  readonly name: SVGTextElement;
+  readonly note: SVGTextElement;
+  readonly point: SVGCircleElement;
+  // The band of the corridor around the point, which the pointer reaches.
+  readonly reach: SVGRectElement;
+}
+let marks = new Map<string, ProviderMarks>();
+// The right of the drawing: its image, its corridor, and the layer of the
+// pill that opens over the others.
+interface Right {
+  readonly image: SVGSVGElement;
+  readonly corridor: SVGGElement;
+  readonly rail: SVGLineElement;
+  readonly focus: SVGRectElement;
+  readonly floating: SVGGElement;
+}
+let right: Right | null = null;
+let supposed = new Set<string>();
 let pillX = LINKS_MIN_WIDTH - PILL_WIDTH - PILL_MARGIN;
+// Where the column last placed the providers, and the provider without a
+// pill that the pointer or the arrows point at.
+let places: ProvidersInView | null = null;
+let hovered: string | null = null;
+let corridorFocused = false;
 // The addresses the event page keeps of the site whose panel is open, and
 // the rows of that panel the user unfolded.
 let record: SiteRecord | null = null;
@@ -286,20 +336,33 @@ function renderColumn(resetScroll: boolean): void {
   const drawing = element("drawing");
   const noMatch = element("no-match");
   drawn = [];
-  pills = new Map();
+  linkProvider = new Map();
+  marks = new Map();
+  right = null;
+  places = null;
+  hovered = null;
+  corridorFocused = false;
+  const legend = element("legend-hollow");
   if (map === null || map.sites.length === 0) {
     column = null;
     noMatch.hidden = true;
+    legend.hidden = true;
     drawing.replaceChildren();
     return;
   }
   const current = columnOf(map, filters);
   column = current;
   const header = headerOf(map);
+  // The legend explains the hollow point only when the map has more
+  // providers than the column has pills, so that a map whose providers all
+  // fit never shows it. Set before the height of the plan is read, which the
+  // legend takes from it, and from every provider of the map rather than
+  // those a filter keeps, so that a keystroke never moves the plan.
+  legend.hidden = map.order.length <= pillsIn(plan.clientHeight);
   const viewHeight = plan.clientHeight;
   const linksWidth = Math.max(LINKS_MIN_WIDTH, plan.clientWidth - LIST_WIDTH);
   pillX = linksWidth - PILL_WIDTH - PILL_MARGIN;
-  const places = placesOf(map, current, viewHeight);
+  const labels = placesOf(map, current).providers;
   if (resetScroll) {
     plan.scrollTop = 0;
   }
@@ -395,7 +458,7 @@ function renderColumn(resetScroll: boolean): void {
     list.append(titled(line, row.kind === "site" ? row.site.title : row.title));
   }
 
-  const right = svg("svg", {
+  const image = svg("svg", {
     class: "providers",
     width: linksWidth,
     height: viewHeight,
@@ -411,7 +474,7 @@ function renderColumn(resetScroll: boolean): void {
   });
   title.textContent = header.providersHeading;
   const links = svg("g");
-  const placed = new Set(places.providers.map((label) => label.provider.id));
+  const placed = new Set(labels.map((label) => label.provider.id));
   for (const link of current.links) {
     if (!placed.has(link.provider)) {
       continue;
@@ -421,119 +484,386 @@ function renderColumn(resetScroll: boolean): void {
       "data-k": link.key,
     });
     links.append(titled(path, link.title));
-    drawn.push({ path, slot: link.slot, provider: link.provider });
+    drawn.push({
+      path,
+      slot: link.slot,
+      provider: link.provider,
+      category: link.category,
+    });
+    linkProvider.set(path, link.provider);
   }
-  right.append(title, links);
-  const named: [SVGTextElement, string][] = [];
-  const pill = (
-    id: string,
-    key: string,
-    y: number,
-    name: string,
-    note: string,
-    tip: string,
-  ) => {
-    const label = svg("g", {
-      class: "fades",
-      "data-k": key,
-      tabindex: 0,
-      transform: `translate(${pillX} ${y.toFixed(1)})`,
+  const corridor = corridorOf(image, header.corridor);
+  const floating = svg("g");
+  image.append(title, links, corridor.corridor);
+  supposed = new Set(
+    labels
+      .filter((label) => label.provider.country === UNKNOWN_COUNTRY)
+      .map((label) => label.provider.id),
+  );
+  const reaches: SVGRectElement[] = [];
+  for (const label of labels) {
+    const { pill, name, note } = pillOf(label, label.name, "fades");
+    pill.setAttribute("tabindex", "0");
+    const point = svg("circle", {
+      class: "hollow fades",
+      "data-k": label.key,
+      cx: pillX - CORRIDOR_GAP,
     });
-    pills.set(id, label);
-    const first = svg("text", {
-      x: PILL_PADDING,
-      y: -3,
-      "font-size": 13,
-      "font-weight": 600,
+    const reach = svg("rect", {
+      class: "reach",
+      "data-k": label.key,
+      x: pillX - CORRIDOR_GAP - CORRIDOR_REACH,
+      width: 2 * CORRIDOR_REACH,
     });
-    first.textContent = name;
-    named.push([first, name]);
-    const second = svg("text", {
-      class: "muted",
-      x: 12,
-      y: 12,
-      "font-size": 11,
-    });
-    second.textContent = note;
-    label.append(
-      svg("rect", {
-        class: "pill",
-        x: 0,
-        y: -20,
-        width: PILL_WIDTH,
-        height: 40,
-        rx: 8,
-      }),
-      first,
-      second,
-    );
-    right.append(titled(label, tip));
-  };
-  for (const label of places.providers) {
-    pill(
-      label.provider.id,
-      label.key,
-      label.y,
-      label.name,
-      label.sites,
-      label.provider.title,
-    );
+    point.style.display = "none";
+    reach.style.display = "none";
+    corridor.corridor.append(point);
+    reaches.push(reach);
+    image.append(pill);
+    marks.set(label.provider.id, { label, pill, name, note, point, reach });
   }
-  drawing.replaceChildren(list, right);
-  // A name too long for its pill is cut at its end, once it is in the page
-  // and can be measured. Its tooltip keeps it whole.
-  for (const [text, name] of named) {
-    text.textContent = cutToFit(name, PILL_WIDTH - 2 * PILL_PADDING, (cut) => {
-      text.textContent = cut;
-      return text.getComputedTextLength();
-    });
-  }
+  corridor.corridor.append(...reaches);
+  image.append(floating);
+  // Over nothing of a provider, such as the line that ties the pill opened
+  // to its point, the pill stays open, so that the pointer reaches it.
+  image.addEventListener("pointerover", (event) => {
+    const provider = providerAt(event);
+    if (provider !== null) {
+      hover(provider);
+    }
+  });
+  image.addEventListener("pointerleave", () => {
+    if (!corridorFocused) {
+      hover(null);
+    }
+  });
+  right = { image, ...corridor, floating };
+  drawing.replaceChildren(list, image);
+  cutNames();
   follow();
 }
 
+// A pill on one line: the flag and the name of its provider on the left,
+// its sites in grey on the right. Its tooltip keeps the name whole.
+function pillOf(
+  label: ProviderLabel,
+  name: string,
+  className: string,
+): { pill: SVGGElement; name: SVGTextElement; note: SVGTextElement } {
+  const pill = svg("g", { class: className, "data-k": label.key });
+  const first = svg("text", {
+    x: PILL_PADDING,
+    y: 4.5,
+    "font-size": 13,
+    "font-weight": 600,
+  });
+  first.textContent = name;
+  const note = svg("text", {
+    class: "muted",
+    x: PILL_WIDTH - PILL_PADDING,
+    y: 4.5,
+    "font-size": 11,
+    "text-anchor": "end",
+  });
+  note.textContent = label.sites;
+  pill.append(
+    svg("rect", {
+      class: "pill",
+      x: 0,
+      y: -PILL_HEIGHT / 2,
+      width: PILL_WIDTH,
+      height: PILL_HEIGHT,
+      rx: 6,
+    }),
+    first,
+    note,
+  );
+  return { pill: titled(pill, label.provider.title), name: first, note };
+}
+
+// A name too long for its pill is cut at its end, once it is in the page
+// and can be measured, the room its sites leave it read for every pill
+// before any is cut, so that the page is laid out once. Each try of a cut
+// lays the page out again, which a supposed provider beside its sites often
+// needs: a name keeps its cut beside the same sites, those of the last
+// answer of the event page kept beside those of the current one, as the
+// messages are, so that neither a keystroke nor a return to the tab measures
+// what it has already seen: with 120 providers in view, a keystroke took
+// 76 ms rather than 53 without it, in LibreWolf 159 without display. Its
+// tooltip keeps it whole.
+let cuts = new Map<string, string>();
+let lastCuts = new Map<string, string>();
+
+function cutNames(): void {
+  const keyOf = (label: ProviderLabel) => `${label.name}\u0000${label.sites}`;
+  const unseen: ProviderMarks[] = [];
+  for (const marked of marks.values()) {
+    const key = keyOf(marked.label);
+    const cut = cuts.get(key) ?? lastCuts.get(key);
+    if (cut === undefined) {
+      unseen.push(marked);
+    } else {
+      cuts.set(key, cut);
+      marked.name.textContent = cut;
+    }
+  }
+  const widths = unseen.map(({ name, note }) => [
+    name.getComputedTextLength(),
+    note.getComputedTextLength(),
+  ]);
+  unseen.forEach(({ label, name }, index) => {
+    const [width = 0, sites = 0] = widths[index] ?? [];
+    const room = PILL_WIDTH - 2 * PILL_PADDING - NOTE_GAP - sites;
+    if (width > room) {
+      name.textContent = cutToFit(label.name, room, (cut) => {
+        name.textContent = cut;
+        return name.getComputedTextLength();
+      });
+    }
+    cuts.set(keyOf(label), name.textContent ?? label.name);
+  });
+}
+
+// The corridor of the providers without a pill: a rail, their points, and
+// one stop of the Tab key, whose arrows go through the points.
+function corridorOf(
+  image: SVGSVGElement,
+  name: string,
+): Omit<Right, "image" | "floating"> {
+  const x = pillX - CORRIDOR_GAP;
+  const corridor = svg("g", { class: "corridor" });
+  const rail = svg("line", { class: "rail", x1: x, x2: x });
+  // A widget of its own keys, which a screen reader leaves to the page
+  // rather than taking the arrows to read on: the live region of the panel
+  // says each provider they reach.
+  const focus = svg("rect", {
+    class: "corridor-focus",
+    tabindex: 0,
+    role: "application",
+    "aria-label": name,
+    x: x - CORRIDOR_REACH,
+    width: 2 * CORRIDOR_REACH,
+  });
+  corridor.append(rail, focus);
+  focus.addEventListener("focus", () => {
+    corridorFocused = true;
+    image.classList.add("corridor-active");
+    if (hovered === null) {
+      go("Home");
+    }
+  });
+  focus.addEventListener("blur", () => {
+    corridorFocused = false;
+    image.classList.remove("corridor-active");
+    hover(null);
+  });
+  focus.addEventListener("keydown", (event) => {
+    const { key } = event;
+    if (key === "Enter") {
+      event.preventDefault();
+      const chosen = hovered === null ? undefined : marks.get(hovered);
+      if (chosen !== undefined) {
+        choose(chosen.label.key);
+      }
+    } else if (key === "Escape") {
+      event.preventDefault();
+      hover(null);
+      focus.blur();
+    } else if (go(key)) {
+      event.preventDefault();
+    }
+  });
+  return { corridor, rail, focus };
+}
+
+// The arrows go through the points of the corridor from the top, Home and
+// End to its ends, opening the pill of each, and a screen reader hears its
+// provider. Whether the key is one of them.
+function go(key: string): boolean {
+  const ids = [...(places?.points.keys() ?? [])];
+  const at = hovered === null ? -1 : ids.indexOf(hovered);
+  const next = {
+    ArrowDown: Math.min(ids.length - 1, at + 1),
+    ArrowUp: Math.max(0, at - 1),
+    Home: 0,
+    End: ids.length - 1,
+  }[key];
+  if (next === undefined) {
+    return false;
+  }
+  const id = ids[next];
+  if (id !== undefined) {
+    hover(id);
+    element("announce").textContent = marks.get(id)?.label.spoken ?? "";
+  }
+  return true;
+}
+
+// The provider a pointer event is over: that of a link, of a point, of the
+// band around it or of a pill, or null over nothing of a provider.
+function providerAt(event: Event): string | null {
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return null;
+  }
+  const link = linkProvider.get(target);
+  if (link !== undefined) {
+    return link;
+  }
+  const parts = keyPartsOf(
+    target.closest<SVGElement>("[data-k]")?.dataset["k"] ?? "",
+  );
+  return parts?.kind === "provider" ? parts.name : null;
+}
+
+// Only a provider with a point opens a pill: pointing at a pill, or at a
+// link to it, closes the one opened.
+function hover(id: string | null): void {
+  if (id !== hovered) {
+    hovered = id;
+    showHover();
+  }
+}
+
+// The links and the point of the provider pointed at stand out, and its
+// pill opens at the height of its point, tied to it by a horizontal line.
+function showHover(): void {
+  if (right === null) {
+    return;
+  }
+  const y = hovered === null ? undefined : places?.points.get(hovered);
+  const marked = hovered === null ? undefined : marks.get(hovered);
+  if (y === undefined || marked === undefined) {
+    hovered = null;
+  }
+  right.image.classList.toggle("hovering", hovered !== null);
+  for (const { path, provider } of drawn) {
+    path.classList.toggle("hovered", provider === hovered);
+  }
+  for (const [id, { point }] of marks) {
+    point.classList.toggle("hovered", id === hovered);
+  }
+  if (y === undefined || marked === undefined || places === null) {
+    right.floating.replaceChildren();
+    return;
+  }
+  const { pill } = pillOf(
+    marked.label,
+    marked.name.textContent ?? "",
+    "floating",
+  );
+  pill.setAttribute(
+    "transform",
+    `translate(${pillX + LIFT_X} ${y.toFixed(1)})`,
+  );
+  pill.prepend(
+    svg("rect", {
+      class: "halo",
+      x: -HALO,
+      y: -PILL_HEIGHT / 2 - HALO,
+      width: PILL_WIDTH + 2 * HALO,
+      height: PILL_HEIGHT + 2 * HALO,
+      rx: 6 + HALO,
+    }),
+  );
+  // The line comes after the pill, so that the halo does not cut it.
+  right.floating.replaceChildren(
+    pill,
+    svg("line", {
+      class: "tie",
+      x1: (pillX - CORRIDOR_GAP + places.radius).toFixed(1),
+      y1: y.toFixed(1),
+      x2: pillX + LIFT_X,
+      y2: y.toFixed(1),
+    }),
+  );
+}
+
 // While the sites scroll, each link leaves from where its row is in view,
-// and the links of the rows out of view are not drawn. The column shows the
-// providers those links reach, and the one chosen, whose panel is open.
+// and the links of the rows out of view are not drawn. The providers those
+// links reach, with the one chosen, whose panel is open, each end its links
+// on its pill, or on its point when the pills have no room left for it.
 function follow(): void {
   const plan = element("plan");
   const top = plan.scrollTop;
   const viewHeight = plan.clientHeight;
-  const middle = pillX / 2;
   const inView = (slot: number): boolean => {
     const y = yOf(slot) - top;
     return y >= 24 && y <= viewHeight - 4;
   };
-  const linked = new Set<string>();
-  for (const { slot, provider } of drawn) {
+  const links: LinkInView[] = [];
+  for (const { slot, provider, category } of drawn) {
     if (inView(slot)) {
-      linked.add(provider);
+      links.push({ provider, y: yOf(slot) - top, category });
     }
   }
-  for (const [id, label] of pills) {
-    if (label.classList.contains("chosen")) {
-      linked.add(id);
-    }
-  }
-  const places = placesInView([...pills.keys()], linked, viewHeight);
-  for (const [id, label] of pills) {
-    const y = places.get(id);
-    label.style.display = y === undefined ? "none" : "";
+  const now = placesInView(
+    [...marks.keys()],
+    links,
+    selectedOf("provider"),
+    (id) => supposed.has(id),
+    viewHeight,
+  );
+  places = now;
+  for (const { pill, label } of marks.values()) {
+    const y = now.pills.get(label.provider.id);
+    pill.style.display = y === undefined ? "none" : "";
     if (y !== undefined) {
-      label.setAttribute("transform", `translate(${pillX} ${y.toFixed(1)})`);
+      pill.setAttribute("transform", `translate(${pillX} ${y.toFixed(1)})`);
     }
   }
+  drawCorridor(now);
   for (const { path, slot, provider } of drawn) {
-    const end = places.get(provider);
+    const pill = now.pills.get(provider);
+    const end = pill ?? now.points.get(provider);
     if (end === undefined || !inView(slot)) {
       path.style.display = "none";
       continue;
     }
-    const y = yOf(slot) - top;
+    const x = pill === undefined ? pillX - CORRIDOR_GAP - now.radius : pillX;
+    const y = (yOf(slot) - top).toFixed(1);
+    const middle = (x / 2).toFixed(1);
     path.setAttribute(
       "d",
-      `M0 ${y.toFixed(1)}C${middle} ${y.toFixed(1)} ${middle} ${end.toFixed(1)} ${pillX} ${end.toFixed(1)}`,
+      `M0 ${y}C${middle} ${y} ${middle} ${end.toFixed(1)} ${x.toFixed(1)} ${end.toFixed(1)}`,
     );
     path.style.display = "";
+  }
+  showHover();
+}
+
+// The points from the top, each band of the pointer reaching halfway to the
+// next point, and the corridor hidden while every provider has its pill.
+function drawCorridor(now: ProvidersInView): void {
+  if (right === null) {
+    return;
+  }
+  // A scroll that empties the corridor while the arrows go through it lets
+  // it go, rather than leave it marked as reached by keys it no longer gets.
+  if (now.points.size === 0 && corridorFocused) {
+    right.focus.blur();
+  }
+  right.corridor.style.display = now.points.size === 0 ? "none" : "";
+  right.rail.setAttribute("y1", now.top.toFixed(1));
+  right.rail.setAttribute("y2", now.bottom.toFixed(1));
+  right.focus.setAttribute("y", now.top.toFixed(1));
+  right.focus.setAttribute("height", (now.bottom - now.top).toFixed(1));
+  const ys = [...now.points.values()];
+  const index = new Map([...now.points.keys()].map((id, at) => [id, at]));
+  for (const [id, { point, reach }] of marks) {
+    const at = index.get(id);
+    const y = at === undefined ? undefined : ys[at];
+    point.style.display = y === undefined ? "none" : "";
+    reach.style.display = point.style.display;
+    if (at === undefined || y === undefined) {
+      continue;
+    }
+    const from = at === 0 ? now.top : ((ys[at - 1] ?? y) + y) / 2;
+    const to = at === ys.length - 1 ? now.bottom : (y + (ys[at + 1] ?? y)) / 2;
+    point.setAttribute("cy", y.toFixed(1));
+    point.setAttribute("r", now.radius.toFixed(2));
+    reach.setAttribute("y", from.toFixed(1));
+    reach.setAttribute("height", Math.max(1, to - from).toFixed(1));
   }
 }
 
@@ -898,16 +1228,17 @@ function renderPanel(): void {
   }
 }
 
-function selectedSite(): string | null {
+// The site or the provider whose panel is open, or null.
+function selectedOf(kind: "site" | "provider"): string | null {
   const parts = selection === null ? null : keyPartsOf(selection);
-  return parts?.kind === "site" ? parts.name : null;
+  return parts?.kind === kind ? parts.name : null;
 }
 
 // Asked when the panel of a site opens, rather than with the counts of every
 // site, so that the map reads the addresses of the site looked at alone.
 // Never from a private window, where nothing is recorded.
 async function askAddresses(): Promise<void> {
-  const site = selectedSite();
+  const site = selectedOf("site");
   if (privateWindow || site === null) {
     return;
   }
@@ -915,7 +1246,7 @@ async function askAddresses(): Promise<void> {
     ask<SiteAddresses>({ kind: "siteAddresses", site, privateWindow }),
     ask<Settings>({ kind: "settings" }),
   ]);
-  if (selectedSite() !== site) {
+  if (selectedOf("site") !== site) {
     return;
   }
   const next = { site, addresses, limit: settings.recordLimit };
@@ -978,6 +1309,8 @@ async function load(resetScroll: boolean): Promise<void> {
   const data = await ask<MapData>({ kind: "map", privateWindow });
   lastMessages = messages;
   messages = new Map();
+  lastCuts = cuts;
+  cuts = new Map();
   map = prepare(data, table.providers, formats);
   // The legend explains the question mark only when the map shows one.
   element("legend-supposed").hidden = !map.providers.some(
