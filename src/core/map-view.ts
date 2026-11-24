@@ -836,7 +836,7 @@ export interface ProvidersInView {
 // As many pills as fit from the top of the column to 10 pixels above the
 // bottom of the view, at the least step, and always one, for the provider
 // chosen.
-function pillsIn(viewHeight: number): number {
+export function pillsIn(viewHeight: number): number {
   return Math.max(
     1,
     Math.floor(

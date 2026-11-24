@@ -464,6 +464,10 @@ button.text-link {
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  /* The room of the scrollbar is kept before the sites outgrow the plan, so
+     that the width of the drawing, read at its first render while the plan
+     is still empty, does not run under the scrollbar once they do. */
+  scrollbar-gutter: stable;
 }
 
 .plan,

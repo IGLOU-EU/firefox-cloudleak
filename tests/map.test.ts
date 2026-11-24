@@ -796,6 +796,8 @@ describe("the column of the providers on the map", () => {
     assert.ok(corridor);
     assert.equal(corridor.getAttribute("tabindex"), "0");
     assert.equal(corridor.getAttribute("aria-label"), "mapCorridor");
+    // A screen reader leaves the arrows to it.
+    assert.equal(corridor.getAttribute("role"), "application");
     const fromTop = (drawn: typeof points) =>
       [...drawn].sort(([, a], [, b]) => a.y - b.y).map(([id]) => id);
     const order = fromTop(points);
@@ -848,6 +850,45 @@ describe("the column of the providers on the map", () => {
     assert.equal(points.has(id), false);
     assert.equal(pills.size, PILLS);
     assert.equal(points.size, 66 - PILLS);
+  });
+
+  it("lets the corridor go when a scroll empties it while the arrows go through it", async () => {
+    // Below the crowded sites, sixty through one provider of the data alone.
+    const page = await open({
+      data: () => {
+        const data = crowd();
+        const sites = { ...data.sites };
+        for (let index = 0; index < 60; index += 1) {
+          sites[`calm${String(index).padStart(2, "0")}.example`] = {
+            edge: { red3: { "GET script": 1 } },
+          };
+        }
+        return { ...data, sites };
+      },
+      height: HEIGHT,
+      width: 960,
+    });
+    const { image } = drawingOf(page);
+    const corridor = image.querySelector("rect.corridor-focus");
+    assert.ok(corridor);
+    corridor.focus();
+    corridor.dispatch("focus");
+    assert.equal(image.classList.contains("corridor-active"), true);
+    assert.ok(drawingOf(page).floating);
+    const plan = page.element("plan");
+    plan.scrollTop = 1400;
+    plan.dispatch("scroll");
+    assert.equal(drawingOf(page).points.size, 0);
+    assert.notEqual(focusedElement(), corridor);
+    assert.equal(image.classList.contains("corridor-active"), false);
+    assert.equal(drawingOf(page).floating, null);
+  });
+
+  it("explains the hollow point in the legend only when the map has more providers than pills", async () => {
+    const crowdedPage = await crowded();
+    assert.equal(crowdedPage.element("legend-hollow").hidden, false);
+    const fewPage = await open({ height: HEIGHT, width: 960 });
+    assert.equal(fewPage.element("legend-hollow").hidden, true);
   });
 
   it("hides the corridor while every provider of the rows in view has its pill", async () => {

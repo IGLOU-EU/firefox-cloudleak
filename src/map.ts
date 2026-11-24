@@ -33,6 +33,7 @@ import {
   type ProviderLabel,
   type ProvidersInView,
   panelOf,
+  pillsIn,
   placesInView,
   placesOf,
   prepare,
@@ -341,15 +342,23 @@ function renderColumn(resetScroll: boolean): void {
   places = null;
   hovered = null;
   corridorFocused = false;
+  const legend = element("legend-hollow");
   if (map === null || map.sites.length === 0) {
     column = null;
     noMatch.hidden = true;
+    legend.hidden = true;
     drawing.replaceChildren();
     return;
   }
   const current = columnOf(map, filters);
   column = current;
   const header = headerOf(map);
+  // The legend explains the hollow point only when the map has more
+  // providers than the column has pills, so that a map whose providers all
+  // fit never shows it. Set before the height of the plan is read, which the
+  // legend takes from it, and from every provider of the map rather than
+  // those a filter keeps, so that a keystroke never moves the plan.
+  legend.hidden = map.order.length <= pillsIn(plan.clientHeight);
   const viewHeight = plan.clientHeight;
   const linksWidth = Math.max(LINKS_MIN_WIDTH, plan.clientWidth - LIST_WIDTH);
   pillX = linksWidth - PILL_WIDTH - PILL_MARGIN;
@@ -624,9 +633,13 @@ function corridorOf(
   const x = pillX - CORRIDOR_GAP;
   const corridor = svg("g", { class: "corridor" });
   const rail = svg("line", { class: "rail", x1: x, x2: x });
+  // A widget of its own keys, which a screen reader leaves to the page
+  // rather than taking the arrows to read on: the live region of the panel
+  // says each provider they reach.
   const focus = svg("rect", {
     class: "corridor-focus",
     tabindex: 0,
+    role: "application",
     "aria-label": name,
     x: x - CORRIDOR_REACH,
     width: 2 * CORRIDOR_REACH,
@@ -824,6 +837,11 @@ function follow(): void {
 function drawCorridor(now: ProvidersInView): void {
   if (right === null) {
     return;
+  }
+  // A scroll that empties the corridor while the arrows go through it lets
+  // it go, rather than leave it marked as reached by keys it no longer gets.
+  if (now.points.size === 0 && corridorFocused) {
+    right.focus.blur();
   }
   right.corridor.style.display = now.points.size === 0 ? "none" : "";
   right.rail.setAttribute("y1", now.top.toFixed(1));
