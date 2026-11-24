@@ -76,6 +76,11 @@ const NOTE_GAP = 8;
 // and how far on each side of it the pointer reaches its points.
 const CORRIDOR_GAP = 16;
 const CORRIDOR_REACH = 8;
+// The pill a point opens, shifted into the margin on the right so that the
+// pill under it and the links that end there keep showing on its left, cut
+// out of them by a halo in the colour of the ground.
+const LIFT_X = 8;
+const HALO = 3;
 
 // A cut address scrolls on hover and focus at this speed, in pixels a
 // second, so that the time it takes follows its length.
@@ -734,16 +739,30 @@ function showHover(): void {
     marked.name.textContent ?? "",
     "floating",
   );
-  pill.setAttribute("transform", `translate(${pillX} ${y.toFixed(1)})`);
+  pill.setAttribute(
+    "transform",
+    `translate(${pillX + LIFT_X} ${y.toFixed(1)})`,
+  );
+  pill.prepend(
+    svg("rect", {
+      class: "halo",
+      x: -HALO,
+      y: -PILL_HEIGHT / 2 - HALO,
+      width: PILL_WIDTH + 2 * HALO,
+      height: PILL_HEIGHT + 2 * HALO,
+      rx: 6 + HALO,
+    }),
+  );
+  // The line comes after the pill, so that the halo does not cut it.
   right.floating.replaceChildren(
+    pill,
     svg("line", {
       class: "tie",
       x1: (pillX - CORRIDOR_GAP + places.radius).toFixed(1),
       y1: y.toFixed(1),
-      x2: pillX,
+      x2: pillX + LIFT_X,
       y2: y.toFixed(1),
     }),
-    pill,
   );
 }
 

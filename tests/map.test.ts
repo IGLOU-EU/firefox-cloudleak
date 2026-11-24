@@ -632,6 +632,8 @@ function crowd(): MapData {
 
 // A tab 1280 pixels wide, its panel aside: the pills start at 354 pixels.
 const PILL_X = 960 - 340 - 248 - 18;
+// How far to the right of the pills the pill a point opens stands.
+const LIFT_X = 8;
 
 function crowded(): Promise<Opened> {
   return open({ data: crowd, height: HEIGHT, width: 960 });
@@ -733,17 +735,27 @@ describe("the column of the providers on the map", () => {
     image.dispatch("pointerover", { target: point.point });
     const { floating } = drawingOf(page);
     assert.ok(floating);
-    const [tie, pill] = floating.parent?.children ?? [];
+    // Shifted to the right of the pills, cut out of them by its halo, and
+    // tied to its point by a line drawn over the halo.
+    const [pill, tie] = floating.parent?.children ?? [];
     assert.equal(tie?.tagName, "line");
     assert.deepEqual(
       ["x1", "y1", "x2", "y2"].map((name) => Number(tie?.getAttribute(name))),
-      [point.x + point.r, point.y, PILL_X, point.y],
+      [point.x + point.r, point.y, PILL_X + LIFT_X, point.y],
     );
     assert.equal(pill, floating);
     assert.deepEqual(numbers(floating.getAttribute("transform")), [
-      PILL_X,
+      PILL_X + LIFT_X,
       point.y,
     ]);
+    const halo = floating.children[0];
+    assert.equal(halo?.getAttribute("class"), "halo");
+    assert.deepEqual(
+      ["x", "y", "width", "height"].map((name) =>
+        Number(halo?.getAttribute(name)),
+      ),
+      [-3, -15, 254, 30],
+    );
     assert.ok(point.y - 12 >= 24 && point.y + 12 <= HEIGHT);
     assert.equal(floating.dataset["k"], `f:${id}`);
     assert.equal(image.classList.contains("hovering"), true);
@@ -768,7 +780,7 @@ describe("the column of the providers on the map", () => {
     const { floating } = drawingOf(page);
     assert.equal(floating?.dataset["k"], `f:${link.provider}`);
     assert.deepEqual(numbers(floating?.getAttribute("transform") ?? ""), [
-      PILL_X,
+      PILL_X + LIFT_X,
       points.get(link.provider)?.y,
     ]);
     const [named] = pills.values();

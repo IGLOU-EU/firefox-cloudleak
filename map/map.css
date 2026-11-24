@@ -20,6 +20,9 @@
   --red: #e03050;
   /* The text of the light theme at half opacity, on both themes. */
   --veil: rgb(21 20 26 / 50%);
+  /* The pill opened over the others: a lighter ground, lifted by a shadow. */
+  --lifted: #ffffff;
+  --lift-shadow: rgb(21 20 26 / 35%);
   color-scheme: light dark;
 }
 
@@ -31,6 +34,8 @@
     --rule: #52525e;
     --button: #45444f;
     --field: #1c1b22;
+    --lifted: #4d4c58;
+    --lift-shadow: rgb(0 0 0 / 80%);
   }
 }
 
@@ -594,9 +599,25 @@ button.text-link {
   stroke-width: 1.5;
 }
 
+/* The pill opened stands out of the column: shifted to the right, on a
+   lighter ground, cut out of the pills under it by a halo in the colour of
+   the ground and lifted by a shadow, while the pills named step back. */
+.drawing .floating {
+  filter: drop-shadow(0 4px 6px var(--lift-shadow));
+}
+
+.drawing .floating .halo {
+  fill: var(--background);
+}
+
 .drawing .floating .pill {
+  fill: var(--lifted);
   stroke: var(--text);
   stroke-width: 1.5;
+}
+
+.drawing svg.hovering > g.fades {
+  opacity: 0.4;
 }
 
 /* A link: the tint of its category, as thick as its level, and dashed when
