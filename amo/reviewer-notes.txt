@@ -1,0 +1,19 @@
+BUILD
+Run "npm ci", then "npm run build", at the root of the source archive. The package is web-ext-artifacts/firefox-cloudleak-{version}.xpi.
+Built on Linux x86_64 with Node {node} and npm {npm}. Any Node 22 or later should work.
+The build compiles TypeScript with tsc (TypeScript 7.0.2, from the lockfile), with no bundler and no minification, and writes the provider data of data/providers/ into providers.js (scripts/build.ts).
+web-ext build writes the build time into the archive: compare the unpacked contents, not the bytes of the .xpi.
+
+PERMISSIONS
+- Access to all sites and webRequest: non-blocking listeners read the IP address, the response headers and the cookie names of each request, to recognise the CDN or reverse proxy that serves it. Nothing is blocked or modified.
+- webNavigation: documentId tells which document a tab shows after Back or Forward (back-forward cache, no request), and getFrame gives the site of a tab opened before the extension started.
+- dns: dns.resolve(host, ["canonical_name"]) reads the final CNAME of a host the page has just contacted, through Firefox's own resolver, never with bypass_cache. Because of Firefox bug 2051290, this lookup does not reuse the page's cache entry, so Firefox resolves the name again. It is the only network activity the extension causes.
+- publicSuffix: the registrable domain of a site, the key of the per-site counts.
+- storage: counts, settings and ignored sites in storage.local, the state of each tab in storage.session.
+- No downloads permission: the map saves the kept counts and recorded addresses into a JSON file through a download link to a blob: URL, which the user clicks. Nothing is sent.
+
+DATA
+Nothing leaves the browser: no request of its own, no remote code, no downloaded list. The provider lists ship in the package. Only aggregated counts are kept. Recording reduced addresses (query values removed) is an option, off by default, never applied to private windows. The counts of private windows live only in storage.session and are purged when the last private window closes.
+
+TESTING
+Open a site served by Cloudflare, such as https://www.cloudflare.com/. The toolbar icon takes the colour of the most serious level and shows a count. Click it for the detail of the site, then "See the map".

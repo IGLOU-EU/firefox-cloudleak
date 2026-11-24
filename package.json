@@ -15,7 +15,8 @@
     "check": "npm test && npm run lint && npm audit",
     "start": "web-ext run --source-dir dist",
     "refresh-ranges": "tsc -p tsconfig.tools.json && node build/scripts/refresh-ranges.js",
-    "measure-map": "tsc -p tsconfig.tools.json && node build/scripts/measure-map.js"
+    "measure-map": "tsc -p tsconfig.tools.json && node build/scripts/measure-map.js",
+    "release": "tsc -p tsconfig.tools.json && node build/scripts/release.js"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.2",

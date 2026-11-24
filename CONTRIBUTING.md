@@ -2,7 +2,7 @@
 
 This file is the reference for anyone who works on this repository: how to set it up, how to make a change, and the rules a change must respect.
 
-- To get to work: [Getting started](#getting-started), [Making a change](#making-a-change), [Tests](#tests), [Checks](#checks).
+- To get to work: [Getting started](#getting-started), [Making a change](#making-a-change), [Tests](#tests), [Checks](#checks), [Releasing a version](#releasing-a-version).
 - To find your way: [Layout](#layout), [Vocabulary](#vocabulary), [Languages](#languages).
 - The rules that bind every change: [Design rules](#design-rules), [User data the extension receives](#user-data-the-extension-receives), [One fact, one place](#one-fact-one-place).
 - To add or update a provider: [Provider data](#provider-data).
@@ -20,6 +20,7 @@ You need Node.js 22 or later, and Firefox or LibreWolf 153 or later to try the e
 | `npm run format` | Applies the formatting |
 | `npm run refresh-ranges` | Downloads the published IP ranges again (see [Provider data](#provider-data)) |
 | `npm run measure-map` | Times the view of the map (see [Checks](#checks)) |
+| `npm run release` | Submits the version of a tag to addons.mozilla.org, or shows what it would send (see [Releasing a version](#releasing-a-version)) |
 
 The README explains how to load the extension in LibreWolf, where `npm start` cannot connect to the browser.
 
@@ -32,13 +33,33 @@ The README explains how to load the extension in LibreWolf, where `npm start` ca
 
 A branch is merged into `main` with `--no-ff`.
 
-**Commit format.** A subject is an emoji, a type and a short description in lowercase English, such as `✨ feat: name the flag of the map`. The types in use are `✨ feat`, `🐛 fix`, `⚡️ perf`, `♻️ refactor`, `💄 style`, `📝 docs` and `🔀 merge`. Every commit is signed off (`git commit -s`). A commit whose content is mostly produced with assistance carries the trailer `Assisted-by: LLM`, before `Signed-off-by` and in the same trailer block. A commit where assistance only asked questions or proofread carries none.
+**Commit format.** A subject is an emoji, a type and a short description in lowercase English, such as `✨ feat: name the flag of the map`. The types in use are `✨ feat`, `🐛 fix`, `⚡️ perf`, `♻️ refactor`, `💄 style`, `📝 docs`, `🚀 ci`, `🙈 chore` (the commit of a version) and `🔀 merge`. Every commit is signed off (`git commit -s`). A commit whose content is mostly produced with assistance carries the trailer `Assisted-by: LLM`, before `Signed-off-by` and in the same trailer block. A commit where assistance only asked questions or proofread carries none.
 
 **What needs the owner's agreement first.**
 
 - A change to a design rule, to a permission of the extension or to the minimum Firefox version.
 - A new dependency, unless it is a standard tool of the ecosystem. Before adding one, check whether Node or the browser already does the job.
 - A visual change (icon, colours, map, layout, logos): it goes first through a mock-up, an image or a demo, which the owner validates before it is integrated.
+
+## Releasing a version
+
+A version is published by its tag: the pipeline of a tag `vX.Y.Z` submits it to the listed channel of addons.mozilla.org. `.gitlab-ci.yml` holds the jobs and the CI/CD variables they need, `scripts/release.ts` the steps of the submission and what it sends.
+
+1. On a branch, raise `version` in `manifest.json` and write the release notes of the version in `amo/release-notes/`, one file per language: `<version>.en-US.md` and `<version>.fr.md`. They are the notes of the listing, at most 3,000 characters each, in the reduced Markdown of addons.mozilla.org (lists, bold, italics, links). They go in the commit of the version, `🙈 chore: version X.Y.Z`, and `npm run check` fails without them.
+2. Merge the branch, push `main` and wait for its pipeline to pass: a pushed tag is never moved, and a tag whose pipeline fails is repaired by a new version.
+3. Tag the merge commit with a signed annotated tag, `git tag -s vX.Y.Z -m "version X.Y.Z"`, and push it, `git push origin vX.Y.Z`.
+
+The pipeline of the tag runs `npm run check`, stops if the tag is not the version of `manifest.json`, builds the package from the source archive of the tag in an empty folder, as the reviewers rebuild it, and submits the version with that archive, its release notes and the notes for the reviewers. It does not wait for the approval, which can take up to a day. Last, it creates the GitLab release, which links to the package and the source archive. The icon, the description and the screenshots of the listing do not change with a version.
+
+The notes for the reviewers are `amo/reviewer-notes.txt`, where `{version}`, `{node}` and `{npm}` become the version and the versions of Node and npm that build the package. Filled, they stay within 3,000 characters.
+
+**Trying a submission.** `npm run release -- vX.Y.Z <folder> --dry-run` builds everything a tag would send, writes it into the folder, prints the release notes, the notes for the reviewers and the command of the submission, and sends nothing: it even takes the packages from the npm cache only. The folder is one outside the repository, or `submission`, which git ignores.
+
+**When the submission fails.** The job keeps the package, the source archive and `amo-metadata.json` in its artifacts.
+
+- Before `web-ext sign`, nothing was sent. A cause outside the tag, such as a missing CI/CD variable, is fixed and the job run again. A cause in the tag, such as missing release notes, takes a new version.
+- `Version X.Y.Z already exists.`: the version was already submitted, by hand or by an earlier run.
+- `Uploading source failed`: the version exists without its source archive. Attach the one of the artifacts on the page of the version in the Developer Hub, which accepts it until a human review.
 
 ## Design rules
 
@@ -202,8 +223,10 @@ Every string shown to the user goes through `_locales` from the moment it is wri
 | The other files of `src/` | The thin adapters between Firefox and the core. They hold no classification logic |
 | `data/providers/` | One folder per provider (see [Provider data](#provider-data)) |
 | `data/consent-cookies.json` | The cookies of known consent and audience-measurement tools (see [Provider data](#provider-data)) |
-| `scripts/` | The build and the maintenance scripts, which run in Node on the development machine only |
+| `scripts/` | The build, maintenance and release scripts, which run in Node, on the development machine or in the pipeline, never in the extension |
 | `tests/` | The tests, run by the Node test runner |
+| `amo/` | What a version sends to addons.mozilla.org besides its package: the release notes of each version and the notes for the reviewers (see [Releasing a version](#releasing-a-version)) |
+| `.gitlab-ci.yml` | The pipeline: the check of `main` and of merge requests, and the submission of a version tag |
 | `.gitlab/issue_templates/` | The template of the issue that the about section of the help opens, to suggest a provider or a translation |
 | `manifest.json`, `_locales/`, `icons/`, `popup/`, `options/`, `map/` | Copied into the extension as they are |
 
