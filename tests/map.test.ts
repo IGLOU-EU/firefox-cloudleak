@@ -3,12 +3,13 @@
 
 // The map page, compiled with the extension into build/extension/, driven by
 // a stand-in for Firefox's browser object, for its clipboard and for the DOM
-// of map.html: the addresses kept of the rows of the panel of a site, and the
-// column of the providers.
+// of map.html: the addresses kept of the rows of the panel of a site, the
+// column of the providers, and the export.
 
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import type {
+  ExportData,
   MapData,
   PopupRequest,
   Settings,
@@ -17,6 +18,7 @@ import type {
 } from "../src/core/popup-message.js";
 import { importModule, writeTable } from "./built-extension.js";
 import { Element, find, focusedElement, htmlOf, installPage } from "./dom.js";
+import { getMessageOf } from "./messages.js";
 
 writeTable();
 
@@ -59,6 +61,12 @@ interface Options {
   readonly data?: () => MapData;
   // What the event page answers to "siteAddresses", once let through.
   readonly addresses?: () => Promise<SiteAddresses>;
+  // The addresses of every site the event page answers to "export" outside
+  // a private window.
+  readonly allAddresses?: ExportData["addresses"];
+  // The language of the browser, whose messages the page then gets, rather
+  // than their names.
+  readonly locale?: "en" | "fr";
   readonly writeText?: (text: string) => Promise<void>;
   // How Firefox writes a site for display.
   readonly display?: (site: string) => string;
@@ -76,6 +84,9 @@ interface Opened {
   // substitutions, and each site it asked Firefox to write.
   readonly messages: string[][];
   readonly domains: string[];
+  // Each link the page made, and those it clicked.
+  readonly links: Element[];
+  readonly clicked: Element[];
   element(id: string): Element;
   // The user clicks the row of the site in the column.
   chooseSite(): void;
@@ -98,7 +109,21 @@ async function open(options: Options = {}): Promise<Opened> {
   const copied: string[] = [];
   const messages: string[][] = [];
   const domains: string[] = [];
+  const links: Element[] = [];
+  const clicked: Element[] = [];
   const root = installPage(HTML);
+  const { document } = globalThis as unknown as {
+    document: { createElement(tagName: string): Element };
+  };
+  const create = document.createElement;
+  document.createElement = (tagName: string) => {
+    const made = create(tagName);
+    if (tagName === "a") {
+      links.push(made);
+      made.addEventListener("click", () => clicked.push(made));
+    }
+    return made;
+  };
   const plan = find(root, "plan");
   plan.clientHeight = options.height ?? 0;
   plan.clientWidth = options.width ?? 0;
@@ -125,11 +150,19 @@ async function open(options: Options = {}): Promise<Opened> {
       getManifest: () => ({ version: "9.8.7" }),
       sendMessage: async (
         request: PopupRequest,
-      ): Promise<MapData | SiteAddresses | Settings> => {
+      ): Promise<MapData | ExportData | SiteAddresses | Settings> => {
         sent.push(request);
         switch (request.kind) {
           case "map":
             return { ...(options.data?.() ?? DATA), privateWindow };
+          case "export":
+            return {
+              ...(options.data?.() ?? DATA),
+              privateWindow,
+              addresses: request.privateWindow
+                ? {}
+                : (options.allAddresses ?? { [SITE]: ADDRESSES }),
+            };
           case "siteAddresses":
             return request.privateWindow
               ? {}
@@ -148,9 +181,11 @@ async function open(options: Options = {}): Promise<Opened> {
     i18n: {
       getMessage: (name: string, substitutions: string[] = []) => {
         messages.push([name, ...substitutions]);
-        return [name, ...substitutions].join(" ");
+        return options.locale === undefined
+          ? [name, ...substitutions].join(" ")
+          : getMessageOf(options.locale)(name, substitutions);
       },
-      getUILanguage: () => "fr",
+      getUILanguage: () => options.locale ?? "fr",
     },
     publicSuffix: {
       getDomain: (host: string) => {
@@ -172,6 +207,8 @@ async function open(options: Options = {}): Promise<Opened> {
     copied,
     messages,
     domains,
+    links,
+    clicked,
     element,
     chooseSite: () => {
       const row = element("drawing")
@@ -949,5 +986,199 @@ describe("the column of the providers on the map", () => {
     } finally {
       measures.mock.restore();
     }
+  });
+});
+
+// What the browser was given to save at a click on the download icon.
+interface Saved {
+  // The name it offers, and the address it saves from.
+  readonly name: string | null;
+  readonly href: string | null;
+  readonly url: string;
+  readonly type: string;
+  readonly text: string;
+  // The blob: URLs revoked, and how many links were clicked at the time.
+  readonly revoked: readonly [string, number][];
+}
+
+async function save(page: Opened): Promise<Saved> {
+  const blobs: Blob[] = [];
+  const revoked: [string, number][] = [];
+  const created = mock.method(URL, "createObjectURL", (blob: Blob) => {
+    blobs.push(blob);
+    return `blob:moz-extension://uuid/${blobs.length}`;
+  });
+  const revoking = mock.method(URL, "revokeObjectURL", (url: string) => {
+    revoked.push([url, page.clicked.length]);
+  });
+  try {
+    page.element("export").click();
+    await settled();
+  } finally {
+    created.mock.restore();
+    revoking.mock.restore();
+  }
+  // The links of the about section of the help come first.
+  const [blob] = blobs;
+  const link = page.links.at(-1);
+  assert.equal(blobs.length, 1);
+  assert.ok(blob && link);
+  assert.deepEqual(page.clicked, [link]);
+  return {
+    name: link.getAttribute("download"),
+    href: link.getAttribute("href"),
+    url: "blob:moz-extension://uuid/1",
+    type: blob.type,
+    text: await blob.text(),
+    revoked,
+  };
+}
+
+// Written as the file holds it: indented, its keys in order, and ended by a
+// line break.
+function fileText(file: object): string {
+  return `${JSON.stringify(file, null, 2)}\n`;
+}
+
+// A moment of the day of the export, in the local time of the browser.
+const NOW = new Date(2026, 10, 24, 18, 42).getTime();
+
+// Two sites, one cleared alone, and a site cleared with nothing since.
+const KEPT: MapData = {
+  privateWindow: false,
+  since: new Date(2026, 10, 7).getTime(),
+  siteSince: {
+    "other.example": new Date(2026, 10, 20).getTime(),
+    "cleared.example": new Date(2026, 10, 23).getTime(),
+  },
+  sites: {
+    [SITE]: DATA.sites[SITE] ?? {},
+    "other.example": { edge: { orange3: { "POST xmlhttprequest": 2 } } },
+    "cleared.example": {},
+  },
+};
+
+describe("the export of the map", () => {
+  it("has a download icon left of the help, drawn as the help is", () => {
+    const icons =
+      /<div class="header-buttons">\s*<button type="button" id="export" class="icon" hidden>(<svg [^>]*>)<path [^>]*stroke="currentColor" stroke-width="1.5"[^>]*\/><\/svg><\/button>\s*<button type="button" id="help" class="icon">(<svg [^>]*>)/.exec(
+        HTML,
+      );
+    assert.ok(icons, "no download icon left of the help");
+    assert.equal(icons[1], icons[2]);
+  });
+
+  for (const [locale, name] of [
+    ["fr", "Exporter en JSON"],
+    ["en", "Export as JSON"],
+  ] as const) {
+    it(`names its icon, for its tooltip and for those who cannot see it, in ${locale}`, async () => {
+      const page = await open({ locale });
+      const icon = page.element("export");
+      assert.equal(icon.getAttribute("title"), name);
+      assert.equal(icon.getAttribute("aria-label"), name);
+      assert.equal(icon.hidden, false);
+    });
+  }
+
+  it("hides its icon while nothing is kept, as the purge, a site cleared with nothing since included", async () => {
+    let data: MapData = { ...KEPT, sites: {} };
+    const page = await open({ data: () => data });
+    const hidden = () =>
+      ["export", "ask-purge"].map((id) => page.element(id).hidden);
+    assert.deepEqual(hidden(), [true, true]);
+    data = KEPT;
+    await page.comeBack();
+    assert.deepEqual(hidden(), [false, false]);
+    data = { ...KEPT, sites: { "cleared.example": {} } };
+    await page.comeBack();
+    assert.deepEqual(hidden(), [true, true]);
+    const privatePage = await open({
+      privateWindow: true,
+      data: () => ({ ...KEPT, since: 0, siteSince: {}, sites: {} }),
+    });
+    assert.equal(privatePage.element("export").hidden, true);
+  });
+
+  it("saves at a click the counts and the addresses kept, under the day of the export, through a link to a blob: URL revoked once clicked", async () => {
+    const page = await open({
+      data: () => KEPT,
+      allAddresses: {
+        [SITE]: ADDRESSES,
+        "cleared.example": { edge: { red4: { "GET script": ["https://x/"] } } },
+      },
+    });
+    page.sent.length = 0;
+    mock.timers.enable({ apis: ["Date"], now: NOW });
+    const saved = await save(page);
+    assert.deepEqual(page.sent, [{ kind: "export", privateWindow: false }]);
+    assert.equal(saved.name, "cloud-leak-2026-11-24.json");
+    assert.equal(saved.href, saved.url);
+    assert.equal(saved.type, "application/json");
+    assert.deepEqual(saved.revoked, [[saved.url, 1]]);
+    assert.equal(
+      saved.text,
+      fileText({
+        format: 1,
+        version: "9.8.7",
+        exported: "2026-11-24",
+        privateWindow: false,
+        since: "2026-11-07",
+        siteSince: { "other.example": "2026-11-20" },
+        sites: {
+          "other.example": { edge: { orange3: { "POST xmlhttprequest": 2 } } },
+          [SITE]: {
+            edge: {
+              blue2: { "GET image": 3 },
+              red4: { "GET script": 2, "GET stylesheet": 3 },
+            },
+          },
+        },
+        addresses: {
+          [SITE]: { edge: { red4: { "GET stylesheet": STYLES } } },
+        },
+      }),
+    );
+  });
+
+  it("saves an empty list of addresses when none is kept", async () => {
+    const page = await open({ data: () => KEPT, allAddresses: {} });
+    mock.timers.enable({ apis: ["Date"], now: NOW });
+    const file = JSON.parse((await save(page)).text) as Record<string, unknown>;
+    assert.deepEqual(file["addresses"], {});
+    assert.deepEqual(Object.keys(file["sites"] as object), [
+      "other.example",
+      SITE,
+    ]);
+  });
+
+  it("saves from a private window the counts of the private session alone, without a start nor an address", async () => {
+    const page = await open({
+      privateWindow: true,
+      data: () => ({
+        privateWindow: true,
+        since: 0,
+        siteSince: {},
+        sites: { [SITE]: { edge: { red4: { "GET script": 1 } } } },
+      }),
+    });
+    page.sent.length = 0;
+    mock.timers.enable({ apis: ["Date"], now: NOW });
+    const saved = await save(page);
+    assert.deepEqual(page.sent, [{ kind: "export", privateWindow: true }]);
+    assert.equal(saved.name, "cloud-leak-2026-11-24.json");
+    assert.equal(
+      saved.text,
+      fileText({
+        format: 1,
+        version: "9.8.7",
+        exported: "2026-11-24",
+        privateWindow: true,
+        since: null,
+        siteSince: {},
+        sites: { [SITE]: { edge: { red4: { "GET script": 1 } } } },
+        addresses: {},
+      }),
+    );
   });
 });

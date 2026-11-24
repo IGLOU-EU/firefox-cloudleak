@@ -555,6 +555,10 @@
     "message": "Cancel",
     "description": "Button of the map that gives up the clearing of the counts of every site."
   },
+  "mapExport": {
+    "message": "Export as JSON",
+    "description": "Accessible name and tooltip of the download icon at the top right of the map, left of the help, which saves in a JSON file the counts kept by site and the recorded addresses, if any, or from a private window the counts of the private session, without addresses. Hidden when nothing is kept."
+  },
   "mapNothingKept": {
     "message": "No counts kept since $DATE$.",
     "description": "Shown in place of the map when no request went through a provider since the kept counts started, with that date.",

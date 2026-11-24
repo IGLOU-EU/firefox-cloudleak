@@ -4,6 +4,7 @@
 import { isRecordLevel, recordLimitOf } from "./core/addresses.js";
 import type {
   ClearedData,
+  ExportData,
   IgnoredData,
   MapData,
   PopupData,
@@ -16,6 +17,7 @@ import {
   changeSettings,
   clear,
   currentSettings,
+  exportData,
   ignore,
   ignoredSites,
   isIgnored,
@@ -35,7 +37,13 @@ export function answer(
   message: unknown,
 ):
   | Promise<
-      PopupData | ClearedData | IgnoredData | MapData | Settings | SiteAddresses
+      | PopupData
+      | ClearedData
+      | IgnoredData
+      | MapData
+      | ExportData
+      | Settings
+      | SiteAddresses
     >
   | undefined {
   const request = requestOf(message);
@@ -55,6 +63,8 @@ export function answer(
       return listed();
     case "map":
       return mapped(request.privateWindow);
+    case "export":
+      return exported(request.privateWindow);
     case "purgeAll":
       return purged(request.privateWindow);
     case "settings":
@@ -106,7 +116,7 @@ function requestOf(message: unknown): PopupRequest | null {
     return { kind };
   }
   if (
-    (kind === "map" || kind === "purgeAll") &&
+    (kind === "map" || kind === "export" || kind === "purgeAll") &&
     typeof privateWindow === "boolean"
   ) {
     return { kind, privateWindow };
@@ -199,6 +209,11 @@ async function listed(): Promise<IgnoredData> {
 async function mapped(privateWindow: boolean): Promise<MapData> {
   await ready;
   return mapData(privateWindow);
+}
+
+async function exported(privateWindow: boolean): Promise<ExportData> {
+  await ready;
+  return exportData(privateWindow);
 }
 
 // Not before the stored counts are read, which would bring them back.

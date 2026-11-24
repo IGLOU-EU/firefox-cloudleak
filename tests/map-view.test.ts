@@ -75,6 +75,7 @@ const FIXED = {
   corridor:
     "Fournisseurs pas encore nommés\u00a0: flèches haut et bas pour les parcourir, Entrée pour choisir, Échap pour quitter",
   search: "Chercher un site",
+  exportName: "Exporter en JSON",
 };
 
 function filters(changes: Partial<Filters>): Filters {

@@ -88,7 +88,7 @@ For example `https://cdn.example.net/assets/app.css?v=…&token=…`.
 - Narrowing the levels drops at once the addresses of the level left out.
 - Lowering the limit trims every kept list at once.
 
-**Display.** The map shows the kept addresses of a site only in the panel of that site, which asks the event page for them when it opens, never in a private window, and copies one to the clipboard only when the user clicks it.
+**Display.** The map shows the kept addresses of a site only in the panel of that site, which asks the event page for them when it opens, never in a private window, and copies one to the clipboard only when the user clicks it. Its export asks the event page for the kept addresses of every site only when the user clicks its download icon, never from a private window, and writes them into the file the user saves (see [The export file](#the-export-file)).
 
 ### Canonical name of a host
 
@@ -134,6 +134,26 @@ That domain is the only thing of the text the extension keeps, in the list of ig
 On the preferences page, where the text is typed, the same function reduces it while it is typed, to show the site it gives before anything is sent. A text that names no site is the one exception: the page shows it back, trimmed, in the line under the field that refuses it, and nowhere else.
 
 Ignoring a site erases its kept counts, their start, its recorded addresses and its counts of the private session, and from then on no request of a document of that site is classified or counted.
+
+### The export file
+
+The download icon of the map, left of its help, saves what the map shows in a JSON file, so that the user can study it elsewhere: the kept counts by site and the recorded addresses, or from a private window the counts of the private session alone, without any address. The icon shows only while something is kept, as the purge does. The file never holds the settings nor the list of ignored sites.
+
+- The page writes the file itself, and the browser saves it through a link of the page to it, a `blob:` URL with a `download` attribute. The extension asks for no permission for it, and the file goes nowhere but where the user saves it. The browser offers the name `cloud-leak-YYYY-MM-DD.json`, of the day of the export.
+- Each date is a day, `YYYY-MM-DD` in the local time of the browser, as the starts of the counts are kept. The keys of every object are in order at every depth, so that the same statistics always give the same file, which is indented and ends with a line break.
+
+| Field | Content |
+| --- | --- |
+| `format` | The number of the format, `1`, which changes with any change a reader of the file has to follow |
+| `version` | The version of the extension that wrote the file |
+| `exported` | The day of the export |
+| `privateWindow` | `true` for an export from a private window, whose counts are those of the private session alone |
+| `since` | The day the kept counts started: the first run of the extension, or the last purge of every site. `null` from a private window |
+| `siteSince` | By site, the day its counts started, for each site cleared alone or watched again since, which the common start would misdate. Empty from a private window |
+| `sites` | By site, then by provider, then by category, then by method and request type, the number of requests, such as `{ "example.com": { "cloudflare": { "red4": { "GET xmlhttprequest": 12 } } } }` |
+| `addresses` | By site, laid out as `sites`, the recorded addresses of each row, the most recently seen first, as the panel of the site shows them. Empty when none is kept, and from a private window |
+
+A site is in the file only when the map shows it, with one request at least through a provider: a site cleared alone with nothing counted since is left out, with its own start and its addresses. A site is its registrable domain in punycode, as the counts keep it. A provider is the name of its folder in `data/providers/`, or the domain of a supposed provider. A category is the colour and the level of a request: `red4`, `red3`, `orange4`, `orange3` or `blue2`.
 
 ## One fact, one place
 

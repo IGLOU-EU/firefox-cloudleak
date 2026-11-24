@@ -136,8 +136,8 @@ svg .corridor-focus:focus-visible {
   gap: 8px;
 }
 
-/* The help and its cross: grey and without a frame until pointed at or
-   focused, as the gear of the popup. */
+/* The download icon, the help and its cross: grey and without a frame until
+   pointed at or focused, as the gear of the popup. */
 .icon {
   flex: none;
   display: grid;
@@ -162,8 +162,13 @@ svg .corridor-focus:focus-visible {
   height: 16px;
 }
 
-/* The help, last of the header and 16 pixels from what comes before it. */
-.header > .icon {
+/* The download icon and the help, last of the header and 16 pixels from
+   what comes before them, 4 pixels apart as the gear and the help of the
+   popup. */
+.header-buttons {
+  flex: none;
+  display: flex;
+  gap: 4px;
   margin-left: 6px;
 }
 

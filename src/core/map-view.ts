@@ -1047,6 +1047,10 @@ export interface MapHeader {
   // its keys.
   readonly corridor: string;
   readonly search: string;
+  // The name of the download icon, which exports what the map shows, for
+  // its tooltip and for those who cannot see it. The icon is hidden when
+  // nothing is kept, as the purge.
+  readonly exportName: string;
 }
 
 export function headerOf(map: PreparedMap): MapHeader {
@@ -1060,6 +1064,7 @@ export function headerOf(map: PreparedMap): MapHeader {
     providersHeading: formats.message("mapProvidersHeading", []),
     corridor: formats.message("mapCorridor", []),
     search: formats.message("mapSearch", []),
+    exportName: formats.message("mapExport", []),
   };
   if (map.privateWindow) {
     return {

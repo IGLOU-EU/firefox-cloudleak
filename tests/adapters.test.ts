@@ -11,6 +11,7 @@ import { after, before, describe, it, mock } from "node:test";
 import { dayOf } from "../src/core/counts.js";
 import type {
   ClearedData,
+  ExportData,
   IgnoredData,
   MapData,
   PopupData,
@@ -31,6 +32,7 @@ interface Answer {
         | ClearedData
         | IgnoredData
         | MapData
+        | ExportData
         | Settings
         | SiteAddresses
       >
@@ -2654,6 +2656,10 @@ describe("the recording of addresses", () => {
     })) as SiteAddresses;
   }
 
+  async function exported(privateWindow = false): Promise<ExportData> {
+    return (await answer({ kind: "export", privateWindow })) as ExportData;
+  }
+
   function stored(site: string): unknown {
     return local.get(`addresses:${site}`);
   }
@@ -3243,6 +3249,136 @@ describe("the recording of addresses", () => {
     assert.equal(localReads.slice(reads).includes(null), false);
   });
 
+  it("exports the counts the map shows and every recorded address, those not yet written and those of a site this run of the page never read included", async () => {
+    await setSettings("level4", 100);
+    const tab = 2420;
+    const site = "t2420.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me`, { cookie: true });
+    await flush();
+    // Recorded, and not yet written.
+    await load(tab, `https://api.${site}/pending`, { cookie: true });
+    assert.deepEqual(stored(site), {
+      edge: { red4: { "GET xmlhttprequest": [`https://api.${site}/me`] } },
+    });
+    // Sites this run of the page has not read, one whose addresses of
+    // level 3 the settings no longer keep, and one with none left.
+    const unread = "t2421.example";
+    local.set(`site:${unread}`, {
+      edge: { red4: { "GET xmlhttprequest": 3 } },
+    });
+    local.set(`addresses:${unread}`, {
+      edge: {
+        red4: { "GET xmlhttprequest": ["/c", "/b", "/a"] },
+        red3: { "GET xmlhttprequest": ["/list"] },
+      },
+    });
+    const emptied = "t2422.example";
+    local.set(`addresses:${emptied}`, {
+      edge: { red3: { "GET xmlhttprequest": ["/list"] } },
+    });
+    const writes = localWrites.length;
+    const data = await exported();
+    assert.deepEqual(data.addresses[site], {
+      edge: {
+        red4: {
+          "GET xmlhttprequest": [
+            `https://api.${site}/pending`,
+            `https://api.${site}/me`,
+          ],
+        },
+      },
+    });
+    assert.deepEqual(data.addresses[unread], {
+      edge: { red4: { "GET xmlhttprequest": ["/c", "/b", "/a"] } },
+    });
+    assert.equal(data.addresses[emptied], undefined);
+    assert.deepEqual(data.sites[site], {
+      edge: { red4: { "GET xmlhttprequest": 2 } },
+    });
+    const { addresses, ...counts } = data;
+    assert.ok(Object.keys(addresses).length >= 2);
+    assert.deepEqual(
+      counts,
+      await answer({ kind: "map", privateWindow: false }),
+    );
+    // An export writes nothing.
+    assert.equal(localWrites.length, writes);
+  });
+
+  it("exports the address of a request that waited for the read of the addresses of its site", async () => {
+    await setSettings("level4", 100);
+    const tab = 2425;
+    const site = "t2425.example";
+    await page(tab, site);
+    local.set(`addresses:${site}`, {
+      edge: { red4: { "GET xmlhttprequest": ["/before"] } },
+    });
+    // The counts of the site are read, and not its addresses.
+    await load(tab, `https://${site}/logo.png`, { type: "image" });
+    await flush();
+    let answered: ExportData | null = null;
+    const exportedYet = (): ExportData | null => answered;
+    let exporting: Promise<void> = Promise.resolve();
+    const finishRead = slowReads();
+    try {
+      await load(tab, `https://api.${site}/during`, { cookie: true });
+      assert.deepEqual(localReads.at(-1), [`addresses:${site}`]);
+      // The read of the export itself is not slowed.
+      localReadGate = null;
+      exporting = exported().then((data) => {
+        answered = data;
+      });
+      await settled();
+      assert.equal(exportedYet(), null);
+    } finally {
+      await finishRead();
+    }
+    await exporting;
+    assert.deepEqual(exportedYet()?.addresses[site], {
+      edge: {
+        red4: {
+          "GET xmlhttprequest": [`https://api.${site}/during`, "/before"],
+        },
+      },
+    });
+  });
+
+  it("exports in a private window the counts of the private session, and no address", async () => {
+    await setSettings("level3and4", 100);
+    const tab = 2430;
+    const site = "t2430.example";
+    await page(tab, site);
+    await load(tab, `https://api.${site}/me`, {
+      cookie: true,
+      privateWindow: true,
+    });
+    await flush();
+    const data = await exported(true);
+    assert.deepEqual(data.addresses, {});
+    assert.deepEqual(data.sites[site], {
+      edge: { red4: { "GET xmlhttprequest": 1 } },
+    });
+    const { addresses, ...counts } = data;
+    assert.deepEqual(addresses, {});
+    assert.deepEqual(
+      counts,
+      await answer({ kind: "map", privateWindow: true }),
+    );
+    assert.ok(Object.keys((await exported()).addresses).length > 0);
+  });
+
+  it("answers no export of another shape", () => {
+    for (const message of [
+      { kind: "export" },
+      { kind: "export", privateWindow: "no" },
+      { kind: "export", privateWindow: null },
+      { kind: "exportAll", privateWindow: false },
+    ]) {
+      assert.equal(answer(message), undefined, JSON.stringify(message));
+    }
+  });
+
   it("purges every kept address at once when the recording is turned off, then records nothing", async () => {
     await setSettings("level3and4", 100);
     const tab = 2410;
@@ -3276,6 +3412,7 @@ describe("the recording of addresses", () => {
     await flush();
     assert.deepEqual(addressKeys(), []);
     assert.deepEqual(await addressesOf(site), {});
+    assert.deepEqual((await exported()).addresses, {});
     await load(tab, `https://api.${site}/off`, { cookie: true });
     await flush();
     assert.deepEqual(addressKeys(), []);

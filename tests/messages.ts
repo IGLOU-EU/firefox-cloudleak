@@ -123,6 +123,7 @@ export const MAP_MESSAGES: readonly string[] = [
   "mapPurgeAllQuestionPrivate",
   "mapPurge",
   "mapCancel",
+  "mapExport",
   "mapNothingKept",
   "mapNothingPrivate",
   "mapLegendRed4",

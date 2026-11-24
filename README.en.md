@@ -16,7 +16,7 @@ These are the basic rules for the design of this project, detailed further in [C
 
 The toolbar icon takes the colour of the highest level of the tab and shows the number of matching requests, or a `+` when there are too many. Its window details the request types, and lets you clear its statistics or ignore the site.
 
-A map links all the sites using these services to their providers and to the country the data going through each of them depends on. In private browsing, nothing is kept after the last private window closes.
+A map links all the sites using these services to their providers and to the country the data going through each of them depends on. Its download icon saves what it shows in a JSON file, to study it elsewhere: the statistics kept by site and the recorded addresses, without the preferences or the list of ignored sites. In private browsing, nothing is kept after the last private window closes, and the export holds only the statistics of the private session.
 
 The extension does not know every provider, and although it tries to guess, a complete view is impossible. When several intermediaries follow one another on the path of a request, it names only one, the one surest to have received it. A dynamic detection, to turn on in the preferences, supposes a provider absent from its list from the final DNS name (CNAME) of a request: it shows under its domain name, with a ❓ in place of the flag, and it is only a supposition, which may name a mere hosting company. Still, it gives an idea of the privacy and data sovereignty issue, and also of which countries can decide on the right to access an online service.
 

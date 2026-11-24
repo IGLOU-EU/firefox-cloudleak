@@ -88,6 +88,10 @@ export type PopupRequest =
   // The counts of every site, for the map: the kept counts, or in a private
   // window those of the private session only.
   | { readonly kind: "map"; readonly privateWindow: boolean }
+  // The counts of every site, as "map" gives them, with the recorded
+  // addresses of every site, for the export of the map, answered with
+  // ExportData. In a private window, no address.
+  | { readonly kind: "export"; readonly privateWindow: boolean }
   // Clear the counts of every site, those the map shows. Outside a private
   // window, every kept count and the start of each site cleared alone, and
   // the counts start again at once, for every site. In a private window, the
@@ -156,6 +160,14 @@ export interface MapData {
   // By site, in punycode. A site may have an empty entry, as one cleared
   // alone has until a request of it goes through a provider again.
   readonly sites: { readonly [site: string]: SiteCounts };
+}
+
+// The answer to an "export" request.
+export interface ExportData extends MapData {
+  // By site, in punycode, as the panel of each site shows them: those
+  // recorded and not yet written included, and the sites without any left
+  // out. Empty in a private window, where nothing is recorded.
+  readonly addresses: { readonly [site: string]: SiteAddresses };
 }
 
 // The answer to "ignoreSite", "unignoreSite" and "ignoredSites".

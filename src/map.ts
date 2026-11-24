@@ -6,6 +6,7 @@
 // of core/map-view.ts, which decides everything that is shown.
 
 import { colourOfCategory, type KnownCategory } from "./core/counts.js";
+import { exportFileOf, exportNameOf, exportTextOf } from "./core/export.js";
 import {
   type AddressRow,
   type CategoryLine,
@@ -49,6 +50,7 @@ import {
 } from "./core/map-view.js";
 import type {
   ClearedData,
+  ExportData,
   MapData,
   Settings,
   SiteAddresses,
@@ -285,6 +287,11 @@ function renderHeader(): void {
   question.textContent = asking ? (header.question ?? "") : "";
   element("purge").hidden = !asking;
   element("purge-cancel").hidden = !asking;
+  // Named as the help is, for its tooltip and for those who cannot see it.
+  const exporting = element("export");
+  exporting.setAttribute("aria-label", header.exportName);
+  exporting.setAttribute("title", header.exportName);
+  exporting.hidden = header.empty !== null;
   element("tools").hidden = header.empty !== null;
   const empty = element("empty");
   empty.hidden = header.empty === null;
@@ -1337,6 +1344,31 @@ async function purge(): Promise<void> {
   await load(true);
 }
 
+// What the map shows, with the addresses kept outside a private window, saved
+// in a file the browser offers under the name of the day. The page makes the
+// file and the browser saves it through a link of the page to it, with no
+// permission: Firefox keeps the download attribute of a link to a blob: URL
+// the page created (nsContentUtils::TriggerLinkClick and
+// ContentPrincipal::MayLoadInternal), a link out of the document included
+// (nsGenericHTMLElement::CheckHandleEventForAnchorsPreconditions), and
+// refuses the download only to a sandboxed frame or to mixed content
+// (nsContentSecurityUtils::ClassifyDownload), Firefox 159.0.1. A blob: URL
+// revoked at once stays 5 s for the download it started
+// (BlobURLProtocolHandler.cpp), which saved the file in LibreWolf 159.0.1.
+async function exportAll(): Promise<void> {
+  const data = await ask<ExportData>({ kind: "export", privateWindow });
+  const now = Date.now();
+  const file = exportFileOf(data, browser.runtime.getManifest().version, now);
+  const url = URL.createObjectURL(
+    new Blob([exportTextOf(file)], { type: "application/json" }),
+  );
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", exportNameOf(now));
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function keyOf(event: Event): string | null {
   const target = event.target;
   if (!(target instanceof Element)) {
@@ -1357,6 +1389,7 @@ element("no-match-clear").addEventListener("click", clearFilters);
 element("ask-purge").addEventListener("click", () => askToPurge(true));
 element("purge-cancel").addEventListener("click", () => askToPurge(false));
 element("purge").addEventListener("click", () => report(purge()));
+element("export").addEventListener("click", () => report(exportAll()));
 element("back").addEventListener("click", () => choose(null));
 setUpHelp();
 element("plan").addEventListener("scroll", follow, { passive: true });

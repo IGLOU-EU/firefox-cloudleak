@@ -23,6 +23,7 @@ import {
   totalsOf,
 } from "./core/counts.js";
 import type {
+  ExportData,
   MapData,
   Settings,
   SiteAddresses,
@@ -479,24 +480,20 @@ export async function clear(
   return at;
 }
 
-// Every site, for the map: the kept counts, or in a private window those of
-// the private session, which have no start. A copy of the sites, which the
-// requests counted afterwards change in place. The map wants every site, so
-// each time it asks, while the user looks at it, the whole store is read,
-// and what memory holds of a site read during this run of the page wins,
-// since it holds the counts of the burst not yet written. The requests
-// counted before the map asked are counted first.
-export async function mapData(privateWindow: boolean): Promise<MapData> {
-  if (privateWindow) {
-    return {
-      privateWindow,
-      since: 0,
-      siteSince: {},
-      sites: { ...privateSession.sites },
-    };
-  }
-  await Promise.allSettled([...countReads.values()].map((read) => read.done));
-  const items = await browser.storage.local.get(null);
+// The counts of the private session, which have no start, as a copy.
+function privateMap(): MapData {
+  return {
+    privateWindow: true,
+    since: 0,
+    siteSince: {},
+    sites: { ...privateSession.sites },
+  };
+}
+
+// The kept counts of every site, from the whole store read: what memory
+// holds of a site read during this run of the page wins, since it holds the
+// counts of the burst not yet written.
+function keptMap(items: Record<string, unknown>): MapData {
   const sites = sitesOf<SiteCounts>(items, SITE_PREFIX);
   const siteSince = sitesOf<number>(items, SITE_SINCE_PREFIX);
   for (const site of keptSites) {
@@ -511,7 +508,53 @@ export async function mapData(privateWindow: boolean): Promise<MapData> {
       siteSince[site] = own;
     }
   }
-  return { privateWindow, since: kept.since, siteSince, sites };
+  return { privateWindow: false, since: kept.since, siteSince, sites };
+}
+
+// The requests that wait for these reads go first.
+async function readsDone(reads: Map<string, Reading>): Promise<void> {
+  await Promise.allSettled([...reads.values()].map((read) => read.done));
+}
+
+// Every site, for the map: the kept counts, or in a private window those of
+// the private session, which have no start. A copy of the sites, which the
+// requests counted afterwards change in place. The map wants every site, so
+// each time it asks, while the user looks at it, the whole store is read,
+// and what memory holds of a site read during this run of the page wins,
+// since it holds the counts of the burst not yet written. The requests
+// counted before the map asked are counted first.
+export async function mapData(privateWindow: boolean): Promise<MapData> {
+  if (privateWindow) {
+    return privateMap();
+  }
+  await readsDone(countReads);
+  return keptMap(await browser.storage.local.get(null));
+}
+
+// What the map shows, with the recorded addresses of every site, for its
+// export: the whole store is read once, at a click of the user. The
+// addresses of a site are those its panel shows: what memory holds of it
+// wins, since it holds the addresses of the burst not yet written, and what
+// storage holds of a site this run of the page never read is fitted to the
+// settings, as a read of the site would. The requests counted or recorded
+// before the export asked go first. Nothing is recorded in a private window.
+export async function exportData(privateWindow: boolean): Promise<ExportData> {
+  if (privateWindow) {
+    return { ...privateMap(), addresses: {} };
+  }
+  await Promise.all([readsDone(countReads), readsDone(addressReads)]);
+  const items = await browser.storage.local.get(null);
+  const stored = sitesOf<unknown>(items, ADDRESSES_PREFIX);
+  const recorded: Record<string, SiteAddresses> = {};
+  for (const site of new Set([...Object.keys(stored), ...addresses.keys()])) {
+    const kept =
+      addresses.get(site) ??
+      fitAddresses(storedAddresses(stored[site]), settings);
+    if (Object.keys(kept).length > 0) {
+      recorded[site] = kept;
+    }
+  }
+  return { ...keptMap(items), addresses: recorded };
 }
 
 // The counts of every site go, written or not. In a private window, those of
