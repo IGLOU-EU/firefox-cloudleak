@@ -403,9 +403,11 @@ a:focus-visible,
   outline-offset: 1px;
 }
 
-/* Last, so that the attribute wins over every display set above. */
+/* The attribute wins over every display set above, whatever its
+   specificity: being last only beats a selector of the same weight. */
 [hidden] {
-  display: none;
+  /* biome-ignore lint/complexity/noImportantStyles: the attribute hides, whatever selector sets the display */
+  display: none !important;
 }
 
 /* The word after the name of a supposed provider, in the grey and the size

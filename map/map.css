@@ -985,7 +985,10 @@ button.address:focus-visible {
   white-space: nowrap;
 }
 
-/* Last, so that the attribute wins over every display set above. */
+/* The attribute wins over every display set above, whatever its
+   specificity: being last only beats a selector of the same weight, and
+   .legend .item outweighed it. */
 [hidden] {
-  display: none;
+  /* biome-ignore lint/complexity/noImportantStyles: the attribute hides, whatever selector sets the display */
+  display: none !important;
 }
